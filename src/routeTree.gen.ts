@@ -9,8 +9,50 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as QualidadeRouteImport } from './routes/qualidade'
+import { Route as MovelRouteImport } from './routes/movel'
+import { Route as LicencasRouteImport } from './routes/licencas'
+import { Route as FtthRouteImport } from './routes/ftth'
+import { Route as CarteiraRouteImport } from './routes/carteira'
+import { Route as CapacidadeRouteImport } from './routes/capacidade'
 import { Route as IndexRouteImport } from './routes/index'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QualidadeRoute = QualidadeRouteImport.update({
+  id: '/qualidade',
+  path: '/qualidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MovelRoute = MovelRouteImport.update({
+  id: '/movel',
+  path: '/movel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LicencasRoute = LicencasRouteImport.update({
+  id: '/licencas',
+  path: '/licencas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FtthRoute = FtthRouteImport.update({
+  id: '/ftth',
+  path: '/ftth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CarteiraRoute = CarteiraRouteImport.update({
+  id: '/carteira',
+  path: '/carteira',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CapacidadeRoute = CapacidadeRouteImport.update({
+  id: '/capacidade',
+  path: '/capacidade',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +61,130 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/capacidade': typeof CapacidadeRoute
+  '/carteira': typeof CarteiraRoute
+  '/ftth': typeof FtthRoute
+  '/licencas': typeof LicencasRoute
+  '/movel': typeof MovelRoute
+  '/qualidade': typeof QualidadeRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/capacidade': typeof CapacidadeRoute
+  '/carteira': typeof CarteiraRoute
+  '/ftth': typeof FtthRoute
+  '/licencas': typeof LicencasRoute
+  '/movel': typeof MovelRoute
+  '/qualidade': typeof QualidadeRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/capacidade': typeof CapacidadeRoute
+  '/carteira': typeof CarteiraRoute
+  '/ftth': typeof FtthRoute
+  '/licencas': typeof LicencasRoute
+  '/movel': typeof MovelRoute
+  '/qualidade': typeof QualidadeRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/capacidade'
+    | '/carteira'
+    | '/ftth'
+    | '/licencas'
+    | '/movel'
+    | '/qualidade'
+    | '/sitemap.xml'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/capacidade'
+    | '/carteira'
+    | '/ftth'
+    | '/licencas'
+    | '/movel'
+    | '/qualidade'
+    | '/sitemap.xml'
+  id:
+    | '__root__'
+    | '/'
+    | '/capacidade'
+    | '/carteira'
+    | '/ftth'
+    | '/licencas'
+    | '/movel'
+    | '/qualidade'
+    | '/sitemap.xml'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CapacidadeRoute: typeof CapacidadeRoute
+  CarteiraRoute: typeof CarteiraRoute
+  FtthRoute: typeof FtthRoute
+  LicencasRoute: typeof LicencasRoute
+  MovelRoute: typeof MovelRoute
+  QualidadeRoute: typeof QualidadeRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qualidade': {
+      id: '/qualidade'
+      path: '/qualidade'
+      fullPath: '/qualidade'
+      preLoaderRoute: typeof QualidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/movel': {
+      id: '/movel'
+      path: '/movel'
+      fullPath: '/movel'
+      preLoaderRoute: typeof MovelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/licencas': {
+      id: '/licencas'
+      path: '/licencas'
+      fullPath: '/licencas'
+      preLoaderRoute: typeof LicencasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ftth': {
+      id: '/ftth'
+      path: '/ftth'
+      fullPath: '/ftth'
+      preLoaderRoute: typeof FtthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/carteira': {
+      id: '/carteira'
+      path: '/carteira'
+      fullPath: '/carteira'
+      preLoaderRoute: typeof CarteiraRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/capacidade': {
+      id: '/capacidade'
+      path: '/capacidade'
+      fullPath: '/capacidade'
+      preLoaderRoute: typeof CapacidadeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,17 +197,14 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CapacidadeRoute: CapacidadeRoute,
+  CarteiraRoute: CarteiraRoute,
+  FtthRoute: FtthRoute,
+  LicencasRoute: LicencasRoute,
+  MovelRoute: MovelRoute,
+  QualidadeRoute: QualidadeRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
