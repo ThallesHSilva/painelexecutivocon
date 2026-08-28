@@ -18,7 +18,11 @@ WORKDIR /app
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/scripts ./scripts
 
-RUN mkdir -p /var/lib/mapa-parque/uploads && chown -R node:node /var/lib/mapa-parque
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && mkdir -p /var/lib/mapa-parque/uploads \
+    && chown -R node:node /var/lib/mapa-parque
 
 USER node
 VOLUME ["/var/lib/mapa-parque"]
