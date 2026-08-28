@@ -41,7 +41,7 @@ type SelectedFile = {
 type UploadRole = "gn" | "director";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
-const UPLOAD_CHUNK_SIZE = 20 * 1024 * 1024;
+const UPLOAD_CHUNK_SIZE = 10 * 1024 * 1024;
 const QSC_KINDS = ["QSC Carteira", "QSC Fixa", "QSC Móvel"] as const;
 
 const EXPECTED_BASES = [
@@ -244,7 +244,10 @@ async function uploadFileInChunks(selectedFile: SelectedFile) {
   const uploadId = crypto.randomUUID();
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
     const start = chunkIndex * UPLOAD_CHUNK_SIZE;
-    const chunk = selectedFile.source.slice(start, Math.min(start + UPLOAD_CHUNK_SIZE, selectedFile.source.size));
+    const chunk = selectedFile.source.slice(
+      start,
+      Math.min(start + UPLOAD_CHUNK_SIZE, selectedFile.source.size),
+    );
     const response = await fetch("/api/data/upload", {
       method: "POST",
       headers: {
@@ -294,7 +297,13 @@ function AlimentacaoPage() {
         role === "gn"
           ? ["QSC Carteira", "QSC Fixa", "QSC Móvel"]
           : role === "director"
-            ? ["Mapa Parque", "Resultados YoY", "Best Guess", "Portabilidade analítica", "Torres de serviço"]
+            ? [
+                "Mapa Parque",
+                "Resultados YoY",
+                "Best Guess",
+                "Portabilidade analítica",
+                "Torres de serviço",
+              ]
             : [],
       ),
     [role],
@@ -394,7 +403,9 @@ function AlimentacaoPage() {
       );
       if (notifySuccess) {
         toast.success("Upload concluído com sucesso", {
-          description: `${selectedFile.name} já está disponível nas visões do painel.`,
+          description: QSC_KINDS.includes(selectedFile.kind as (typeof QSC_KINDS)[number])
+            ? `${selectedFile.name} foi recebido e o QSC está sendo atualizado no servidor.`
+            : `${selectedFile.name} já está disponível nas visões do painel.`,
         });
       }
       return true;
@@ -434,7 +445,10 @@ function AlimentacaoPage() {
     setBatchImporting(false);
     if (completed > 0) {
       toast.success("Upload concluído com sucesso", {
-        description: `${completed} ${completed === 1 ? "arquivo foi importado" : "arquivos foram importados"} e já atualizam o painel.`,
+        description:
+          role === "gn"
+            ? `${completed} ${completed === 1 ? "arquivo foi recebido" : "arquivos foram recebidos"}. O QSC está sendo atualizado no servidor.`
+            : `${completed} ${completed === 1 ? "arquivo foi importado" : "arquivos foram importados"} e já atualizam o painel.`,
       });
     }
   };
@@ -543,7 +557,9 @@ function AlimentacaoPage() {
                           onClick={() => void importReadyFiles()}
                         >
                           {batchImporting ? (
-                            <><LoaderCircle className="size-3.5 animate-spin" /> Importando…</>
+                            <>
+                              <LoaderCircle className="size-3.5 animate-spin" /> Importando…
+                            </>
                           ) : (
                             "Importar todos"
                           )}
@@ -588,23 +604,23 @@ function AlimentacaoPage() {
                           <X className="size-4 shrink-0 text-rose-500" />
                         )}
                         {isImportable(file) && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              disabled={batchImporting}
-                              className="shrink-0 rounded-xl px-3 text-xs"
-                              onClick={() =>
-                                void importFile(
-                                  file,
-                                  role === "gn"
-                                    ? "Falha ao importar o QSC."
-                                    : "Falha ao importar a base.",
-                                )
-                              }
-                            >
-                              Importar
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={batchImporting}
+                            className="shrink-0 rounded-xl px-3 text-xs"
+                            onClick={() =>
+                              void importFile(
+                                file,
+                                role === "gn"
+                                  ? "Falha ao importar o QSC."
+                                  : "Falha ao importar a base.",
+                              )
+                            }
+                          >
+                            Importar
+                          </Button>
+                        )}
                         <button
                           type="button"
                           aria-label={`Remover ${file.name}`}

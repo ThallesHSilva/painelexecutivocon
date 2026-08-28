@@ -68,6 +68,84 @@ function qscSemesterSlot(fileName: string) {
   return "h1";
 }
 
+type QscProcessingContext = {
+  qscDirectory: string;
+  snapshotDirectory: string;
+  sourceName: string;
+  uploadedBy?: string | null;
+  sizeBytes?: number;
+};
+
+let qscProcessingPromise: Promise<void> | null = null;
+let qscReprocessRequested = false;
+let latestQscContext: QscProcessingContext | null = null;
+
+async function listQscInputs(qscDirectory: string) {
+  const storedFiles = await readdir(qscDirectory);
+  const domains = ["carteira", "fixa", "movel"];
+  const inputs = domains.flatMap((domain) =>
+    storedFiles
+      .filter((fileName) => new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(fileName))
+      .sort()
+      .map((fileName) => `${domain}:${path.join(qscDirectory, fileName)}`),
+  );
+  const available = domains.map((domain) => inputs.some((input) => input.startsWith(`${domain}:`)));
+  return { inputs, available };
+}
+
+async function processStoredQsc(context: QscProcessingContext) {
+  const { inputs } = await listQscInputs(context.qscDirectory);
+  const processor = path.resolve("scripts", "process-qsc.mjs");
+  const snapshotPath = path.join(context.snapshotDirectory, "qsc.snapshot.json");
+  const mapaSnapshotPath = path.join(context.snapshotDirectory, "mapa-parque.snapshot.json");
+
+  await execFileAsync(process.execPath, [processor, ...inputs], {
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: 30 * 60 * 1000,
+    env: {
+      ...process.env,
+      QSC_SNAPSHOT_PATH: snapshotPath,
+      MAPA_PARQUE_SNAPSHOT_PATH: mapaSnapshotPath,
+    },
+  });
+  await persistSnapshot({
+    kind: "qsc",
+    snapshotPath,
+    sourceName: context.sourceName,
+    uploadedBy: context.uploadedBy,
+    sizeBytes: context.sizeBytes,
+  });
+}
+
+function scheduleQscProcessing(context: QscProcessingContext) {
+  latestQscContext = context;
+  qscReprocessRequested = true;
+  if (qscProcessingPromise) return;
+
+  qscProcessingPromise = (async () => {
+    while (qscReprocessRequested && latestQscContext) {
+      qscReprocessRequested = false;
+      const current = latestQscContext;
+      try {
+        await processStoredQsc(current);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Falha ao processar a base QSC.";
+        recordDataImportError({
+          kind: "QSC",
+          sourceName: current.sourceName,
+          uploadedBy: current.uploadedBy,
+          sizeBytes: current.sizeBytes,
+          message,
+        });
+        console.error("Falha no processamento assíncrono do QSC:", error);
+      }
+    }
+  })().finally(() => {
+    qscProcessingPromise = null;
+    if (qscReprocessRequested && latestQscContext) scheduleQscProcessing(latestQscContext);
+  });
+}
+
 export const Route = createFileRoute("/api/data/upload")({
   server: {
     handlers: {
@@ -278,35 +356,10 @@ export const Route = createFileRoute("/api/data/upload")({
           await rm(finalPath, { force: true });
           await rename(uploadedPath, finalPath);
 
-          const storedFiles = await readdir(qscDirectory);
-          const domains = ["carteira", "fixa", "movel"];
-          const availableInputs = domains.flatMap((domain) =>
-            storedFiles
-              .filter((fileName) =>
-                new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(fileName),
-              )
-              .sort()
-              .map((fileName) => `${domain}:${path.join(qscDirectory, fileName)}`),
-          );
-          const available = domains.map((domain) =>
-            availableInputs.some((input) => input.startsWith(`${domain}:`)),
-          );
-
-          const processor = path.resolve("scripts", "process-qsc.mjs");
-          const qscSnapshotPath = path.join(snapshotDirectory, "qsc.snapshot.json");
-          const mapaSnapshotPath = path.join(snapshotDirectory, "mapa-parque.snapshot.json");
-          await execFileAsync(process.execPath, [processor, ...availableInputs], {
-            maxBuffer: 10 * 1024 * 1024,
-            timeout: 30 * 60 * 1000,
-            env: {
-              ...process.env,
-              QSC_SNAPSHOT_PATH: qscSnapshotPath,
-              MAPA_PARQUE_SNAPSHOT_PATH: mapaSnapshotPath,
-            },
-          });
-          await persistSnapshot({
-            kind: "qsc",
-            snapshotPath: qscSnapshotPath,
+          const { available } = await listQscInputs(qscDirectory);
+          scheduleQscProcessing({
+            qscDirectory,
+            snapshotDirectory,
             sourceName: originalName,
             uploadedBy: user?.email,
             sizeBytes: declaredFileSize || contentLength,
@@ -314,7 +367,8 @@ export const Route = createFileRoute("/api/data/upload")({
           return Response.json(
             {
               imported: true,
-              processed: true,
+              processed: false,
+              processing: true,
               available: QSC_KINDS.filter((_, index) => available[index]),
               awaiting: QSC_KINDS.filter((_, index) => !available[index]),
             },
