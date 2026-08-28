@@ -41,7 +41,18 @@ type SelectedFile = {
 type UploadRole = "gn" | "director";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
-const UPLOAD_CHUNK_SIZE = 10 * 1024 * 1024;
+const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
+const MAX_CHUNK_ATTEMPTS = 4;
+const RETRYABLE_UPLOAD_STATUS = new Set([408, 425, 429, 499, 500, 502, 503, 504]);
+
+class UploadChunkError extends Error {
+  constructor(
+    message: string,
+    readonly retryable: boolean,
+  ) {
+    super(message);
+  }
+}
 const QSC_KINDS = ["QSC Carteira", "QSC Fixa", "QSC Móvel"] as const;
 
 const EXPECTED_BASES = [
@@ -248,21 +259,47 @@ async function uploadFileInChunks(selectedFile: SelectedFile) {
       start,
       Math.min(start + UPLOAD_CHUNK_SIZE, selectedFile.source.size),
     );
-    const response = await fetch("/api/data/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "X-Base-Kind": selectedFile.kind,
-        "X-File-Name": encodeURIComponent(selectedFile.name),
-        "X-Upload-Id": uploadId,
-        "X-Chunk-Index": String(chunkIndex),
-        "X-Chunk-Count": String(chunkCount),
-        "X-File-Size": String(selectedFile.source.size),
-      },
-      body: chunk,
-    });
-    const payload = await readUploadPayload(response);
-    if (!response.ok) throw new Error(payload.message ?? "Não foi possível importar a base.");
+    let uploaded = false;
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < MAX_CHUNK_ATTEMPTS && !uploaded; attempt += 1) {
+      try {
+        const response = await fetch("/api/data/upload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/octet-stream",
+            "X-Base-Kind": selectedFile.kind,
+            "X-File-Name": encodeURIComponent(selectedFile.name),
+            "X-Upload-Id": uploadId,
+            "X-Chunk-Index": String(chunkIndex),
+            "X-Chunk-Count": String(chunkCount),
+            "X-File-Size": String(selectedFile.source.size),
+          },
+          body: chunk,
+        });
+        const payload = await readUploadPayload(response);
+        if (response.ok) {
+          uploaded = true;
+          break;
+        }
+
+        lastError = new UploadChunkError(
+          payload.message ?? `Falha temporária no envio (${response.status}).`,
+          RETRYABLE_UPLOAD_STATUS.has(response.status),
+        );
+        if (!lastError.retryable) throw lastError;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error("Falha de conexão durante o envio.");
+        if (lastError instanceof UploadChunkError && !lastError.retryable) throw lastError;
+        if (attempt + 1 >= MAX_CHUNK_ATTEMPTS) break;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 1_000 * 2 ** attempt));
+    }
+
+    if (!uploaded) {
+      throw lastError ?? new Error("Não foi possível enviar uma parte do arquivo.");
+    }
   }
 }
 

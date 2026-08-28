@@ -1,6 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createWriteStream } from "node:fs";
-import { access, appendFile, mkdir, readFile, readdir, rename, rm } from "node:fs/promises";
+import {
+  access,
+  appendFile,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -79,6 +88,10 @@ type QscProcessingContext = {
 let qscProcessingPromise: Promise<void> | null = null;
 let qscReprocessRequested = false;
 let latestQscContext: QscProcessingContext | null = null;
+let qscProcessingTimer: ReturnType<typeof setTimeout> | null = null;
+
+const QSC_PROCESSING_DELAY_MS = 30_000;
+const QSC_UPLOAD_ACTIVITY_DELAY_MS = 2 * 60_000;
 
 async function listQscInputs(qscDirectory: string) {
   const storedFiles = await readdir(qscDirectory);
@@ -117,9 +130,7 @@ async function processStoredQsc(context: QscProcessingContext) {
   });
 }
 
-function scheduleQscProcessing(context: QscProcessingContext) {
-  latestQscContext = context;
-  qscReprocessRequested = true;
+function startQscProcessing() {
   if (qscProcessingPromise) return;
 
   qscProcessingPromise = (async () => {
@@ -144,6 +155,25 @@ function scheduleQscProcessing(context: QscProcessingContext) {
     qscProcessingPromise = null;
     if (qscReprocessRequested && latestQscContext) scheduleQscProcessing(latestQscContext);
   });
+}
+
+function armQscProcessing(delayMs: number) {
+  if (!latestQscContext || qscProcessingPromise) return;
+  if (qscProcessingTimer) clearTimeout(qscProcessingTimer);
+  qscProcessingTimer = setTimeout(() => {
+    qscProcessingTimer = null;
+    startQscProcessing();
+  }, delayMs);
+}
+
+function noteQscUploadActivity() {
+  if (latestQscContext) armQscProcessing(QSC_UPLOAD_ACTIVITY_DELAY_MS);
+}
+
+function scheduleQscProcessing(context: QscProcessingContext) {
+  latestQscContext = context;
+  qscReprocessRequested = true;
+  armQscProcessing(QSC_PROCESSING_DELAY_MS);
 }
 
 export const Route = createFileRoute("/api/data/upload")({
@@ -213,6 +243,29 @@ export const Route = createFileRoute("/api/data/upload")({
         }
         const uploadedPath = path.join(uploadDirectory, `${Date.now()}-${originalName}`);
         const chunkDirectory = isChunked ? path.join(uploadDirectory, "chunks", uploadId) : null;
+        const completedUploadPath = isChunked
+          ? path.join(uploadDirectory, "chunks", `${uploadId}.complete.json`)
+          : null;
+        const importedResponse = async (payload: Record<string, unknown>) => {
+          if (completedUploadPath) {
+            await mkdir(path.dirname(completedUploadPath), { recursive: true });
+            await writeFile(completedUploadPath, JSON.stringify(payload), "utf8");
+          }
+          return Response.json(payload, { headers: { "Cache-Control": "no-store" } });
+        };
+
+        if (completedUploadPath && (await exists(completedUploadPath))) {
+          try {
+            const payload = JSON.parse(await readFile(completedUploadPath, "utf8")) as Record<
+              string,
+              unknown
+            >;
+            return Response.json(payload, { headers: { "Cache-Control": "no-store" } });
+          } catch {
+            await rm(completedUploadPath, { force: true });
+          }
+        }
+        if (isQsc) noteQscUploadActivity();
 
         try {
           if (chunkDirectory) {
@@ -262,10 +315,11 @@ export const Route = createFileRoute("/api/data/upload")({
               uploadedBy: user?.email,
               sizeBytes: declaredFileSize || contentLength,
             });
-            return Response.json(
-              { imported: true, processed: true, result: JSON.parse(stdout) },
-              { headers: { "Cache-Control": "no-store" } },
-            );
+            return importedResponse({
+              imported: true,
+              processed: true,
+              result: JSON.parse(stdout),
+            });
           }
 
           if (kind === "Best Guess") {
@@ -283,10 +337,11 @@ export const Route = createFileRoute("/api/data/upload")({
               uploadedBy: user?.email,
               sizeBytes: declaredFileSize || contentLength,
             });
-            return Response.json(
-              { imported: true, processed: true, result: JSON.parse(stdout) },
-              { headers: { "Cache-Control": "no-store" } },
-            );
+            return importedResponse({
+              imported: true,
+              processed: true,
+              result: JSON.parse(stdout),
+            });
           }
 
           if (kind === "Torres de serviço") {
@@ -307,10 +362,11 @@ export const Route = createFileRoute("/api/data/upload")({
               uploadedBy: user?.email,
               sizeBytes: declaredFileSize || contentLength,
             });
-            return Response.json(
-              { imported: true, processed: true, result: JSON.parse(stdout) },
-              { headers: { "Cache-Control": "no-store" } },
-            );
+            return importedResponse({
+              imported: true,
+              processed: true,
+              result: JSON.parse(stdout),
+            });
           }
 
           if (kind === "Resultados YoY" || kind === "Portabilidade analítica") {
@@ -338,10 +394,11 @@ export const Route = createFileRoute("/api/data/upload")({
               uploadedBy: user?.email,
               sizeBytes: declaredFileSize || contentLength,
             });
-            return Response.json(
-              { imported: true, processed: true, result: JSON.parse(stdout) },
-              { headers: { "Cache-Control": "no-store" } },
-            );
+            return importedResponse({
+              imported: true,
+              processed: true,
+              result: JSON.parse(stdout),
+            });
           }
 
           const qscDirectory = path.join(uploadDirectory, "qsc");
@@ -364,16 +421,13 @@ export const Route = createFileRoute("/api/data/upload")({
             uploadedBy: user?.email,
             sizeBytes: declaredFileSize || contentLength,
           });
-          return Response.json(
-            {
-              imported: true,
-              processed: false,
-              processing: true,
-              available: QSC_KINDS.filter((_, index) => available[index]),
-              awaiting: QSC_KINDS.filter((_, index) => !available[index]),
-            },
-            { headers: { "Cache-Control": "no-store" } },
-          );
+          return importedResponse({
+            imported: true,
+            processed: false,
+            processing: true,
+            available: QSC_KINDS.filter((_, index) => available[index]),
+            awaiting: QSC_KINDS.filter((_, index) => !available[index]),
+          });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Falha ao processar a base.";
           recordDataImportError({
