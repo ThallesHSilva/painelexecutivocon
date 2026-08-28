@@ -112,7 +112,8 @@ export const Route = createFileRoute("/api/data/upload")({
         const chunkIndex = Number(request.headers.get("x-chunk-index"));
         const chunkCount = Number(request.headers.get("x-chunk-count"));
         const declaredFileSize = Number(request.headers.get("x-file-size"));
-        const isChunked = uploadId !== "" || Number.isFinite(chunkIndex) || Number.isFinite(chunkCount);
+        const isChunked =
+          uploadId !== "" || Number.isFinite(chunkIndex) || Number.isFinite(chunkCount);
         const validChunkedRequest =
           /^[a-z0-9-]{16,80}$/i.test(uploadId) &&
           Number.isInteger(chunkIndex) &&
@@ -124,7 +125,10 @@ export const Route = createFileRoute("/api/data/upload")({
           declaredFileSize > 0 &&
           declaredFileSize <= MAX_FILE_SIZE;
         if (!request.body || !contentLength || (isChunked && contentLength > MAX_CHUNK_SIZE)) {
-          return Response.json({ message: "Arquivo ou parte do upload inválida." }, { status: 400 });
+          return Response.json(
+            { message: "Arquivo ou parte do upload inválida." },
+            { status: 400 },
+          );
         }
         if ((isChunked && !validChunkedRequest) || (!isChunked && contentLength > MAX_FILE_SIZE)) {
           return Response.json({ message: "Arquivo ausente ou acima de 500 MB." }, { status: 400 });
@@ -154,7 +158,10 @@ export const Route = createFileRoute("/api/data/upload")({
               );
             }
             for (let index = 0; index < chunkCount; index += 1) {
-              await appendFile(uploadedPath, await readFile(path.join(chunkDirectory, `${index}.part`)));
+              await appendFile(
+                uploadedPath,
+                await readFile(path.join(chunkDirectory, `${index}.part`)),
+              );
             }
           } else {
             await pipeline(
@@ -207,10 +214,14 @@ export const Route = createFileRoute("/api/data/upload")({
           if (kind === "Torres de serviço") {
             const processor = path.resolve("scripts", "process-torres-servico.mjs");
             const snapshotPath = path.join(snapshotDirectory, "torres-servico.snapshot.json");
-            const { stdout } = await execFileAsync(process.execPath, [processor, uploadedPath, snapshotPath], {
-              maxBuffer: 10 * 1024 * 1024,
-              timeout: 30 * 60 * 1000,
-            });
+            const { stdout } = await execFileAsync(
+              process.execPath,
+              [processor, uploadedPath, snapshotPath],
+              {
+                maxBuffer: 10 * 1024 * 1024,
+                timeout: 30 * 60 * 1000,
+              },
+            );
             await persistSnapshot({
               kind: "torres-servico",
               snapshotPath,
@@ -271,7 +282,9 @@ export const Route = createFileRoute("/api/data/upload")({
           const domains = ["carteira", "fixa", "movel"];
           const availableInputs = domains.flatMap((domain) =>
             storedFiles
-              .filter((fileName) => new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(fileName))
+              .filter((fileName) =>
+                new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(fileName),
+              )
               .sort()
               .map((fileName) => `${domain}:${path.join(qscDirectory, fileName)}`),
           );
@@ -319,7 +332,12 @@ export const Route = createFileRoute("/api/data/upload")({
           return Response.json({ message }, { status: 500 });
         } finally {
           await rm(uploadedPath, { force: true });
-          if (chunkDirectory) await rm(chunkDirectory, { force: true, recursive: true });
+          // Keep intermediate chunks until the final request assembles the file.
+          // A `return` inside `try` still executes `finally`, so removing the
+          // directory here for every request discarded all previously sent parts.
+          if (chunkDirectory && chunkIndex + 1 >= chunkCount) {
+            await rm(chunkDirectory, { force: true, recursive: true });
+          }
         }
       },
     },
