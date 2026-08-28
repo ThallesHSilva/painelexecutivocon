@@ -5,76 +5,135 @@ import {
   PARTNERS,
   PARTNER_METRICS,
   PORTFOLIO,
-  UF_DIST,
   META,
   aggregate,
   type Partner,
   type PortfolioRow,
 } from "@/mocks/data";
+import type { QscApiResponse } from "@/lib/qsc";
+import type { MapaScope, MapaSnapshot } from "@/lib/snapshot-types";
 
 const delay = (ms = 220) => new Promise((r) => setTimeout(r, ms));
 
-function scope(ids: string[]) {
-  return ids.length ? ids : PARTNERS.map((p) => p.id);
+async function fetchMapaSnapshot() {
+  const response = await fetch("/api/data/mapa", { cache: "no-store" });
+  if (!response.ok) throw new Error("Não foi possível carregar o Mapa Parque.");
+  return response.json() as Promise<MapaSnapshot>;
+}
+
+function scope(ids: string[], partners: Partner[] = PARTNERS) {
+  const availableIds = partners.map((partner) => partner.id);
+  const validIds = ids.filter((id) => availableIds.includes(id));
+  return validIds.length ? validIds : availableIds;
+}
+
+function selectedMapaScopes(snapshot: MapaSnapshot, ids: string[]) {
+  return snapshot.partners.flatMap((partner) => {
+    const partnerScope = snapshot.scopes[partner.id as keyof typeof snapshot.scopes] as
+      MapaScope | undefined;
+    return ids.includes(partner.id) && partnerScope ? [{ partner, scope: partnerScope }] : [];
+  });
+}
+
+function sumMapa<T>(rows: { scope: MapaScope }[], select: (scope: MapaScope) => T) {
+  return rows.reduce((total, row) => total + Number(select(row.scope) ?? 0), 0);
+}
+
+function mergeMapaRows<T extends Record<string, unknown>>(
+  rows: { scope: MapaScope }[],
+  select: (scope: MapaScope) => T[],
+  key: keyof T,
+  values: (keyof T)[],
+) {
+  const merged = new Map<string, T>();
+  for (const row of rows) {
+    for (const item of select(row.scope)) {
+      const id = String(item[key]);
+      const current = merged.get(id) ?? ({ ...item } as T);
+      for (const field of values) {
+        current[field] = (Number(merged.has(id) ? current[field] : 0) +
+          Number(item[field] ?? 0)) as T[keyof T];
+      }
+      merged.set(id, current);
+    }
+  }
+  return [...merged.values()];
 }
 
 export async function fetchPartners(): Promise<Partner[]> {
-  await delay(120);
-  return PARTNERS;
+  const snapshot = await fetchMapaSnapshot();
+  return snapshot.partners;
 }
 
 export async function fetchDashboard(partnerIds: string[]) {
-  await delay();
-  const ids = scope(partnerIds);
-  const agg = aggregate(ids);
-  const porTipo = [
-    { tipo: "Móvel", valor: agg.oportMovel },
-    { tipo: "FTTH", valor: agg.oportFtth },
-    { tipo: "Licenças", valor: Math.round(agg.oportLicencas * 0.7) },
-    { tipo: "Serviços Digitais", valor: Math.round(agg.oportLicencas * 0.3) },
-  ];
-  const porParceiro = PARTNER_METRICS.filter((m) => ids.includes(m.partnerId))
-    .map((m) => {
-      const p = PARTNERS.find((x) => x.id === m.partnerId)!;
-      return { partnerId: p.id, parceiro: p.name, oportunidades: m.oportunidades };
-    })
-    .sort((a, b) => a.parceiro.localeCompare(b.parceiro, "pt-BR"));
-  const geo = UF_DIST.map((u) => ({
-    uf: u.uf,
-    total: Math.round(
-      u.total *
-        (ids.length === PARTNERS.length
-          ? 1
-          : ids.length / PARTNERS.length),
-    ),
+  const snapshot = await fetchMapaSnapshot();
+  const ids = scope(partnerIds, snapshot.partners);
+  const selected = selectedMapaScopes(snapshot, ids);
+  const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
+  const porTipo = mergeMapaRows(selected, (item) => item.breakdowns.byType, "tipo", ["valor"]);
+  const porParceiro = selected.map(({ partner, scope: partnerScope }) => ({
+    partnerId: partner.id,
+    parceiro: partner.name,
+    oportunidades: partnerScope.opportunities.uniqueCnpjWithOpportunity,
   }));
-  const categorias = [
-    { categoria: "Com múltiplas oportunidades", valor: Math.round(agg.oportunidades * 0.18) },
-    { categoria: "Somente móvel", valor: Math.round(agg.oportunidades * 0.22) },
-    { categoria: "Somente FTTH", valor: Math.round(agg.oportunidades * 0.14) },
-    { categoria: "Somente licenças", valor: Math.round(agg.oportunidades * 0.12) },
-    { categoria: "Sem oportunidade", valor: Math.round(agg.clientes * 0.30) },
-  ];
+  const geo = mergeMapaRows(selected, (item) => item.breakdowns.byCity, "cidade", [
+    "records",
+    "opportunities",
+  ]).map((item) => ({
+    cidade: item.cidade,
+    total: item.opportunities,
+  }));
+  const categorias = mergeMapaRows(selected, (item) => item.breakdowns.byCategory, "categoria", [
+    "valor",
+  ]).sort((left, right) => Number(right.valor) - Number(left.valor));
+  const allCnpj = total((item) => item.totals.allCnpj);
+  const opportunityCnpj = total((item) => item.opportunities.uniqueCnpjWithOpportunity);
   const destaques = [
-    { titulo: "Clientes com oportunidade móvel", valor: agg.oportMovel, hint: "Base REC_MOVEL elegível" },
-    { titulo: "Clientes com cobertura FTTH", valor: agg.oportFtth, hint: "Endereço coberto" },
-    { titulo: "Elegíveis a licenças", valor: Math.round(agg.oportLicencas * 0.7), hint: "Perfil DIGITAL_1" },
-    { titulo: "Múltiplas oportunidades", valor: Math.round(agg.oportunidades * 0.18), hint: "2+ produtos" },
-    { titulo: "Maior potencial financeiro", valor: Math.round(agg.oportunidades * 0.06), hint: "Top ticket" },
+    {
+      titulo: "CNPJs com REC_MOVEL",
+      valor: total((item) => item.opportunities.mobile),
+      hint: "REC_MOVEL com Aquisição ou Winback",
+    },
+    {
+      titulo: "Oportunidades de FTTH",
+      valor: total((item) => item.opportunities.ftth),
+      hint: "Regra comercial de FTTH",
+    },
+    {
+      titulo: "Oferta Digital",
+      valor: total((item) => item.opportunities.digital1),
+      hint: "Campo DIGITAL_1 preenchido",
+    },
+    {
+      titulo: "Múltiplas oportunidades",
+      valor: total((item) => item.opportunities.multipleOpportunities),
+      hint: "2 ou mais regras atendidas",
+    },
+    {
+      titulo: "CNPJs sem oportunidade",
+      valor: total((item) => item.opportunities.recordsWithoutOpportunity),
+      hint: "Nenhuma frente de oportunidade",
+    },
   ];
   return {
     kpis: {
-      cnpjs: agg.cnpjs,
-      clientes: agg.clientes,
-      oportunidades: agg.oportunidades,
-      oportMovel: agg.oportMovel,
-      oportFtth: agg.oportFtth,
-      oportLicencas: agg.oportLicencas,
-      linhasPotenciais: agg.linhasPotenciais,
-      potencialFinanceiro: agg.potencialFinanceiro,
-      contatosQualificados: agg.contatosQualificados,
-      cxNecessario: agg.cxNecessario,
-      percentualComOportunidade: agg.clientes ? (agg.oportunidades / agg.clientes) * 0.6 : 0,
+      eligibleBase: total((item) => item.totals.uniqueCnpj),
+      cnpjs: total((item) => item.totals.uniqueCnpj),
+      clientes: total((item) => item.totals.uniqueCnpj),
+      oportunidades: opportunityCnpj,
+      registrosComOportunidade: total((item) => item.opportunities.recordsWithOpportunity),
+      oportMovel: total((item) => item.opportunities.mobile),
+      oportFtth: total((item) => item.breakdowns.ftth.oportunidades),
+      oportLicencas: total((item) => item.opportunities.digital1),
+      linhasPotenciais: total((item) => item.totals.mobileParkLines),
+      linhasParqueSemFiltros: total((item) => item.totals.mobileParkLinesUnfiltered),
+      potencialFinanceiro: total((item) => item.totals.totalPortfolioValue),
+      contatosQualificados: total((item) => item.totals.contactableRecords),
+      aparelhos: total((item) => item.opportunities.devices),
+      avancados: total((item) => item.opportunities.advancedAcquisitionWinback),
+      vivoTech: total((item) => item.opportunities.vivoTech),
+      cobertura5g: total((item) => item.opportunities.coverage5g),
+      percentualComOportunidade: allCnpj ? opportunityCnpj / allCnpj : 0,
     },
     porTipo,
     porParceiro,
@@ -85,12 +144,13 @@ export async function fetchDashboard(partnerIds: string[]) {
 }
 
 export async function fetchMobile(partnerIds: string[]) {
-  await delay();
-  const ids = scope(partnerIds);
-  const agg = aggregate(ids);
-  const baseRec = Math.round(agg.clientes * 0.72);
+  const snapshot = await fetchMapaSnapshot();
+  const ids = scope(partnerIds, snapshot.partners);
+  const selected = selectedMapaScopes(snapshot, ids);
+  const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
+  const baseRec = total((item) => item.opportunities.mobile);
   const elegiveis = Math.round(baseRec * 0.55);
-  const linhas = agg.linhasPotenciais;
+  const linhas = total((item) => item.opportunities.mobileParkLines);
   const meta = Math.round(linhas * 0.28);
   const mensal = Math.round(meta / 6);
   const semanal = Math.round(mensal / 4);
@@ -104,27 +164,21 @@ export async function fetchMobile(partnerIds: string[]) {
       oportMensal: mensal,
       oportSemanal: semanal,
       oportDiario: diario,
-      contatosQualificados: agg.contatosQualificados,
+      contatosQualificados: total((item) => item.totals.contactableRecords),
       alimentacaoComercial: Math.round(elegiveis * 0.35),
-      cxNecessario: agg.cxNecessario,
+      cxNecessario: 0,
+      creditoAparelhos: total((item) => item.opportunities.deviceCredit),
+      renovacaoMovelComAparelho: total((item) => item.opportunities.mobileRenewalWithDevice),
+      aparelhoSemRenovacao: total((item) => item.opportunities.devicesWithoutMobileRenewal),
     },
-    composicao: [
-      { tipo: "Expansão de linhas", valor: Math.round(elegiveis * 0.42) },
-      { tipo: "Novos titulares", valor: Math.round(elegiveis * 0.28) },
-      { tipo: "Migração pré→pós", valor: Math.round(elegiveis * 0.18) },
-      { tipo: "Convergência", valor: Math.round(elegiveis * 0.12) },
-    ],
-    porParceiro: PARTNER_METRICS.filter((m) => ids.includes(m.partnerId))
-      .map((m) => {
-        const p = PARTNERS.find((x) => x.id === m.partnerId)!;
-        return {
-          parceiro: p.name,
-          elegiveis: Math.round(m.clientes * 0.55),
-          linhas: m.linhasPotenciais,
-          cx: m.cxNecessario,
-        };
-      })
-      .sort((a, b) => a.parceiro.localeCompare(b.parceiro, "pt-BR")),
+    composicao: mergeMapaRows(selected, (item) => item.breakdowns.mobileComposition, "tipo", [
+      "valor",
+    ]),
+    porParceiro: selected.map(({ partner, scope: partnerScope }) => ({
+      parceiro: partner.name,
+      baseRecMovel: partnerScope.opportunities.mobile,
+      linhasRecMovel: partnerScope.opportunities.mobileParkLines,
+    })),
     volume: [
       { periodo: "Mensal", valor: mensal },
       { periodo: "Semanal", valor: semanal },
@@ -134,76 +188,103 @@ export async function fetchMobile(partnerIds: string[]) {
 }
 
 export async function fetchFtth(partnerIds: string[]) {
-  await delay();
-  const ids = scope(partnerIds);
-  const agg = aggregate(ids);
-  const cobertura = Math.round(agg.clientes * 0.48);
-  const elegiveis = agg.oportFtth;
+  const snapshot = await fetchMapaSnapshot();
+  const ids = scope(partnerIds, snapshot.partners);
+  const selected = selectedMapaScopes(snapshot, ids);
+  const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
+  const baseBasica = total((item) => item.breakdowns.ftth.baseBasica);
+  const oportunidades = total((item) => item.breakdowns.ftth.oportunidades);
+
   return {
     kpis: {
-      cobertura,
-      elegiveis,
-      renovacao: Math.round(elegiveis * 0.22),
-      convergentes: Math.round(elegiveis * 0.18),
-      movelMaisFtth: Math.round(elegiveis * 0.31),
-      potencial: Math.round(elegiveis * 340),
+      cobertura: total((item) => item.breakdowns.ftth.cobertura),
+      oportunidades,
+      penetracaoBase: baseBasica + oportunidades ? baseBasica / (baseBasica + oportunidades) : 0,
+      renovacao: total((item) => item.breakdowns.ftth.renovacao),
+      semFtthNoParque: total((item) => item.breakdowns.ftth.semFtthNoParque),
+      comFtthNoParque: total((item) => item.breakdowns.ftth.comFtthNoParque),
+      convergentes: total((item) => item.breakdowns.ftth.convergentes),
     },
-    composicao: [
-      { tipo: "Nova venda", valor: Math.round(elegiveis * 0.48) },
-      { tipo: "Renovação", valor: Math.round(elegiveis * 0.22) },
-      { tipo: "Convergência móvel+FTTH", valor: Math.round(elegiveis * 0.18) },
-      { tipo: "Upgrade velocidade", valor: Math.round(elegiveis * 0.12) },
-    ],
-    geo: UF_DIST.map((u) => ({ uf: u.uf, cobertura: Math.round(u.total * 0.6), oportunidade: Math.round(u.total * 0.35) })),
+    composicao: mergeMapaRows(selected, (item) => item.breakdowns.ftth.composicao, "tipo", [
+      "valor",
+    ]),
+    geo: mergeMapaRows(selected, (item) => item.breakdowns.ftth.oportunidadesPorCidade, "cidade", [
+      "oportunidades",
+    ]),
     coberturaVsOport: [
-      { grupo: "Coberto e sem produto", valor: Math.round(cobertura * 0.42) },
-      { grupo: "Coberto com produto", valor: Math.round(cobertura * 0.38) },
-      { grupo: "Coberto e renovação", valor: Math.round(cobertura * 0.20) },
+      { grupo: "Sem FTTH no parque", valor: total((item) => item.breakdowns.ftth.semFtthNoParque) },
+      { grupo: "Com FTTH no parque", valor: total((item) => item.breakdowns.ftth.comFtthNoParque) },
     ],
-    porParceiro: PARTNER_METRICS.filter((m) => ids.includes(m.partnerId))
-      .map((m) => {
-        const p = PARTNERS.find((x) => x.id === m.partnerId)!;
-        return { parceiro: p.name, cobertura: Math.round(m.clientes * 0.48), oportunidade: m.oportFtth };
-      })
-      .sort((a, b) => a.parceiro.localeCompare(b.parceiro, "pt-BR")),
+    porParceiro: selected.map(({ partner, scope: partnerScope }) => ({
+      parceiro: partner.name,
+      oportunidades: partnerScope.breakdowns.ftth.oportunidades,
+    })),
+  };
+}
+export async function fetchAdvanced(partnerIds: string[]) {
+  const snapshot = await fetchMapaSnapshot();
+  const ids = scope(partnerIds, snapshot.partners);
+  const selected = selectedMapaScopes(snapshot, ids);
+  const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
+  const totalBase = total((item) => item.totals.allCnpj);
+  const opportunities = total((item) => item.opportunities.advanced);
+  const acquisitionWinback = total((item) => item.opportunities.advancedAcquisitionWinback);
+  const renewal = total((item) => item.opportunities.advancedRenewal);
+  const vivoTech = total((item) => item.opportunities.vivoTech);
+  const totalEvents = total((item) => item.opportunities.totalEvents);
+
+  return {
+    kpis: {
+      opportunities,
+      acquisitionWinback,
+      renewal,
+      vivoTech,
+      percentualBase: totalBase ? acquisitionWinback / totalBase : 0,
+      participacaoMix: totalEvents ? acquisitionWinback / totalEvents : 0,
+    },
+    porParceiro: selected.map(({ partner, scope: partnerScope }) => ({
+      parceiro: partner.name,
+      oportunidades: partnerScope.opportunities.advancedAcquisitionWinback,
+    })),
+    comparativo: [
+      { tipo: "Oportunidade Avançada", valor: acquisitionWinback },
+      { tipo: "Renovação de Avançada", valor: renewal },
+    ],
   };
 }
 
 export async function fetchLicenses(partnerIds: string[]) {
-  await delay();
-  const ids = scope(partnerIds);
-  const agg = aggregate(ids);
-  const base = Math.round(agg.clientes * 0.62);
-  const elegiveis = agg.oportLicencas;
+  const snapshot = await fetchMapaSnapshot();
+  const ids = scope(partnerIds, snapshot.partners);
+  const selected = selectedMapaScopes(snapshot, ids);
+  const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
+  const base = total((item) => item.totals.allCnpj);
+  const elegiveis = total((item) => item.opportunities.digital1);
   const percent = base ? elegiveis / base : 0;
   return {
     kpis: {
       baseElegivel: base,
       clientesElegiveis: elegiveis,
       percentualBase: percent,
-      potencialAdocao: Math.round(elegiveis * 0.34),
-      cenario34: Math.round(elegiveis * 0.34 * 34 * 12),
-      cenario100: Math.round(elegiveis * 0.34 * 100 * 12),
-      totalEstimado: Math.round(elegiveis * 0.34 * 62 * 12),
     },
-    porParceiro: PARTNER_METRICS.filter((m) => ids.includes(m.partnerId))
-      .map((m) => {
-        const p = PARTNERS.find((x) => x.id === m.partnerId)!;
-        return { parceiro: p.name, baseElegivel: Math.round(m.clientes * 0.62), elegiveis: m.oportLicencas };
-      })
-      .sort((a, b) => a.parceiro.localeCompare(b.parceiro, "pt-BR")),
-    composicao: [
-      { tipo: "Microsoft 365", valor: Math.round(elegiveis * 0.42) },
-      { tipo: "Google Workspace", valor: Math.round(elegiveis * 0.22) },
-      { tipo: "Segurança digital", valor: Math.round(elegiveis * 0.20) },
-      { tipo: "Backup e cloud", valor: Math.round(elegiveis * 0.16) },
-    ],
-    potencial: [
-      { cenario: "Conservador (R$34)", valor: Math.round(elegiveis * 0.34 * 34 * 12) },
-      { cenario: "Médio (R$62)", valor: Math.round(elegiveis * 0.34 * 62 * 12) },
-      { cenario: "Otimista (R$100)", valor: Math.round(elegiveis * 0.34 * 100 * 12) },
-    ],
+    porParceiro: selected.map(({ partner, scope: partnerScope }) => ({
+      parceiro: partner.name,
+      baseElegivel: partnerScope.totals.allCnpj,
+      elegiveis: partnerScope.opportunities.digital1,
+    })),
+    composicao: mergeMapaRows(selected, (item) => item.breakdowns.digitalComposition, "tipo", [
+      "valor",
+    ]),
   };
+}
+
+export async function fetchQsc(partnerIds: string[]): Promise<QscApiResponse> {
+  const query = new URLSearchParams();
+  partnerIds.forEach((partnerId) => query.append("partner", partnerId));
+  const suffix = query.size ? `?${query.toString()}` : "";
+  const response = await fetch(`/api/qsc${suffix}`);
+  if (!response.ok) throw new Error("Não foi possível carregar os resultados QSC.");
+  return response.json() as Promise<QscApiResponse>;
 }
 
 export async function fetchCapacity(partnerIds: string[]) {
@@ -284,19 +365,21 @@ export async function fetchClient(id: string): Promise<PortfolioRow | undefined>
 }
 
 export async function fetchDataQuality(partnerIds: string[]) {
-  await delay();
-  const ids = scope(partnerIds);
+  const snapshot = await fetchMapaSnapshot();
+  const ids = scope(partnerIds, snapshot.partners);
+  const selected = selectedMapaScopes(snapshot, ids);
+  const totalFor = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
   const filtered = PORTFOLIO.filter((r) => ids.includes(r.partnerId));
-  const total = filtered.length * 12;
+  const total = totalFor((item) => item.totals.rawRecords);
   return {
     kpis: {
       registrosProcessados: total,
-      cnpjsDistintos: filtered.length,
-      duplicidades: Math.round(total * 0.008),
+      cnpjsDistintos: totalFor((item) => item.totals.uniqueCnpj),
+      duplicidades: totalFor((item) => item.totals.recurringCnpjRows),
       cnpjsInvalidos: Math.round(total * 0.003),
       camposVazios: Math.round(total * 0.021),
       semParceiro: Math.round(total * 0.001),
-      semOportunidade: Math.round(filtered.length * 0.28),
+      semOportunidade: totalFor((item) => item.opportunities.recordsWithoutOpportunity),
       ultimaCarga: META.processadoEm,
     },
     porTipo: [
@@ -323,7 +406,12 @@ export async function fetchDataQuality(partnerIds: string[]) {
     exemplos: filtered.slice(0, 8).map((r, i) => ({
       id: r.id,
       cnpj: r.cnpj,
-      problema: ["Campo MUNICIPIO vazio", "DIGITAL_1 indefinido", "SITUACAO_RECEITA divergente", "Duplicidade parcial"][i % 4],
+      problema: [
+        "Campo MUNICIPIO vazio",
+        "DIGITAL_1 indefinido",
+        "SITUACAO_RECEITA divergente",
+        "Duplicidade parcial",
+      ][i % 4],
       parceiro: r.partnerName,
     })),
   };

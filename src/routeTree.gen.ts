@@ -9,33 +9,47 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
-import { Route as QualidadeRouteImport } from './routes/qualidade'
-import { Route as MovelRouteImport } from './routes/movel'
-import { Route as LicencasRouteImport } from './routes/licencas'
-import { Route as FtthRouteImport } from './routes/ftth'
-import { Route as CarteiraRouteImport } from './routes/carteira'
-import { Route as CapacidadeRouteImport } from './routes/capacidade'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
+import { Route as AvancadaRouteImport } from './routes/avancada'
+import { Route as CertificacaoRouteImport } from './routes/certificacao'
+import { Route as FtthRouteImport } from './routes/ftth'
+import { Route as LicencasRouteImport } from './routes/licencas'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as MovelRouteImport } from './routes/movel'
+import { Route as QscRouteImport } from './routes/qsc'
+import { Route as ResultadosRouteImport } from './routes/resultados'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as UsuariosRouteImport } from './routes/usuarios'
+import { Route as ApiQscRouteImport } from './routes/api.qsc'
+import { Route as ApiAdminUsersRouteImport } from './routes/api.admin.users'
+import { Route as ApiAuthLoginRouteImport } from './routes/api.auth.login'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
+import { Route as ApiAuthRegisterRouteImport } from './routes/api.auth.register'
+import { Route as ApiAuthSessionRouteImport } from './routes/api.auth.session'
+import { Route as ApiDataMapaRouteImport } from './routes/api.data.mapa'
+import { Route as ApiDataResultadosRouteImport } from './routes/api.data.resultados'
+import { Route as ApiDataUploadRouteImport } from './routes/api.data.upload'
+import { Route as ApiDirectorAccessRouteImport } from './routes/api.director.access'
 
-const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
-  id: '/sitemap.xml',
-  path: '/sitemap.xml',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const QualidadeRoute = QualidadeRouteImport.update({
-  id: '/qualidade',
-  path: '/qualidade',
+const AlimentacaoRoute = AlimentacaoRouteImport.update({
+  id: '/alimentacao',
+  path: '/alimentacao',
   getParentRoute: () => rootRouteImport,
 } as any)
-const MovelRoute = MovelRouteImport.update({
-  id: '/movel',
-  path: '/movel',
+const AvancadaRoute = AvancadaRouteImport.update({
+  id: '/avancada',
+  path: '/avancada',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LicencasRoute = LicencasRouteImport.update({
-  id: '/licencas',
-  path: '/licencas',
+const CertificacaoRoute = CertificacaoRouteImport.update({
+  id: '/certificacao',
+  path: '/certificacao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FtthRoute = FtthRouteImport.update({
@@ -43,125 +57,293 @@ const FtthRoute = FtthRouteImport.update({
   path: '/ftth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CarteiraRoute = CarteiraRouteImport.update({
-  id: '/carteira',
-  path: '/carteira',
+const LicencasRoute = LicencasRouteImport.update({
+  id: '/licencas',
+  path: '/licencas',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CapacidadeRoute = CapacidadeRouteImport.update({
-  id: '/capacidade',
-  path: '/capacidade',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const MovelRoute = MovelRouteImport.update({
+  id: '/movel',
+  path: '/movel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QscRoute = QscRouteImport.update({
+  id: '/qsc',
+  path: '/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResultadosRoute = ResultadosRouteImport.update({
+  id: '/resultados',
+  path: '/resultados',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UsuariosRoute = UsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQscRoute = ApiQscRouteImport.update({
+  id: '/api/qsc',
+  path: '/api/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
+  id: '/api/admin/users',
+  path: '/api/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
+  id: '/api/auth/register',
+  path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
+  id: '/api/auth/session',
+  path: '/api/auth/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDataMapaRoute = ApiDataMapaRouteImport.update({
+  id: '/api/data/mapa',
+  path: '/api/data/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDataResultadosRoute = ApiDataResultadosRouteImport.update({
+  id: '/api/data/resultados',
+  path: '/api/data/resultados',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDataUploadRoute = ApiDataUploadRouteImport.update({
+  id: '/api/data/upload',
+  path: '/api/data/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDirectorAccessRoute = ApiDirectorAccessRouteImport.update({
+  id: '/api/director/access',
+  path: '/api/director/access',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/capacidade': typeof CapacidadeRoute
-  '/carteira': typeof CarteiraRoute
+  '/alimentacao': typeof AlimentacaoRoute
+  '/avancada': typeof AvancadaRoute
+  '/certificacao': typeof CertificacaoRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
+  '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
-  '/qualidade': typeof QualidadeRoute
+  '/qsc': typeof QscRoute
+  '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/usuarios': typeof UsuariosRoute
+  '/api/qsc': typeof ApiQscRoute
+  '/api/admin/users': typeof ApiAdminUsersRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/data/mapa': typeof ApiDataMapaRoute
+  '/api/data/resultados': typeof ApiDataResultadosRoute
+  '/api/data/upload': typeof ApiDataUploadRoute
+  '/api/director/access': typeof ApiDirectorAccessRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/capacidade': typeof CapacidadeRoute
-  '/carteira': typeof CarteiraRoute
+  '/alimentacao': typeof AlimentacaoRoute
+  '/avancada': typeof AvancadaRoute
+  '/certificacao': typeof CertificacaoRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
+  '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
-  '/qualidade': typeof QualidadeRoute
+  '/qsc': typeof QscRoute
+  '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/usuarios': typeof UsuariosRoute
+  '/api/qsc': typeof ApiQscRoute
+  '/api/admin/users': typeof ApiAdminUsersRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/data/mapa': typeof ApiDataMapaRoute
+  '/api/data/resultados': typeof ApiDataResultadosRoute
+  '/api/data/upload': typeof ApiDataUploadRoute
+  '/api/director/access': typeof ApiDirectorAccessRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/capacidade': typeof CapacidadeRoute
-  '/carteira': typeof CarteiraRoute
+  '/alimentacao': typeof AlimentacaoRoute
+  '/avancada': typeof AvancadaRoute
+  '/certificacao': typeof CertificacaoRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
+  '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
-  '/qualidade': typeof QualidadeRoute
+  '/qsc': typeof QscRoute
+  '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/usuarios': typeof UsuariosRoute
+  '/api/qsc': typeof ApiQscRoute
+  '/api/admin/users': typeof ApiAdminUsersRoute
+  '/api/auth/login': typeof ApiAuthLoginRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/data/mapa': typeof ApiDataMapaRoute
+  '/api/data/resultados': typeof ApiDataResultadosRoute
+  '/api/data/upload': typeof ApiDataUploadRoute
+  '/api/director/access': typeof ApiDirectorAccessRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/capacidade'
-    | '/carteira'
+    | '/alimentacao'
+    | '/avancada'
+    | '/certificacao'
     | '/ftth'
     | '/licencas'
+    | '/login'
     | '/movel'
-    | '/qualidade'
+    | '/qsc'
+    | '/resultados'
     | '/sitemap.xml'
+    | '/usuarios'
+    | '/api/qsc'
+    | '/api/admin/users'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/register'
+    | '/api/auth/session'
+    | '/api/data/mapa'
+    | '/api/data/resultados'
+    | '/api/data/upload'
+    | '/api/director/access'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/capacidade'
-    | '/carteira'
+    | '/alimentacao'
+    | '/avancada'
+    | '/certificacao'
     | '/ftth'
     | '/licencas'
+    | '/login'
     | '/movel'
-    | '/qualidade'
+    | '/qsc'
+    | '/resultados'
     | '/sitemap.xml'
+    | '/usuarios'
+    | '/api/qsc'
+    | '/api/admin/users'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/register'
+    | '/api/auth/session'
+    | '/api/data/mapa'
+    | '/api/data/resultados'
+    | '/api/data/upload'
+    | '/api/director/access'
   id:
     | '__root__'
     | '/'
-    | '/capacidade'
-    | '/carteira'
+    | '/alimentacao'
+    | '/avancada'
+    | '/certificacao'
     | '/ftth'
     | '/licencas'
+    | '/login'
     | '/movel'
-    | '/qualidade'
+    | '/qsc'
+    | '/resultados'
     | '/sitemap.xml'
+    | '/usuarios'
+    | '/api/qsc'
+    | '/api/admin/users'
+    | '/api/auth/login'
+    | '/api/auth/logout'
+    | '/api/auth/register'
+    | '/api/auth/session'
+    | '/api/data/mapa'
+    | '/api/data/resultados'
+    | '/api/data/upload'
+    | '/api/director/access'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  CapacidadeRoute: typeof CapacidadeRoute
-  CarteiraRoute: typeof CarteiraRoute
+  AlimentacaoRoute: typeof AlimentacaoRoute
+  AvancadaRoute: typeof AvancadaRoute
+  CertificacaoRoute: typeof CertificacaoRoute
   FtthRoute: typeof FtthRoute
   LicencasRoute: typeof LicencasRoute
+  LoginRoute: typeof LoginRoute
   MovelRoute: typeof MovelRoute
-  QualidadeRoute: typeof QualidadeRoute
+  QscRoute: typeof QscRoute
+  ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  UsuariosRoute: typeof UsuariosRoute
+  ApiQscRoute: typeof ApiQscRoute
+  ApiAdminUsersRoute: typeof ApiAdminUsersRoute
+  ApiAuthLoginRoute: typeof ApiAuthLoginRoute
+  ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
+  ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
+  ApiAuthSessionRoute: typeof ApiAuthSessionRoute
+  ApiDataMapaRoute: typeof ApiDataMapaRoute
+  ApiDataResultadosRoute: typeof ApiDataResultadosRoute
+  ApiDataUploadRoute: typeof ApiDataUploadRoute
+  ApiDirectorAccessRoute: typeof ApiDirectorAccessRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/sitemap.xml': {
-      id: '/sitemap.xml'
-      path: '/sitemap.xml'
-      fullPath: '/sitemap.xml'
-      preLoaderRoute: typeof SitemapDotxmlRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/qualidade': {
-      id: '/qualidade'
-      path: '/qualidade'
-      fullPath: '/qualidade'
-      preLoaderRoute: typeof QualidadeRouteImport
+    '/alimentacao': {
+      id: '/alimentacao'
+      path: '/alimentacao'
+      fullPath: '/alimentacao'
+      preLoaderRoute: typeof AlimentacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/movel': {
-      id: '/movel'
-      path: '/movel'
-      fullPath: '/movel'
-      preLoaderRoute: typeof MovelRouteImport
+    '/avancada': {
+      id: '/avancada'
+      path: '/avancada'
+      fullPath: '/avancada'
+      preLoaderRoute: typeof AvancadaRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/licencas': {
-      id: '/licencas'
-      path: '/licencas'
-      fullPath: '/licencas'
-      preLoaderRoute: typeof LicencasRouteImport
+    '/certificacao': {
+      id: '/certificacao'
+      path: '/certificacao'
+      fullPath: '/certificacao'
+      preLoaderRoute: typeof CertificacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ftth': {
@@ -171,25 +353,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FtthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/carteira': {
-      id: '/carteira'
-      path: '/carteira'
-      fullPath: '/carteira'
-      preLoaderRoute: typeof CarteiraRouteImport
+    '/licencas': {
+      id: '/licencas'
+      path: '/licencas'
+      fullPath: '/licencas'
+      preLoaderRoute: typeof LicencasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/capacidade': {
-      id: '/capacidade'
-      path: '/capacidade'
-      fullPath: '/capacidade'
-      preLoaderRoute: typeof CapacidadeRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/movel': {
+      id: '/movel'
+      path: '/movel'
+      fullPath: '/movel'
+      preLoaderRoute: typeof MovelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qsc': {
+      id: '/qsc'
+      path: '/qsc'
+      fullPath: '/qsc'
+      preLoaderRoute: typeof QscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resultados': {
+      id: '/resultados'
+      path: '/resultados'
+      fullPath: '/resultados'
+      preLoaderRoute: typeof ResultadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/usuarios': {
+      id: '/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof UsuariosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/qsc': {
+      id: '/api/qsc'
+      path: '/api/qsc'
+      fullPath: '/api/qsc'
+      preLoaderRoute: typeof ApiQscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/users': {
+      id: '/api/admin/users'
+      path: '/api/admin/users'
+      fullPath: '/api/admin/users'
+      preLoaderRoute: typeof ApiAdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/register': {
+      id: '/api/auth/register'
+      path: '/api/auth/register'
+      fullPath: '/api/auth/register'
+      preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/session': {
+      id: '/api/auth/session'
+      path: '/api/auth/session'
+      fullPath: '/api/auth/session'
+      preLoaderRoute: typeof ApiAuthSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/data/mapa': {
+      id: '/api/data/mapa'
+      path: '/api/data/mapa'
+      fullPath: '/api/data/mapa'
+      preLoaderRoute: typeof ApiDataMapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/data/resultados': {
+      id: '/api/data/resultados'
+      path: '/api/data/resultados'
+      fullPath: '/api/data/resultados'
+      preLoaderRoute: typeof ApiDataResultadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/data/upload': {
+      id: '/api/data/upload'
+      path: '/api/data/upload'
+      fullPath: '/api/data/upload'
+      preLoaderRoute: typeof ApiDataUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/director/access': {
+      id: '/api/director/access'
+      path: '/api/director/access'
+      fullPath: '/api/director/access'
+      preLoaderRoute: typeof ApiDirectorAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -197,14 +477,38 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  CapacidadeRoute: CapacidadeRoute,
-  CarteiraRoute: CarteiraRoute,
+  AlimentacaoRoute: AlimentacaoRoute,
+  AvancadaRoute: AvancadaRoute,
+  CertificacaoRoute: CertificacaoRoute,
   FtthRoute: FtthRoute,
   LicencasRoute: LicencasRoute,
+  LoginRoute: LoginRoute,
   MovelRoute: MovelRoute,
-  QualidadeRoute: QualidadeRoute,
+  QscRoute: QscRoute,
+  ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  UsuariosRoute: UsuariosRoute,
+  ApiQscRoute: ApiQscRoute,
+  ApiAdminUsersRoute: ApiAdminUsersRoute,
+  ApiAuthLoginRoute: ApiAuthLoginRoute,
+  ApiAuthLogoutRoute: ApiAuthLogoutRoute,
+  ApiAuthRegisterRoute: ApiAuthRegisterRoute,
+  ApiAuthSessionRoute: ApiAuthSessionRoute,
+  ApiDataMapaRoute: ApiDataMapaRoute,
+  ApiDataResultadosRoute: ApiDataResultadosRoute,
+  ApiDataUploadRoute: ApiDataUploadRoute,
+  ApiDirectorAccessRoute: ApiDirectorAccessRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

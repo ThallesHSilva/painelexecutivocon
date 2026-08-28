@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 /* ---------------- Theme ---------------- */
 type Theme = "light" | "dark";
@@ -14,7 +22,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const stored = localStorage.getItem("mp:theme") as Theme | null;
-      const initial: Theme = stored ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      const initial: Theme =
+        stored ?? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
       setTheme(initial);
     } catch {
       /* ignore */
@@ -48,6 +57,9 @@ export function useTheme() {
 /* ---------------- Partner Filter ---------------- */
 interface PartnerFilterCtx {
   selected: string[]; // empty = all
+  effectiveSelected: string[];
+  role: "admin" | "director" | "gn" | null;
+  allowedPartnerIds: string[] | null;
   setSelected: (ids: string[]) => void;
   toggle: (id: string) => void;
   clear: () => void;
@@ -57,6 +69,8 @@ const PartnerFilterContext = createContext<PartnerFilterCtx | null>(null);
 
 export function PartnerFilterProvider({ children }: { children: ReactNode }) {
   const [selected, setSelectedState] = useState<string[]>([]);
+  const [role, setRole] = useState<PartnerFilterCtx["role"]>(null);
+  const [allowedPartnerIds, setAllowedPartnerIds] = useState<string[] | null>(null);
 
   useEffect(() => {
     try {
@@ -68,6 +82,21 @@ export function PartnerFilterProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then((response) => response.json())
+      .then((payload: { user?: { role?: PartnerFilterCtx["role"]; partnerIds?: string[] } }) => {
+        const sessionRole = payload.user?.role ?? null;
+        const assigned = sessionRole === "gn" ? (payload.user?.partnerIds ?? []) : null;
+        setRole(sessionRole);
+        setAllowedPartnerIds(assigned);
+        if (assigned) {
+          setSelectedState((current) => current.filter((id) => assigned.includes(id)));
+        }
+      })
+      .catch(() => undefined);
   }, []);
 
   const setSelected = useCallback((ids: string[]) => {
@@ -88,9 +117,27 @@ export function PartnerFilterProvider({ children }: { children: ReactNode }) {
 
   const clear = useCallback(() => setSelected([]), [setSelected]);
 
+  const effectiveSelected = useMemo(
+    () =>
+      role === "gn" && selected.length === 0
+        ? allowedPartnerIds?.length
+          ? allowedPartnerIds
+          : ["__no_partner_access__"]
+        : selected,
+    [role, selected, allowedPartnerIds],
+  );
   const value = useMemo(
-    () => ({ selected, setSelected, toggle, clear, isAll: selected.length === 0 }),
-    [selected, setSelected, toggle, clear],
+    () => ({
+      selected,
+      effectiveSelected,
+      role,
+      allowedPartnerIds,
+      setSelected,
+      toggle,
+      clear,
+      isAll: selected.length === 0,
+    }),
+    [selected, effectiveSelected, role, allowedPartnerIds, setSelected, toggle, clear],
   );
   return <PartnerFilterContext.Provider value={value}>{children}</PartnerFilterContext.Provider>;
 }

@@ -7,6 +7,10 @@
     "dev": "vite dev",
     "build": "vite build",
     "build:dev": "vite build --mode development",
+    "data:import": "node scripts/process-mapa-parque-all.mjs",
+    "data:import:qsc": "node scripts/process-qsc.mjs",
+    "data:migrate:snapshots": "node scripts/migrate-snapshots-to-sqlite.mjs",
+    "auth:hash": "node scripts/hash-password.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write ."

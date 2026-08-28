@@ -16,6 +16,18 @@ dist-ssr
 .nitro
 *.local
 
+# Local application database
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+.data/
+src/data/*.snapshot.json
+.codex/
+
+# Local Graphify code knowledge graph
+graphify-out/
+.graphify_version
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

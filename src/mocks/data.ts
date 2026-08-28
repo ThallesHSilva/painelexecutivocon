@@ -1,25 +1,14 @@
-// Fixed deterministic mock data representing pre-processed backend responses.
-// No Math.random — values are static, computed once at module load.
+import { EMPTY_MAPA_SNAPSHOT as snapshot } from "@/lib/snapshot-types";
+
+// Temporary compatibility layer while the application backend is implemented.
+// The dashboard metrics below come from the real processed MAPA PARQUE snapshot.
 
 export interface Partner {
   id: string;
   name: string;
 }
 
-export const PARTNERS: Partner[] = [
-  { id: "p01", name: "A7 Connect" },
-  { id: "p02", name: "Alpha Telecom" },
-  { id: "p03", name: "BR Digital" },
-  { id: "p04", name: "Conecta Norte" },
-  { id: "p05", name: "Delta Comunicações" },
-  { id: "p06", name: "Elo Corporativo" },
-  { id: "p07", name: "Fibra Central" },
-  { id: "p08", name: "Global Link" },
-  { id: "p09", name: "Horizonte Sul" },
-  { id: "p10", name: "Íris Serviços" },
-  { id: "p11", name: "Junction Comm" },
-  { id: "p12", name: "Kappa Networks" },
-];
+export const PARTNERS: Partner[] = snapshot.partners;
 
 // Deterministic pseudo-random using seed
 function hash(s: string): number {
@@ -44,32 +33,27 @@ export interface PartnerMetrics {
   oportFtth: number;
   oportLicencas: number;
   linhasPotenciais: number;
+  linhasRecMovel: number;
   potencialFinanceiro: number; // R$
   contatosQualificados: number;
   cxNecessario: number;
 }
 
-export const PARTNER_METRICS: PartnerMetrics[] = PARTNERS.map((p) => {
-  const cnpjs = pr(p.id + "cnpj", 800, 4200);
-  const clientes = cnpjs + pr(p.id + "cli", 100, 900);
-  const oportMovel = pr(p.id + "mov", 300, 1800);
-  const oportFtth = pr(p.id + "ftth", 200, 1400);
-  const oportLicencas = pr(p.id + "lic", 250, 1600);
-  const oportunidades = oportMovel + oportFtth + oportLicencas;
-  const linhasPotenciais = oportMovel * pr(p.id + "lp", 3, 7);
-  const potencialFinanceiro = oportunidades * pr(p.id + "pot", 180, 420);
+export const PARTNER_METRICS: PartnerMetrics[] = PARTNERS.map((partner) => {
+  const partnerScope = snapshot.scopes[partner.id as keyof typeof snapshot.scopes];
   return {
-    partnerId: p.id,
-    cnpjs,
-    clientes,
-    oportunidades,
-    oportMovel,
-    oportFtth,
-    oportLicencas,
-    linhasPotenciais,
-    potencialFinanceiro,
-    contatosQualificados: Math.floor(oportunidades * 0.42),
-    cxNecessario: Math.max(2, Math.floor(oportunidades / 220)),
+    partnerId: partner.id,
+    cnpjs: partnerScope.totals.uniqueCnpj,
+    clientes: partnerScope.totals.uniqueCnpj,
+    oportunidades: partnerScope.opportunities.totalEvents,
+    oportMovel: partnerScope.opportunities.mobile,
+    oportFtth: partnerScope.opportunities.ftth,
+    oportLicencas: partnerScope.opportunities.digital1,
+    linhasPotenciais: partnerScope.totals.mobileParkLines,
+    linhasRecMovel: partnerScope.opportunities.mobileParkLines,
+    potencialFinanceiro: partnerScope.totals.totalPortfolioValue,
+    contatosQualificados: partnerScope.totals.contactableRecords,
+    cxNecessario: 0,
   };
 });
 
@@ -85,6 +69,7 @@ export function aggregate(partnerIds: string[]) {
       acc.oportFtth += r.oportFtth;
       acc.oportLicencas += r.oportLicencas;
       acc.linhasPotenciais += r.linhasPotenciais;
+      acc.linhasRecMovel += r.linhasRecMovel;
       acc.potencialFinanceiro += r.potencialFinanceiro;
       acc.contatosQualificados += r.contatosQualificados;
       acc.cxNecessario += r.cxNecessario;
@@ -98,6 +83,7 @@ export function aggregate(partnerIds: string[]) {
       oportFtth: 0,
       oportLicencas: 0,
       linhasPotenciais: 0,
+      linhasRecMovel: 0,
       potencialFinanceiro: 0,
       contatosQualificados: 0,
       cxNecessario: 0,
@@ -179,7 +165,8 @@ export const PORTFOLIO: PortfolioRow[] = (() => {
         Number(oportMovel) + Number(oportFtth) + Number(oportLicencas) + Number(servicosDigitais);
       const potencial = pr(seed + "pot", 1200, 48000);
       const razao = `${RAZOES[pr(seed + "rz", 0, RAZOES.length)]} ${city} ${pr(seed + "n", 10, 999)} LTDA`;
-      const cnpjRaw = pad(pr(seed + "cnpj", 1, 99999999), 8) + "0001" + pad(pr(seed + "d", 10, 99), 2);
+      const cnpjRaw =
+        pad(pr(seed + "cnpj", 1, 99999999), 8) + "0001" + pad(pr(seed + "d", 10, 99), 2);
       const cnpj = `${cnpjRaw.slice(0, 2)}.${cnpjRaw.slice(2, 5)}.${cnpjRaw.slice(5, 8)}/${cnpjRaw.slice(8, 12)}-${cnpjRaw.slice(12)}`;
       const produtos = [
         parqueMovel > 0 ? "Móvel Pós" : null,
@@ -224,9 +211,9 @@ export const UF_DIST = UFS.map((uf) => ({
 })).sort((a, b) => b.total - a.total);
 
 export const META = {
-  regrasVersao: "v3.2.1",
-  processadoEm: "2026-07-14 06:12",
-  dataBase: "2026-07-13",
-  registrosProcessados: PORTFOLIO.length * 12,
-  status: "Atualizado",
+  regrasVersao: snapshot.rules.version,
+  processadoEm: snapshot.source.importedAt,
+  dataBase: snapshot.source.sourceModifiedAt.slice(0, 10),
+  registrosProcessados: snapshot.totals.rawRecords,
+  status: "Amostra real carregada",
 };

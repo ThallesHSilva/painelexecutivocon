@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,34 +11,54 @@ import { usePartners } from "@/hooks/useData";
 
 export function PartnerFilter() {
   const { data: partners = [] } = usePartners();
-  const { selected, toggle, clear, setSelected, isAll } = usePartnerFilter();
+  const { selected, toggle, clear, setSelected, allowedPartnerIds, role } =
+    usePartnerFilter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
 
+  useEffect(() => {
+    if (!partners.length || !selected.length) return;
+    const availableIds = new Set(partners.map((partner) => partner.id));
+    const validSelection = selected.filter((id) => availableIds.has(id));
+    if (validSelection.length !== selected.length) setSelected(validSelection);
+  }, [partners, selected, setSelected]);
+
+  const availablePartners = useMemo(
+    () =>
+      role === "gn" && allowedPartnerIds
+        ? partners.filter((partner) => allowedPartnerIds.includes(partner.id))
+        : partners,
+    [partners, role, allowedPartnerIds],
+  );
   const filtered = useMemo(
-    () => partners.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())),
-    [partners, q],
+    () => availablePartners.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())),
+    [availablePartners, q],
   );
 
-  const label = isAll
+  const hasSelection = selected.length > 0;
+  const label = !hasSelection
     ? "Todos os parceiros"
     : selected.length === 1
-      ? partners.find((p) => p.id === selected[0])?.name ?? "1 parceiro"
+      ? (availablePartners.find((p) => p.id === selected[0])?.name ?? "1 parceiro")
       : `${selected.length} parceiros`;
+  const handleClear = () => {
+    clear();
+    setQ("");
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="h-10 min-w-[180px] justify-between gap-2 rounded-xl bg-card"
+          className="h-10 min-w-[190px] justify-between gap-2 rounded-2xl border-primary/10 bg-card/70 px-3 shadow-sm transition hover:border-primary/25 hover:bg-primary/[0.05]"
         >
           <div className="flex min-w-0 items-center gap-2">
             <Users className="size-4 shrink-0 text-muted-foreground" />
             <span className="truncate text-sm">{label}</span>
           </div>
           <div className="flex items-center gap-1">
-            {!isAll && (
+            {hasSelection && (
               <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px]">
                 {selected.length}
               </Badge>
@@ -62,33 +82,27 @@ export function PartnerFilter() {
         </div>
         <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
           <button
-            onClick={() => setSelected(partners.map((p) => p.id))}
+            onClick={() => setSelected(availablePartners.map((p) => p.id))}
             className="text-muted-foreground hover:text-foreground"
           >
             Selecionar todos
           </button>
           <button
-            onClick={clear}
+            onClick={handleClear}
             className="flex items-center gap-1 text-muted-foreground hover:text-foreground disabled:opacity-40"
-            disabled={isAll}
+            disabled={!hasSelection && !q}
           >
             <X className="size-3" /> Limpar
           </button>
         </div>
-        <ScrollArea className="max-h-[280px]">
+        <ScrollArea className="h-[280px]">
           <ul className="p-1">
             {filtered.map((p) => {
-              const checked = isAll || selected.includes(p.id);
+              const checked = selected.includes(p.id);
               return (
                 <li key={p.id}>
                   <button
-                    onClick={() => {
-                      if (isAll) {
-                        setSelected(partners.filter((x) => x.id !== p.id).map((x) => x.id));
-                      } else {
-                        toggle(p.id);
-                      }
-                    }}
+                    onClick={() => toggle(p.id)}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                   >
                     <Checkbox checked={checked} className="pointer-events-none" />
@@ -98,12 +112,18 @@ export function PartnerFilter() {
               );
             })}
             {filtered.length === 0 && (
-              <li className="px-3 py-6 text-center text-xs text-muted-foreground">Nenhum parceiro encontrado</li>
+              <li className="px-3 py-6 text-center text-xs text-muted-foreground">
+                Nenhum parceiro encontrado
+              </li>
             )}
           </ul>
         </ScrollArea>
         <div className="border-t p-2 text-[11px] text-muted-foreground">
-          {isAll ? "Considerando todos os parceiros" : `${selected.length} selecionado(s)`}
+          {hasSelection
+            ? `${selected.length} selecionado(s)`
+            : role === "gn"
+              ? "Nenhum parceiro selecionado · visão dos parceiros atribuídos"
+              : "Nenhum parceiro selecionado · visão consolidada"}
         </div>
       </PopoverContent>
     </Popover>

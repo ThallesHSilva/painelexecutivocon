@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { PartnerFilterProvider, ThemeProvider } from "@/contexts/AppContexts";
+import { Toaster } from "@/components/ui/sonner";
 
 function NotFoundComponent() {
   return (
@@ -78,13 +79,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Visão Geral — Mapa Parque" },
+      { title: "Visão Carteira — Mapa Parque" },
       {
         name: "description",
         content:
           "Painel executivo do Mapa Parque para visualizar oportunidades comerciais de móvel, FTTH e serviços digitais na carteira dos parceiros.",
       },
-      { property: "og:title", content: "Visão Geral — Mapa Parque" },
+      { property: "og:title", content: "Visão Carteira — Mapa Parque" },
       {
         property: "og:description",
         content:
@@ -92,14 +93,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: "Visão Geral — Mapa Parque" },
+      { name: "twitter:title", content: "Visão Carteira — Mapa Parque" },
       { name: "twitter:description", content: "Painel executivo do Mapa Parque para visualizar oportunidades comerciais de móvel, FTTH e serviços digitais na carteira dos parceiros." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/280a057c-6359-4f76-8d2f-19ff68aa3793/id-preview-84e2418c--d70409f6-9719-47c9-ab73-afbbaa87e3d4.lovable.app-1784145047939.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/280a057c-6359-4f76-8d2f-19ff68aa3793/id-preview-84e2418c--d70409f6-9719-47c9-ab73-afbbaa87e3d4.lovable.app-1784145047939.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      { rel: "icon", href: "/vivo-mark.svg", type: "image/svg+xml" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
@@ -137,6 +138,7 @@ function RootComponent() {
         <PartnerFilterProvider>
           <Outlet />
         </PartnerFilterProvider>
+        <Toaster position="bottom-right" closeButton richColors />
       </ThemeProvider>
     </QueryClientProvider>
   );

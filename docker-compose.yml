@@ -1,0 +1,33 @@
+services:
+  mapa-parque:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mapa-parque
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 8000
+      NODE_OPTIONS: --max-old-space-size=4096
+      DATABASE_PATH: /var/lib/mapa-parque/mapa-parque.sqlite
+      UPLOAD_PATH: /var/lib/mapa-parque/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - mapa-parque-data:/var/lib/mapa-parque
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:8000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mapa-parque-data:
+    name: mapa-parque-data
