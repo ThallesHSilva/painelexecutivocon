@@ -42,6 +42,8 @@ type UploadRole = "gn" | "director";
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
 const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
+const IDENTIFICATION_SAMPLE_BYTES = 256 * 1024;
+const IDENTIFICATION_SAMPLE_ROWS = 300;
 const MAX_CHUNK_ATTEMPTS = 4;
 const RETRYABLE_UPLOAD_STATUS = new Set([408, 425, 429, 499, 500, 502, 503, 504]);
 
@@ -113,7 +115,7 @@ function normalizeHeader(value: unknown) {
     .replace(/[^A-Z0-9]/g, "");
 }
 
-function parseCsvSample(text: string) {
+function parseCsvSample(text: string, maxRows = IDENTIFICATION_SAMPLE_ROWS) {
   const delimiter = (text.match(/;/g)?.length ?? 0) > (text.match(/,/g)?.length ?? 0) ? ";" : ",";
   const rows: string[][] = [];
   let row: string[] = [];
@@ -134,7 +136,7 @@ function parseCsvSample(text: string) {
     } else {
       cell += character;
     }
-    if (rows.length >= 25) break;
+    if (rows.length >= maxRows) break;
   }
   if (row.length || cell) {
     row.push(cell);
@@ -201,7 +203,7 @@ async function identifySpreadsheet(file: File): Promise<FileKind> {
 
   const rows =
     extension === "CSV"
-      ? parseCsvSample(await file.slice(0, 1_500_000).text())
+      ? parseCsvSample(await file.slice(0, IDENTIFICATION_SAMPLE_BYTES).text())
       : await readXlsxRows(file);
   const headers = headersFromRows(rows);
   const firstMatching = (required: string[]) => headers.some((row) => hasHeaders(row, required));

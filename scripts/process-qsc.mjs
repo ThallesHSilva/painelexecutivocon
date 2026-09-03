@@ -179,10 +179,29 @@ try {
   mapaPartners = [];
 }
 
+const partnerIdsByName = new Map(
+  mapaPartners.map((partner) => [compactKey(partner.name), partner.id]),
+);
+const partnerIdCache = new Map();
+const normalizedKeyCache = new Map();
+
+function cachedNormalizeKey(value) {
+  const raw = normalize(value);
+  const cached = normalizedKeyCache.get(raw);
+  if (cached !== undefined) return cached;
+  const result = normalizeKey(raw);
+  normalizedKeyCache.set(raw, result);
+  return result;
+}
+
 function resolvePartnerId(name, document) {
-  const nameKey = compactKey(name);
-  const match = mapaPartners.find((partner) => compactKey(partner.name) === nameKey);
-  return match?.id ?? slugify(name || document || "parceiro");
+  const cacheKey = `${name}\u001f${document}`;
+  const cached = partnerIdCache.get(cacheKey);
+  if (cached) return cached;
+  const id =
+    partnerIdsByName.get(cachedNormalizeKey(name)) ?? slugify(name || document || "parceiro");
+  partnerIdCache.set(cacheKey, id);
+  return id;
 }
 
 const movementGroups = new Map();
@@ -214,26 +233,38 @@ for (const { domain, filePath } of inputs) {
     throw new Error(`${path.basename(absolutePath)} não possui: ${missing.join(", ")}`);
   }
 
-  const valueAt = (row, header) => normalize(row[indexByHeader.get(normalizeKey(header))]);
+  const index = (header) => indexByHeader.get(header);
+  const columns = {
+    indicator: index("INDICADOR"),
+    subIndicator: index("SUB INDICADOR"),
+    competence: index("COMPETENCIA"),
+    partnerName: index("GRUPO REDE TERMO"),
+    partnerDocument: index("CNPJ PARCEIRO"),
+    movement: index("TIPO MOVIMENTO"),
+    movementDetail: index("DETALHE TIPO MOVIMENTO"),
+    quantity: index("QUANTIDADE"),
+    observation: index("OBSERVACAO"),
+  };
+  const valueAt = (row, column) => normalize(column === undefined ? "" : row[column]);
   let rowCount = 0;
 
   for await (const row of rows) {
     if (row.length === 1 && !normalize(row[0])) continue;
     rowCount += 1;
 
-    const indicator = valueAt(row, "INDICADOR");
-    const subIndicator = valueAt(row, "SUB INDICADOR");
-    const competence = valueAt(row, "COMPETENCIA");
-    const partnerName = valueAt(row, "GRUPO REDE TERMO") || "Parceiro não informado";
-    const partnerDocument = valueAt(row, "CNPJ PARCEIRO");
+    const indicator = valueAt(row, columns.indicator);
+    const subIndicator = valueAt(row, columns.subIndicator);
+    const competence = valueAt(row, columns.competence);
+    const partnerName = valueAt(row, columns.partnerName) || "Parceiro não informado";
+    const partnerDocument = valueAt(row, columns.partnerDocument);
     const partnerId = resolvePartnerId(partnerName, partnerDocument);
-    const movement = valueAt(row, "TIPO MOVIMENTO") || "Em branco";
-    const movementDetail = valueAt(row, "DETALHE TIPO MOVIMENTO") || "Em branco";
-    const reportedQuantity = parseNumber(valueAt(row, "QUANTIDADE"));
+    const movement = valueAt(row, columns.movement) || "Em branco";
+    const movementDetail = valueAt(row, columns.movementDetail) || "Em branco";
+    const reportedQuantity = parseNumber(valueAt(row, columns.quantity));
     const quantity =
       reportedQuantity ||
-      (compactKey(subIndicator) === "PARQUECOMDEBITOAUTOMATICO"
-        ? quantityFromObservation(valueAt(row, "OBSERVACAO"))
+      (cachedNormalizeKey(subIndicator).replaceAll(" ", "") === "PARQUECOMDEBITOAUTOMATICO"
+        ? quantityFromObservation(valueAt(row, columns.observation))
         : 0);
 
     partners.set(partnerId, { id: partnerId, name: partnerName, document: partnerDocument });
@@ -254,11 +285,11 @@ for (const { domain, filePath } of inputs) {
       subIndicator,
       competence,
       partnerId,
-      normalizeKey(movement),
+      cachedNormalizeKey(movement),
     ].join("\u001f");
     addToAccumulator(movementGroups, movementKey, base, quantity);
 
-    const detailKey = `${movementKey}\u001f${normalizeKey(movementDetail)}`;
+    const detailKey = `${movementKey}\u001f${cachedNormalizeKey(movementDetail)}`;
     addToAccumulator(detailGroups, detailKey, { ...base, movementDetail }, quantity);
   }
 
