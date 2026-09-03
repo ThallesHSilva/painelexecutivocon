@@ -185,7 +185,8 @@ export const Route = createFileRoute("/api/data/upload")({
         const isQsc = QSC_KINDS.includes(kind as (typeof QSC_KINDS)[number]);
         const isDirectorBase = DIRECTOR_KINDS.includes(kind as (typeof DIRECTOR_KINDS)[number]);
         const permitted =
-          (user?.role === "director" && isDirectorBase) || (user?.role === "gn" && isQsc);
+          (user?.role === "director" && (isDirectorBase || isQsc)) ||
+          (user?.role === "gn" && isQsc);
         if (!permitted)
           return Response.json({ message: "Sem permissão para esta base." }, { status: 403 });
         if (!isSameOriginRequest(request)) {

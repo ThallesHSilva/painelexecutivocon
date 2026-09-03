@@ -340,6 +340,9 @@ function AlimentacaoPage() {
                 "Best Guess",
                 "Portabilidade analítica",
                 "Torres de serviço",
+                "QSC Carteira",
+                "QSC Fixa",
+                "QSC Móvel",
               ]
             : [],
       ),
