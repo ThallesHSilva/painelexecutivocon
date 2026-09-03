@@ -32,12 +32,7 @@ function movementValue(records, competence, scopeId, selector) {
       matchesSuffix(record.movement, selector.movement) &&
       matchesSubIndicator(record.subIndicator, selector.subIndicators),
   );
-  const field =
-    selector.measure === "documents"
-      ? "distinctDocuments"
-      : selector.measure === "rows"
-        ? "rows"
-        : "quantity";
+  const field = selector.measure === "rows" ? "rows" : "quantity";
   return {
     value: matches.reduce((total, record) => total + record[field], 0),
     found: matches.length > 0,
@@ -53,7 +48,7 @@ function detailValue(records, competence, scopeId, selector) {
       matchesSuffix(record.movementDetail, selector.detail) &&
       matchesSubIndicator(record.subIndicator, selector.subIndicators),
   );
-  const field = selector.measure === "documents" ? "distinctDocuments" : "quantity";
+  const field = selector.measure === "rows" ? "rows" : "quantity";
   return matches.reduce((total, record) => total + record[field], 0);
 }
 
@@ -219,12 +214,10 @@ const METRICS = [
     numerator: {
       movement: "CLIENTE TOTALIZADO",
       subIndicators: ["Totalizacao Altas Fixa Basica"],
-      measure: "documents",
     },
     denominator: {
       movement: "CLIENTE POTENCIAL",
       subIndicators: ["Totalizacao Altas Fixa Basica"],
-      measure: "documents",
     },
     denominatorMode: "plus-numerator",
   },
@@ -257,9 +250,8 @@ const METRICS = [
     numerator: {
       movement: "CLIENTE COM FATURA PAGA",
       subIndicators: ["TFP"],
-      measure: "documents",
     },
-    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"], measure: "documents" },
+    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"] },
     denominatorMode: "plus-numerator",
   },
   {
@@ -273,12 +265,10 @@ const METRICS = [
     numerator: {
       movement: "ACEITE VALIDO",
       subIndicators: ["Qualidade Aceite"],
-      measure: "documents",
     },
     denominator: {
       movement: "ATIVACAO CLIENTE",
       subIndicators: ["Qualidade Aceite"],
-      measure: "documents",
     },
     denominatorMode: "plus-numerator",
   },
@@ -318,12 +308,10 @@ const METRICS = [
     numerator: {
       movement: "CLIENTE TOTALIZADO",
       subIndicators: ["% Totalizacao Altas Movel"],
-      measure: "documents",
     },
     denominator: {
       movement: "CLIENTE POTENCIAL",
       subIndicators: ["% Totalizacao Altas Movel"],
-      measure: "documents",
     },
     denominatorMode: "plus-numerator",
   },
@@ -356,9 +344,8 @@ const METRICS = [
     numerator: {
       movement: "CLIENTE COM FATURA PAGA",
       subIndicators: ["TFP"],
-      measure: "documents",
     },
-    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"], measure: "documents" },
+    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"] },
     denominatorMode: "plus-numerator",
   },
 ];

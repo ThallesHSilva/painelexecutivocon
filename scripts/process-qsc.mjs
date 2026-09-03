@@ -18,7 +18,9 @@ const inputs = requestedInputs.map((input) => {
   return { domain: match[1].toLowerCase(), filePath: match[2] };
 });
 
-const outputPath = path.resolve(process.env.QSC_SNAPSHOT_PATH ?? ".data/snapshots/qsc.snapshot.json");
+const outputPath = path.resolve(
+  process.env.QSC_SNAPSHOT_PATH ?? ".data/snapshots/qsc.snapshot.json",
+);
 const mapaSnapshotPath = path.resolve(
   process.env.MAPA_PARQUE_SNAPSHOT_PATH ?? ".data/snapshots/mapa-parque.snapshot.json",
 );
@@ -155,20 +157,18 @@ async function* parseDelimited(filePath, encoding, delimiter = ";") {
 }
 
 function createAccumulator(base) {
-  return { ...base, quantity: 0, rows: 0, documents: new Set() };
+  return { ...base, quantity: 0, rows: 0 };
 }
 
-function addToAccumulator(map, key, base, quantity, document) {
+function addToAccumulator(map, key, base, quantity) {
   const current = map.get(key) ?? createAccumulator(base);
   current.quantity += quantity;
   current.rows += 1;
-  if (document) current.documents.add(document);
   map.set(key, current);
 }
 
 function serializeAccumulator(value) {
-  const { documents, ...record } = value;
-  return { ...record, distinctDocuments: documents.size };
+  return value;
 }
 
 let mapaPartners = [];
@@ -229,7 +229,6 @@ for (const { domain, filePath } of inputs) {
     const partnerId = resolvePartnerId(partnerName, partnerDocument);
     const movement = valueAt(row, "TIPO MOVIMENTO") || "Em branco";
     const movementDetail = valueAt(row, "DETALHE TIPO MOVIMENTO") || "Em branco";
-    const document = valueAt(row, "DOCUMENTO CLIENTE");
     const reportedQuantity = parseNumber(valueAt(row, "QUANTIDADE"));
     const quantity =
       reportedQuantity ||
@@ -257,10 +256,10 @@ for (const { domain, filePath } of inputs) {
       partnerId,
       normalizeKey(movement),
     ].join("\u001f");
-    addToAccumulator(movementGroups, movementKey, base, quantity, document);
+    addToAccumulator(movementGroups, movementKey, base, quantity);
 
     const detailKey = `${movementKey}\u001f${normalizeKey(movementDetail)}`;
-    addToAccumulator(detailGroups, detailKey, { ...base, movementDetail }, quantity, document);
+    addToAccumulator(detailGroups, detailKey, { ...base, movementDetail }, quantity);
   }
 
   source.push({
