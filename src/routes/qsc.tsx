@@ -396,10 +396,9 @@ const SEMESTER_DOMAINS: Array<{ domain: QscDomain; label: string }> = [
   { domain: "movel", label: "QSC Móvel" },
 ];
 
-function currentSemesterCompetencies(currentCompetence: string) {
+function semesterCompetencies(currentCompetence: string, semester: 1 | 2) {
   const year = Number(currentCompetence.slice(0, 4)) || new Date().getFullYear();
-  const currentMonth = Number(currentCompetence.slice(5, 7)) || new Date().getMonth() + 1;
-  const firstMonth = currentMonth <= 6 ? 1 : 7;
+  const firstMonth = semester === 1 ? 1 : 7;
   return Array.from(
     { length: 6 },
     (_, index) => `${year}-${String(firstMonth + index).padStart(2, "0")}`,
@@ -434,14 +433,15 @@ function SemesterHistoryPanel({
   metrics: QscMetricSeries[];
   currentCompetence: string;
 }) {
-  const competencies = currentSemesterCompetencies(currentCompetence);
+  const currentMonth = Number(currentCompetence.slice(5, 7)) || new Date().getMonth() + 1;
+  const [selectedSemester, setSelectedSemester] = useState<1 | 2>(currentMonth <= 6 ? 1 : 2);
+  const competencies = semesterCompetencies(currentCompetence, selectedSemester);
   const historyRows = SEMESTER_DOMAINS.map(({ domain, label }) => ({
     domain,
     label,
     ...qscHistoryRow(domain, metrics, competencies),
   }));
-  const semesterNumber = Number(competencies[0]?.slice(5, 7)) <= 6 ? 1 : 2;
-  const semesterLabel = `${semesterNumber}º semestre de ${competencies[0]?.slice(0, 4)}`;
+  const semesterLabel = `${selectedSemester}º semestre de ${competencies[0]?.slice(0, 4)}`;
 
   return (
     <Card className="overflow-hidden rounded-[1.8rem] border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-elegant">
@@ -451,12 +451,35 @@ function SemesterHistoryPanel({
             Histórico consolidado
           </p>
           <h2 className="mt-1 text-lg font-semibold tracking-tight">
-            Visão histórica do semestre corrente
+            Visão histórica por semestre
           </h2>
         </div>
-        <span className="w-fit rounded-full border border-primary/15 bg-background/75 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
-          {semesterLabel}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="inline-flex rounded-xl border border-primary/15 bg-background/75 p-1 shadow-sm"
+            aria-label="Selecionar semestre do histórico QSC"
+          >
+            {([1, 2] as const).map((semester) => (
+              <button
+                key={semester}
+                type="button"
+                onClick={() => setSelectedSemester(semester)}
+                aria-pressed={selectedSemester === semester}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all",
+                  selectedSemester === semester
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-primary/[0.07] hover:text-foreground",
+                )}
+              >
+                {semester}º semestre
+              </button>
+            ))}
+          </div>
+          <span className="w-fit rounded-full border border-primary/15 bg-background/75 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
+            {semesterLabel}
+          </span>
+        </div>
       </div>
       <div className="overflow-x-auto p-3 sm:p-5">
         <Table className="min-w-[1220px] table-fixed">
