@@ -4,6 +4,7 @@ import {
   access,
   appendFile,
   mkdir,
+  open,
   readFile,
   readdir,
   rename,
@@ -14,7 +15,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { promisify, TextDecoder } from "node:util";
 import { isSameOriginRequest, readAuthUser } from "@/lib/auth.server";
 import {
   listDataImports,
@@ -72,6 +73,117 @@ function safeFileName(value: string) {
   return path.basename(value).replace(/[^a-zA-Z0-9._ -]/g, "_");
 }
 
+function normalizedPartnerKey(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLocaleUpperCase("pt-BR")
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function partnerSlug(value: string) {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function parseDelimitedSample(text: string, maxRows = 250) {
+  const firstLine = text.split(/\r?\n/, 1)[0] ?? "";
+  const delimiter =
+    (firstLine.match(/;/g)?.length ?? 0) >= (firstLine.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length && rows.length < maxRows; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') {
+        field += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === delimiter && !quoted) {
+      row.push(field);
+      field = "";
+    } else if ((character === "\r" || character === "\n") && !quoted) {
+      if (character === "\r" && text[index + 1] === "\n") index += 1;
+      row.push(field);
+      if (row.some((value) => value.trim())) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += character;
+    }
+  }
+  if (rows.length < maxRows && (row.length || field)) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+async function qscPartnerName(filePath: string) {
+  const handle = await open(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(1024 * 1024);
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
+    const sample = buffer.subarray(0, bytesRead);
+    let text: string;
+    try {
+      text = new TextDecoder("utf-8", { fatal: true }).decode(sample);
+    } catch {
+      text = new TextDecoder("windows-1252").decode(sample);
+    }
+    const rows = parseDelimitedSample(text);
+    const headerIndex = rows.findIndex((row) =>
+      row.some((value) => normalizedPartnerKey(value) === "GRUPOREDETERMO"),
+    );
+    if (headerIndex < 0) throw new Error("Cabeçalho GRUPO_REDE_TERMO ausente na base QSC.");
+    const partnerColumn = rows[headerIndex].findIndex(
+      (value) => normalizedPartnerKey(value) === "GRUPOREDETERMO",
+    );
+    const partnerName = rows
+      .slice(headerIndex + 1)
+      .map((row) => row[partnerColumn]?.trim() ?? "")
+      .find(Boolean);
+    if (!partnerName) {
+      throw new Error("Não foi possível identificar o parceiro em GRUPO_REDE_TERMO.");
+    }
+    return partnerName;
+  } finally {
+    await handle.close();
+  }
+}
+
+async function canonicalQscPartner(
+  partnerName: string,
+  snapshotDirectory: string,
+): Promise<{ id: string; name: string }> {
+  try {
+    const snapshot = JSON.parse(
+      await readFile(path.join(snapshotDirectory, "mapa-parque.snapshot.json"), "utf8"),
+    ) as { partners?: Array<{ id?: unknown; name?: unknown }> };
+    const key = normalizedPartnerKey(partnerName);
+    const match = snapshot.partners?.find(
+      (partner) => normalizedPartnerKey(String(partner.name ?? "")) === key,
+    );
+    if (typeof match?.id === "string" && match.id) {
+      return { id: match.id, name: String(match.name ?? partnerName) };
+    }
+  } catch {
+    // The QSC can still be stored by its normalized partner name before Mapa Parque is available.
+  }
+  return { id: partnerSlug(partnerName) || "parceiro-nao-informado", name: partnerName };
+}
+
 function qscSemesterSlot(fileName: string) {
   const name = fileName
     .normalize("NFD")
@@ -98,13 +210,31 @@ const QSC_PROCESSING_DELAY_MS = 30_000;
 const QSC_UPLOAD_ACTIVITY_DELAY_MS = 2 * 60_000;
 
 async function listQscInputs(qscDirectory: string) {
-  const storedFiles = await readdir(qscDirectory);
+  const storedFiles = await readdir(qscDirectory, { withFileTypes: true });
+  const qscFiles = storedFiles
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(qscDirectory, entry.name));
+  const partnersDirectory = path.join(qscDirectory, "partners");
+  if (await exists(partnersDirectory)) {
+    const partnerEntries = await readdir(partnersDirectory, { withFileTypes: true });
+    for (const partnerEntry of partnerEntries.filter((entry) => entry.isDirectory())) {
+      const partnerDirectory = path.join(partnersDirectory, partnerEntry.name);
+      const partnerFiles = await readdir(partnerDirectory, { withFileTypes: true });
+      qscFiles.push(
+        ...partnerFiles
+          .filter((entry) => entry.isFile())
+          .map((entry) => path.join(partnerDirectory, entry.name)),
+      );
+    }
+  }
   const domains = ["carteira", "fixa", "movel"];
   const inputs = domains.flatMap((domain) =>
-    storedFiles
-      .filter((fileName) => new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(fileName))
+    qscFiles
+      .filter((filePath) =>
+        new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(path.basename(filePath)),
+      )
       .sort()
-      .map((fileName) => `${domain}:${path.join(qscDirectory, fileName)}`),
+      .map((filePath) => `${domain}:${filePath}`),
   );
   const available = domains.map((domain) => inputs.some((input) => input.startsWith(`${domain}:`)));
   return { inputs, available };
@@ -424,10 +554,39 @@ export const Route = createFileRoute("/api/data/upload")({
             "QSC Fixa": "fixa",
             "QSC Móvel": "movel",
           }[kind];
-          const qscFileName = `qsc-${qscDomain}${qscSemesterSlot(originalName) === "h2" ? "-h2" : ""}.csv`;
-          const finalPath = path.join(qscDirectory, qscFileName);
+          const semester = qscSemesterSlot(originalName);
+          const sourcePartnerName = await qscPartnerName(uploadedPath);
+          const sourcePartner = await canonicalQscPartner(sourcePartnerName, snapshotDirectory);
+          if (user?.role === "gn" && !user.partnerIds.includes(sourcePartner.id)) {
+            return Response.json(
+              {
+                message: `O parceiro ${sourcePartner.name} não está vinculado ao seu perfil de acesso.`,
+              },
+              { status: 403 },
+            );
+          }
+          const storagePartnerId =
+            partnerSlug(sourcePartner.id) ||
+            partnerSlug(sourcePartner.name) ||
+            "parceiro-nao-informado";
+          const partnerDirectory = path.join(qscDirectory, "partners", storagePartnerId);
+          await mkdir(partnerDirectory, { recursive: true });
+          const qscFileName = `qsc-${qscDomain}-${semester}.csv`;
+          const finalPath = path.join(partnerDirectory, qscFileName);
           await rm(finalPath, { force: true });
           await rename(uploadedPath, finalPath);
+
+          const legacyFileName = `qsc-${qscDomain}${semester === "h2" ? "-h2" : ""}.csv`;
+          const legacyPath = path.join(qscDirectory, legacyFileName);
+          if (await exists(legacyPath)) {
+            try {
+              const legacyPartnerName = await qscPartnerName(legacyPath);
+              const legacyPartner = await canonicalQscPartner(legacyPartnerName, snapshotDirectory);
+              if (legacyPartner.id === sourcePartner.id) await rm(legacyPath, { force: true });
+            } catch (error) {
+              console.warn("Não foi possível migrar a base QSC legada.", error);
+            }
+          }
 
           recordDataImportSuccess({
             kind,
