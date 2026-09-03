@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowRight,
   CheckCircle2,
+  Clock3,
   FileSpreadsheet,
   LoaderCircle,
   ShieldCheck,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { readXlsxRows } from "@/lib/xlsx-reader";
 
@@ -34,11 +36,23 @@ type SelectedFile = {
   extension: string;
   kind: FileKind | "Identificando…";
   status: "reading" | "ready" | "uploading" | "imported" | "error";
+  progress: number;
   error?: string;
   source: File;
 };
 
 type UploadRole = "gn" | "director";
+
+type UploadHistoryItem = {
+  id: number;
+  kind: string;
+  sourceName: string;
+  uploadedBy: string | null;
+  status: "success" | "error";
+  sizeBytes: number;
+  message: string | null;
+  createdAt: string;
+};
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024;
 const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
@@ -252,7 +266,10 @@ async function readUploadPayload(response: Response) {
   }
 }
 
-async function uploadFileInChunks(selectedFile: SelectedFile) {
+async function uploadFileInChunks(
+  selectedFile: SelectedFile,
+  onProgress: (progress: number) => void,
+) {
   const chunkCount = Math.ceil(selectedFile.source.size / UPLOAD_CHUNK_SIZE);
   const uploadId = crypto.randomUUID();
   for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
@@ -282,6 +299,7 @@ async function uploadFileInChunks(selectedFile: SelectedFile) {
         const payload = await readUploadPayload(response);
         if (response.ok) {
           uploaded = true;
+          onProgress(Math.round(((chunkIndex + 1) / chunkCount) * 100));
           break;
         }
 
@@ -305,6 +323,34 @@ async function uploadFileInChunks(selectedFile: SelectedFile) {
   }
 }
 
+async function fetchUploadHistory() {
+  const response = await fetch("/api/data/upload", { cache: "no-store" });
+  if (!response.ok) throw new Error("Não foi possível carregar o histórico.");
+  const payload = (await response.json()) as { uploads?: UploadHistoryItem[] };
+  return payload.uploads ?? [];
+}
+
+const formatUploadDate = (value: string) =>
+  new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+
+const UPLOAD_KIND_LABELS: Record<string, string> = {
+  "mapa-parque": "Mapa Parque",
+  "resultados-yoy": "Resultados YoY",
+  "best-guess": "Best Guess",
+  "portabilidade-analitica": "Portabilidade analítica",
+  "torres-servico": "Torres de serviço",
+  qsc: "QSC consolidado",
+};
+
+const uploadKindLabel = (kind: string) => UPLOAD_KIND_LABELS[kind] ?? kind;
+
 export const Route = createFileRoute("/alimentacao")({
   head: () => ({ meta: [{ title: "Alimentar dados — Mapa Parque" }] }),
   component: AlimentacaoPage,
@@ -317,6 +363,8 @@ function AlimentacaoPage() {
   const [role, setRole] = useState<UploadRole | null>(null);
   const roleRef = useRef<UploadRole | null>(null);
   const [batchImporting, setBatchImporting] = useState(false);
+  const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
   useEffect(() => {
     void fetch("/api/auth/session", { cache: "no-store" })
       .then((response) => response.json())
@@ -329,6 +377,16 @@ function AlimentacaoPage() {
         roleRef.current = null;
         setRole(null);
       });
+  }, []);
+  const refreshUploadHistory = () => {
+    setHistoryLoading(true);
+    void fetchUploadHistory()
+      .then(setUploadHistory)
+      .catch(() => setUploadHistory([]))
+      .finally(() => setHistoryLoading(false));
+  };
+  useEffect(() => {
+    refreshUploadHistory();
   }, []);
   const permittedTitles = useMemo(
     () =>
@@ -373,6 +431,7 @@ function AlimentacaoPage() {
       extension: formatExtension(file.name),
       kind: "Identificando…" as const,
       status: "reading" as const,
+      progress: 0,
       source: file,
     }));
     setFiles((current) => {
@@ -433,14 +492,20 @@ function AlimentacaoPage() {
   ) => {
     setFiles((current) =>
       current.map((item) =>
-        item.id === selectedFile.id ? { ...item, status: "uploading", error: undefined } : item,
+        item.id === selectedFile.id
+          ? { ...item, status: "uploading", progress: 0, error: undefined }
+          : item,
       ),
     );
     try {
-      await uploadFileInChunks(selectedFile);
+      await uploadFileInChunks(selectedFile, (progress) => {
+        setFiles((current) =>
+          current.map((item) => (item.id === selectedFile.id ? { ...item, progress } : item)),
+        );
+      });
       setFiles((current) =>
         current.map((item) =>
-          item.id === selectedFile.id ? { ...item, status: "imported" } : item,
+          item.id === selectedFile.id ? { ...item, status: "imported", progress: 100 } : item,
         ),
       );
       if (notifySuccess) {
@@ -450,6 +515,7 @@ function AlimentacaoPage() {
             : `${selectedFile.name} já está disponível nas visões do painel.`,
         });
       }
+      refreshUploadHistory();
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : failureMessage;
@@ -526,7 +592,7 @@ function AlimentacaoPage() {
           </div>
         </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
           <Card className="overflow-hidden rounded-[2rem] border-primary/15 bg-card/85 shadow-elevated">
             <div className="border-b border-primary/10 bg-primary/[0.035] px-5 py-5 sm:px-7">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
@@ -637,6 +703,14 @@ function AlimentacaoPage() {
                             </strong>{" "}
                             · {file.extension} · {formatFileSize(file.size)}
                           </span>
+                          {file.status === "uploading" && (
+                            <span className="mt-2 flex items-center gap-2">
+                              <Progress value={file.progress} className="h-1.5 flex-1" />
+                              <span className="w-9 text-right text-[11px] font-semibold tabular-nums text-primary">
+                                {file.progress}%
+                              </span>
+                            </span>
+                          )}
                         </span>
                         {file.status === "reading" || file.status === "uploading" ? (
                           <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" />
@@ -725,6 +799,63 @@ function AlimentacaoPage() {
                     </div>
                   );
                 })}
+              </div>
+            </Card>
+            <Card className="rounded-[2rem] border-primary/15 bg-card/85 p-5 shadow-elevated sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
+                    Histórico
+                  </p>
+                  <h2 className="mt-1 text-lg font-semibold tracking-tight">Últimos 10 uploads</h2>
+                </div>
+                <span className="grid size-9 place-items-center rounded-xl bg-primary/[0.08] text-primary">
+                  <Clock3 className="size-4" />
+                </span>
+              </div>
+              <div className="mt-5 space-y-1">
+                {historyLoading ? (
+                  <div className="flex items-center gap-2 py-4 text-xs text-muted-foreground">
+                    <LoaderCircle className="size-4 animate-spin text-primary" />
+                    Carregando histórico…
+                  </div>
+                ) : uploadHistory.length === 0 ? (
+                  <p className="py-4 text-xs text-muted-foreground">Nenhum upload registrado.</p>
+                ) : (
+                  uploadHistory.map((upload) => (
+                    <div
+                      key={upload.id}
+                      className="border-b border-primary/[0.08] py-3 last:border-0"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="min-w-0">
+                          <strong className="block truncate text-sm font-semibold">
+                            {uploadKindLabel(upload.kind)}
+                          </strong>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {upload.sourceName}
+                          </span>
+                        </span>
+                        <span
+                          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${upload.status === "success" ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-rose-500/10 text-rose-700 dark:text-rose-300"}`}
+                        >
+                          {upload.status === "success" ? "Concluído" : "Erro"}
+                        </span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
+                        <span>{formatUploadDate(upload.createdAt)}</span>
+                        <span>·</span>
+                        <span>{formatFileSize(upload.sizeBytes)}</span>
+                        {upload.uploadedBy && (
+                          <>
+                            <span>·</span>
+                            <span className="truncate">{upload.uploadedBy}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </Card>
             <Card className="relative overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-violet-500/[0.12] via-card to-cyan/[0.08] p-5 shadow-elevated sm:p-6">

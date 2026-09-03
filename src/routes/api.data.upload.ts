@@ -17,7 +17,9 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { isSameOriginRequest, readAuthUser } from "@/lib/auth.server";
 import {
+  listDataImports,
   recordDataImportError,
+  recordDataImportSuccess,
   saveDataSnapshot,
   type DataSnapshotKind,
 } from "@/lib/database.server";
@@ -44,6 +46,7 @@ async function persistSnapshot(input: {
   sourceName: string;
   uploadedBy?: string | null;
   sizeBytes?: number;
+  recordImport?: boolean;
 }) {
   const payload = JSON.parse(await readFile(input.snapshotPath, "utf8")) as unknown;
   return saveDataSnapshot({
@@ -52,6 +55,7 @@ async function persistSnapshot(input: {
     sourceName: input.sourceName,
     uploadedBy: input.uploadedBy,
     sizeBytes: input.sizeBytes,
+    recordImport: input.recordImport,
   });
 }
 
@@ -127,6 +131,7 @@ async function processStoredQsc(context: QscProcessingContext) {
     sourceName: context.sourceName,
     uploadedBy: context.uploadedBy,
     sizeBytes: context.sizeBytes,
+    recordImport: false,
   });
 }
 
@@ -179,6 +184,16 @@ function scheduleQscProcessing(context: QscProcessingContext) {
 export const Route = createFileRoute("/api/data/upload")({
   server: {
     handlers: {
+      GET: async () => {
+        const user = await readAuthUser();
+        if (!user) {
+          return Response.json({ message: "Acesso não autorizado." }, { status: 403 });
+        }
+        return Response.json(
+          { uploads: listDataImports(10, user.role === "gn" ? user.email : undefined) },
+          { headers: { "Cache-Control": "no-store" } },
+        );
+      },
       POST: async ({ request }) => {
         const user = await readAuthUser();
         const kind = request.headers.get("x-base-kind") ?? "";
@@ -413,6 +428,14 @@ export const Route = createFileRoute("/api/data/upload")({
           const finalPath = path.join(qscDirectory, qscFileName);
           await rm(finalPath, { force: true });
           await rename(uploadedPath, finalPath);
+
+          recordDataImportSuccess({
+            kind,
+            sourceName: originalName,
+            uploadedBy: user?.email,
+            sizeBytes: declaredFileSize || contentLength,
+            message: "Arquivo recebido; processamento QSC agendado.",
+          });
 
           const { available } = await listQscInputs(qscDirectory);
           scheduleQscProcessing({

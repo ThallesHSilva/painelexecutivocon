@@ -22,6 +22,17 @@ export type DataSnapshotInfo = {
   checksum: string;
 };
 
+export type DataImportInfo = {
+  id: number;
+  kind: string;
+  sourceName: string;
+  uploadedBy: string | null;
+  status: "success" | "error";
+  sizeBytes: number;
+  message: string | null;
+  createdAt: string;
+};
+
 export type StoredUser = {
   id: number;
   name: string;
@@ -220,6 +231,7 @@ export function saveDataSnapshot(input: {
   sourceName: string;
   uploadedBy?: string | null;
   sizeBytes?: number;
+  recordImport?: boolean;
 }) {
   const db = getDatabase();
   const payload = JSON.stringify(input.payload);
@@ -249,18 +261,13 @@ export function saveDataSnapshot(input: {
       sizeBytes,
       checksum,
     );
-    db.prepare(
-      `INSERT INTO data_imports
-        (kind, source_name, uploaded_by, status, size_bytes, checksum, created_at)
-       VALUES (?, ?, ?, 'success', ?, ?, ?)`,
-    ).run(
-      input.kind,
-      input.sourceName,
-      input.uploadedBy ?? null,
-      sizeBytes,
-      checksum,
-      updatedAt,
-    );
+    if (input.recordImport !== false) {
+      db.prepare(
+        `INSERT INTO data_imports
+          (kind, source_name, uploaded_by, status, size_bytes, checksum, created_at)
+         VALUES (?, ?, ?, 'success', ?, ?, ?)`,
+      ).run(input.kind, input.sourceName, input.uploadedBy ?? null, sizeBytes, checksum, updatedAt);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -268,6 +275,29 @@ export function saveDataSnapshot(input: {
   }
 
   return { updatedAt, checksum, sizeBytes };
+}
+
+export function recordDataImportSuccess(input: {
+  kind: string;
+  sourceName: string;
+  uploadedBy?: string | null;
+  sizeBytes?: number;
+  message?: string | null;
+}) {
+  getDatabase()
+    .prepare(
+      `INSERT INTO data_imports
+        (kind, source_name, uploaded_by, status, size_bytes, message, created_at)
+       VALUES (?, ?, ?, 'success', ?, ?, ?)`,
+    )
+    .run(
+      input.kind,
+      input.sourceName,
+      input.uploadedBy ?? null,
+      input.sizeBytes ?? 0,
+      input.message ?? null,
+      new Date().toISOString(),
+    );
 }
 
 export function recordDataImportError(input: {
@@ -320,5 +350,39 @@ export function listDataSnapshots(): DataSnapshotInfo[] {
     updatedAt: row.updated_at,
     sizeBytes: row.size_bytes,
     checksum: row.checksum,
+  }));
+}
+
+export function listDataImports(limit = 10, uploadedBy?: string): DataImportInfo[] {
+  const safeLimit = Math.max(1, Math.min(100, Math.trunc(limit)));
+  const selection = `SELECT id, kind, source_name, uploaded_by, status, size_bytes, message, created_at
+    FROM data_imports`;
+  const rows = (
+    uploadedBy
+      ? getDatabase()
+          .prepare(`${selection} WHERE uploaded_by = ? ORDER BY created_at DESC, id DESC LIMIT ?`)
+          .all(uploadedBy, safeLimit)
+      : getDatabase()
+          .prepare(`${selection} ORDER BY created_at DESC, id DESC LIMIT ?`)
+          .all(safeLimit)
+  ) as Array<{
+    id: number;
+    kind: string;
+    source_name: string;
+    uploaded_by: string | null;
+    status: "success" | "error";
+    size_bytes: number;
+    message: string | null;
+    created_at: string;
+  }>;
+  return rows.map((row) => ({
+    id: row.id,
+    kind: row.kind,
+    sourceName: row.source_name,
+    uploadedBy: row.uploaded_by,
+    status: row.status,
+    sizeBytes: row.size_bytes,
+    message: row.message,
+    createdAt: row.created_at,
   }));
 }
