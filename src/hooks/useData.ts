@@ -45,6 +45,8 @@ export function useQsc() {
     queryFn: () => fetchQsc(selected),
     staleTime: 0,
     refetchOnMount: "always",
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
 }
 export function useCapacity() {
