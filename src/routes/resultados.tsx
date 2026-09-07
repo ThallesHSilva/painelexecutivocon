@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
+  ArrowRight,
   Award,
   BarChart3,
   ChevronLeft,
@@ -1426,13 +1427,14 @@ function ServiceTowersPanel({
     if (
       !["bgxpc", "meta", "estxpc"].includes(normalizeCompany(column.label)) ||
       typeof value !== "number" ||
-      !Number.isFinite(value) ||
-      (value >= 0.8 && value <= 0.9)
+      !Number.isFinite(value)
     )
       return formatted;
-    const Icon = value > 0.9 ? TrendingUp : TrendingDown;
-    const color =
-      value > 0.9
+    const neutral = value >= 0.8 && value <= 0.9;
+    const Icon = neutral ? ArrowRight : value > 0.9 ? TrendingUp : TrendingDown;
+    const color = neutral
+      ? "text-foreground"
+      : value > 0.9
         ? "text-emerald-600 dark:text-emerald-400"
         : value <= 0.5
           ? "text-rose-600 dark:text-rose-400"
