@@ -9,11 +9,10 @@ import {
   PencilLine,
   TrendingDown,
   TrendingUp,
-  Upload,
 } from "lucide-react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { usePartnerFilter } from "@/contexts/AppContexts";
-import { usePartners } from "@/hooks/useData";
+import { usePartners, useQsc } from "@/hooks/useData";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -480,6 +479,7 @@ export const Route = createFileRoute("/resultados")({
 function ResultadosPage() {
   const { selected } = usePartnerFilter();
   const { data: partners = [] } = usePartners();
+  const { data: qscData } = useQsc();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [reportSource, setReportSource] = useState<ReportSource | null>(null);
   const [sourceRecords, setSourceRecords] = useState<SourceRecord[]>([]);
@@ -787,8 +787,7 @@ function ResultadosPage() {
         />
         <AnalyticalPortabilityPanel
           summary={portabilitySummary}
-          onUpload={() => fileInputRef.current?.click()}
-          loading={uploadState.status === "loading"}
+          qscMetric={qscData?.metrics.find((metric) => metric.id === "saldo-portabilidade")}
         />
       </div>
     </DashboardLayout>
@@ -1186,14 +1185,30 @@ function PortabilityPanel({
 
 function AnalyticalPortabilityPanel({
   summary,
-  onUpload,
-  loading,
+  qscMetric,
 }: {
   summary: { rows: PortabilitySummaryRow[]; total: PortabilitySummaryTotal };
-  onUpload: () => void;
-  loading: boolean;
+  qscMetric?: import("@/lib/qsc").QscMetricSeries;
 }) {
   const { rows, total } = summary;
+  const qscByCompetence = new Map(
+    (qscMetric?.history ?? []).map((point) => [point.competence, point]),
+  );
+  const qscPointForMonth = (month: number) =>
+    qscByCompetence.get(`${Math.trunc(month / 100)}-${String(month % 100).padStart(2, "0")}`);
+  const qscPoints = rows.flatMap((row) => {
+    const point = qscPointForMonth(row.month);
+    return point?.available ? [point] : [];
+  });
+  const qscTotal = qscPoints.length
+    ? qscPoints.reduce(
+        (result, point) => ({
+          numerator: result.numerator + point.numerator,
+          denominator: result.denominator + point.denominator,
+        }),
+        { numerator: 0, denominator: 0 },
+      )
+    : null;
   const periodLabel = rows.length
     ? `${rows[0].label} a ${rows[rows.length - 1].label}`
     : "Sem período disponível";
@@ -1236,6 +1251,18 @@ function AnalyticalPortabilityPanel({
       />
     </TableCell>
   );
+  const qscNumberCell = (value?: number) => (
+    <TableCell className="bg-violet-500/[0.025] text-right font-semibold tabular-nums text-foreground">
+      {value == null ? "—" : formatInteger(value)}
+    </TableCell>
+  );
+  const qscPercentCell = (numerator?: number, denominator?: number) => (
+    <TableCell className="bg-violet-500/[0.04] text-right font-semibold tabular-nums text-violet-700 dark:text-violet-300">
+      {numerator == null || denominator == null || denominator <= 0
+        ? "—"
+        : fmtPct(numerator / denominator)}
+    </TableCell>
+  );
 
   return (
     <Card className="overflow-hidden rounded-[2rem] border-emerald-500/15 bg-gradient-to-br from-card via-card to-emerald-500/[0.035] shadow-elevated">
@@ -1255,16 +1282,6 @@ function AnalyticalPortabilityPanel({
           <span className="rounded-full border border-emerald-500/15 bg-background/75 px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
             Últimos {rows.length} meses · {periodLabel}
           </span>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onUpload}
-            disabled={loading}
-            className="h-9 rounded-xl border-emerald-500/20 bg-background/75 px-3 text-xs"
-          >
-            <Upload className="size-3.5" />
-            {loading ? "Atualizando..." : "Atualizar planilha"}
-          </Button>
         </div>
       </div>
       <div className="space-y-5 p-3 sm:p-5">
@@ -1284,13 +1301,16 @@ function AnalyticalPortabilityPanel({
           )}
         </div>
         <div className="overflow-x-auto rounded-2xl border border-emerald-500/15 bg-background/80 shadow-elegant">
-          <Table className="min-w-[1470px] table-fixed">
+          <Table className="min-w-[1840px] table-fixed">
             <colgroup>
               <col className="w-[170px]" />
               <col className="w-[135px]" />
               <col className="w-[135px]" />
               <col className="w-[135px]" />
               <col className="w-[145px]" />
+              <col className="w-[135px]" />
+              <col className="w-[135px]" />
+              <col className="w-[135px]" />
               <col className="w-[210px]" />
               <col className="w-[170px]" />
               <col className="w-[210px]" />
@@ -1303,7 +1323,16 @@ function AnalyticalPortabilityPanel({
                 <TableHead className="text-right">PortOut total</TableHead>
                 <TableHead className="text-right">Saldo líquido</TableHead>
                 <TableHead className="bg-emerald-500/[0.025] text-right text-emerald-700 dark:text-emerald-300">
-                  Conversão
+                  %
+                </TableHead>
+                <TableHead className="bg-violet-500/[0.025] text-right text-violet-700 dark:text-violet-300">
+                  Saldo QSC
+                </TableHead>
+                <TableHead className="bg-violet-500/[0.025] text-right text-violet-700 dark:text-violet-300">
+                  Altas
+                </TableHead>
+                <TableHead className="bg-violet-500/[0.04] text-right text-violet-700 dark:text-violet-300">
+                  % QSC
                 </TableHead>
                 <TableHead className="text-right">Operadora líder em PortIn</TableHead>
                 <TableHead className="text-right">Volume de PortIn</TableHead>
@@ -1312,27 +1341,36 @@ function AnalyticalPortabilityPanel({
               </TableRow>
             </TableHeader>
             <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3.5 [&_tr]:border-emerald-500/[0.1] [&_tr]:transition-colors [&_tr:hover]:bg-emerald-500/[0.035]">
-              {rows.map((row) => (
-                <TableRow key={row.month}>
-                  <TableCell className="font-semibold text-foreground">{row.label}</TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                    {formatInteger(row.portIn)}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                    {formatInteger(row.portOut)}
-                  </TableCell>
-                  {saldoCell(row.saldo)}
-                  {conversionCell(row.conversion)}
-                  {leaderCell(row.leaderPortIn)}
-                  <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                    {formatInteger(row.leaderPortInVolume)}
-                  </TableCell>
-                  {leaderCell(row.leaderPortOut)}
-                  <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                    {formatInteger(row.leaderPortOutVolume)}
-                  </TableCell>
-                </TableRow>
-              ))}
+              {rows.map((row) => {
+                const qscPoint = qscPointForMonth(row.month);
+                return (
+                  <TableRow key={row.month}>
+                    <TableCell className="font-semibold text-foreground">{row.label}</TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                      {formatInteger(row.portIn)}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                      {formatInteger(row.portOut)}
+                    </TableCell>
+                    {saldoCell(row.saldo)}
+                    {conversionCell(row.conversion)}
+                    {qscNumberCell(qscPoint?.available ? qscPoint.numerator : undefined)}
+                    {qscNumberCell(qscPoint?.available ? qscPoint.denominator : undefined)}
+                    {qscPercentCell(
+                      qscPoint?.available ? qscPoint.numerator : undefined,
+                      qscPoint?.available ? qscPoint.denominator : undefined,
+                    )}
+                    {leaderCell(row.leaderPortIn)}
+                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                      {formatInteger(row.leaderPortInVolume)}
+                    </TableCell>
+                    {leaderCell(row.leaderPortOut)}
+                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
+                      {formatInteger(row.leaderPortOutVolume)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
               <TableRow className="border-t-2 border-emerald-500/20 bg-emerald-500/[0.04]">
                 <TableCell className="font-semibold text-foreground">Total acumulado</TableCell>
                 <TableCell className="text-right font-semibold tabular-nums text-foreground">
@@ -1343,6 +1381,9 @@ function AnalyticalPortabilityPanel({
                 </TableCell>
                 {saldoCell(total.saldo)}
                 {conversionCell(total.conversion)}
+                {qscNumberCell(qscTotal?.numerator)}
+                {qscNumberCell(qscTotal?.denominator)}
+                {qscPercentCell(qscTotal?.numerator, qscTotal?.denominator)}
                 {leaderCell(total.leaderPortIn)}
                 <TableCell className="text-right font-semibold tabular-nums text-foreground">
                   {formatInteger(total.leaderPortInVolume)}
