@@ -7,18 +7,8 @@ import { BarSimple, DonutChart } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
 import { useLicenses } from "@/hooks/useData";
 import { fmtInt, fmtBRLCompact, fmtPct } from "@/lib/format";
-import {
-  UserCheck,
-  Percent,
-  Target,
-  ShieldCheck,
-  Scale,
-  Rocket,
-  SlidersHorizontal,
-  Sparkles,
-} from "lucide-react";
+import { UserCheck, Percent, Target, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 
 export const Route = createFileRoute("/licencas")({
@@ -60,28 +50,6 @@ function Page() {
                   </h2>
                 </div>
               </div>
-              <div className="flex items-center gap-3 self-start rounded-2xl border border-primary/15 bg-background/75 p-2 pl-3 shadow-sm backdrop-blur md:self-auto">
-                <SlidersHorizontal className="size-4 text-primary" />
-                <div className="leading-tight">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                    Conversão
-                  </p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">Taxa aplicada</p>
-                </div>
-                <div className="flex items-center rounded-xl bg-primary/[0.07] px-2">
-                  <Input
-                    aria-label="Taxa de conversão"
-                    className="h-10 w-14 border-0 bg-transparent px-0 text-right text-base font-semibold tabular-nums shadow-none focus-visible:ring-0"
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={appliedRate}
-                    onChange={(event) => setConversionRate(Number(event.target.value) || 0)}
-                  />
-                  <span className="pl-1 text-sm font-semibold text-primary">%</span>
-                </div>
-              </div>
             </div>
           </Card>
           <section>
@@ -120,41 +88,6 @@ function Page() {
                 tooltip="Oportunidade Digital multiplicada pela taxa de conversão selecionada."
                 loading={isLoading}
                 className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.1]"
-              />
-            </div>
-          </section>
-
-          <section className="mt-7">
-            <div className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                Projeção comercial
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight">Cenários por ticket</h2>
-            </div>
-            <div className="grid gap-3 md:grid-cols-3">
-              <KpiCard
-                icon={ShieldCheck}
-                title="Cenário R$ 34"
-                value={fmtBRLCompact(financialScenarios[0].valor)}
-                description="Ticket conservador"
-                loading={isLoading}
-                className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.08]"
-              />
-              <KpiCard
-                icon={Scale}
-                title="Cenário R$ 62"
-                value={fmtBRLCompact(financialScenarios[1].valor)}
-                description="Ticket médio"
-                loading={isLoading}
-                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
-              />
-              <KpiCard
-                icon={Rocket}
-                title="Cenário R$ 100"
-                value={fmtBRLCompact(financialScenarios[2].valor)}
-                description="Ticket otimista"
-                loading={isLoading}
-                emphasis
               />
             </div>
           </section>

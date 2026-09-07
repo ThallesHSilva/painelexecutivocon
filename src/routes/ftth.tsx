@@ -79,7 +79,7 @@ function Page() {
             storageKey="mapa-parque.ftth-simulators.v1"
             simulatorLabel="Simulador FTTH"
             opportunityLabel="Oportunidade FTTH"
-            quantityLabel="Acessos"
+            quantityLabel="BLs"
             revenueLabel="Receita FTTH"
           />
 
