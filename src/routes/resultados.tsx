@@ -1416,7 +1416,9 @@ function ServiceTowersPanel({
   onPrevious: () => void;
   onNext: () => void;
 }) {
-  const [showOthers, setShowOthers] = useState(false);
+  const [expandedFocus, setExpandedFocus] = useState<string | null>(null);
+  const focusKey = `${activeIndex}:${[...selectedCompanies].sort().join("|")}`;
+  const showOthers = expandedFocus === focusKey;
   const tower = towers[activeIndex] ?? towers[0];
   if (!tower) return null;
   const rankingColumns = ["bgxpc", "meta", "estxpc"].flatMap((label) =>
@@ -1440,7 +1442,7 @@ function ServiceTowersPanel({
   const otherRows = rankedRows.filter(
     (row) => !selectedCompanies.has(normalizeCompany(row.partner)),
   );
-  const displayedRows = focused && !showOthers ? focusedRows : rankedRows;
+  const displayedRows = focused ? [...focusedRows, ...(showOthers ? otherRows : [])] : rankedRows;
   const visibleColumns = tower.columns.filter(
     (column) =>
       !(
@@ -1554,6 +1556,26 @@ function ServiceTowersPanel({
             </button>
           ))}
         </div>
+        {focused && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-500/15 bg-violet-500/[0.05] px-4 py-3">
+            <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
+              Modo foco · {focusedRows.length} parceiro(s) selecionado(s)
+            </span>
+            {otherRows.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                aria-expanded={showOthers}
+                onClick={() => setExpandedFocus(showOthers ? null : focusKey)}
+                className="h-8 text-violet-700 dark:text-violet-300"
+              >
+                {showOthers
+                  ? "Recolher demais parceiros"
+                  : `Expandir demais parceiros (${otherRows.length})`}
+              </Button>
+            )}
+          </div>
+        )}
         <div className="overflow-x-auto rounded-2xl border border-violet-500/15 bg-background/80 shadow-elegant">
           <Table className="min-w-max table-fixed">
             <TableHeader className="bg-violet-500/[0.05] [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-violet-500/15 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground">
@@ -1580,7 +1602,14 @@ function ServiceTowersPanel({
                 </TableRow>
               )}
               {displayedRows.map((row) => (
-                <TableRow key={`${tower.id}-${row.partner}`}>
+                <TableRow
+                  key={`${tower.id}-${row.partner}`}
+                  className={
+                    focused && selectedCompanies.has(normalizeCompany(row.partner))
+                      ? "bg-violet-500/[0.07]"
+                      : undefined
+                  }
+                >
                   <TableCell className="sticky left-0 z-[1] bg-background font-semibold text-foreground group-hover:bg-violet-500/[0.035]">
                     {rankingColumns.length > 0 && (
                       <span className="mr-2 inline-flex min-w-7 justify-center rounded-lg bg-violet-500/10 px-1.5 py-1 text-xs font-bold tabular-nums text-violet-700 dark:text-violet-300">
@@ -1605,7 +1634,7 @@ function ServiceTowersPanel({
                     <Button
                       type="button"
                       variant="ghost"
-                      onClick={() => setShowOthers((value) => !value)}
+                      onClick={() => setExpandedFocus(showOthers ? null : focusKey)}
                       aria-expanded={showOthers}
                       className="w-full rounded-xl text-violet-700 dark:text-violet-300"
                     >
