@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import "@/results-editorial.css";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowRight,
@@ -721,74 +722,70 @@ function ResultadosPage() {
 
   return (
     <DashboardLayout title="Visão resultado">
-      <Card className="relative mb-7 overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-primary/[0.16] via-card/95 to-cyan/[0.13] p-5 shadow-elevated backdrop-blur-sm sm:p-6 md:p-8">
-        <div className="pointer-events-none absolute -left-12 -top-16 size-60 rounded-full bg-primary/25 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 right-0 size-64 rounded-full bg-cyan/25 blur-3xl" />
-        <div className="pointer-events-none absolute right-1/3 top-8 size-32 rounded-full bg-violet-500/10 blur-3xl" />
-        <div className="relative">
-          <div className="flex items-start gap-4">
-            <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant ring-4 ring-primary/10">
-              <BarChart3 className="size-5" />
+      <div className="results-editorial">
+        <Card className="results-intro mb-8 border-0 bg-transparent shadow-none">
+          <div className="relative">
+            <div className="flex items-start gap-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  Resultado consolidado
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-tight text-foreground md:text-3xl">
+                  Comparativo de resultado 2025 × 2026.
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+                  Meta e Real são editáveis; percentual, Gap TT, média e YoY são recalculados
+                  automaticamente.
+                </p>
+              </div>
             </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                Resultado consolidado
-              </p>
-              <h2 className="mt-2 bg-gradient-brand bg-clip-text text-3xl font-semibold leading-[1.08] tracking-tight text-transparent md:text-4xl">
-                Comparativo de resultado 2025 × 2026.
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Meta e Real são editáveis; percentual, Gap TT, média e YoY são recalculados
-                automaticamente.
-              </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              onChange={handleSpreadsheetUpload}
+            />
+            <div className="results-highlights mt-6 grid gap-0 md:grid-cols-3">
+              {highlights.map(({ label, row }) => (
+                <HighlightCard key={label} label={label} yoy={row.yoy} gap={row.yoyGap} />
+              ))}
             </div>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="sr-only"
-            onChange={handleSpreadsheetUpload}
-          />
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            {highlights.map(({ label, row }) => (
-              <HighlightCard key={label} label={label} yoy={row.yoy} gap={row.yoyGap} />
-            ))}
-          </div>
-        </div>
-      </Card>
+        </Card>
 
-      <div className="space-y-6">
-        <ServiceTowersPanel
-          key={[...selectedCompanies].sort().join("|")}
-          selectedCompanies={selectedCompanies}
-          towers={completeTowers}
-          activeIndex={towerIndex}
-          onSelect={setTowerIndex}
-          onPrevious={() =>
-            setTowerIndex(
-              (current) => (current - 1 + completeTowers.length) % completeTowers.length,
-            )
-          }
-          onNext={() => setTowerIndex((current) => (current + 1) % completeTowers.length)}
-        />
-        <PeriodPanel
-          rows={rows}
-          title={reportSource?.period ?? "YTD por produto"}
-          monthsElapsed={reportSource?.monthsElapsed ?? 1}
-          subtitle="Resultado atual"
-          tone="current"
-          period="current"
-          onUpdate={updateValue}
-        />
-        <PortabilityPanel
-          records={scopedBestGuessRecords}
-          total={selectedCompanies.size ? undefined : bestGuessTotal}
-        />
-        <AnalyticalPortabilityPanel
-          summary={portabilitySummary}
-          qscMetric={qscData?.metrics.find((metric) => metric.id === "saldo-portabilidade")}
-        />
+        <div className="results-panels space-y-8">
+          <ServiceTowersPanel
+            key={[...selectedCompanies].sort().join("|")}
+            selectedCompanies={selectedCompanies}
+            towers={completeTowers}
+            activeIndex={towerIndex}
+            onSelect={setTowerIndex}
+            onPrevious={() =>
+              setTowerIndex(
+                (current) => (current - 1 + completeTowers.length) % completeTowers.length,
+              )
+            }
+            onNext={() => setTowerIndex((current) => (current + 1) % completeTowers.length)}
+          />
+          <PeriodPanel
+            rows={rows}
+            title={reportSource?.period ?? "YTD por produto"}
+            monthsElapsed={reportSource?.monthsElapsed ?? 1}
+            subtitle="Resultado atual"
+            tone="current"
+            period="current"
+            onUpdate={updateValue}
+          />
+          <PortabilityPanel
+            records={scopedBestGuessRecords}
+            total={selectedCompanies.size ? undefined : bestGuessTotal}
+          />
+          <AnalyticalPortabilityPanel
+            summary={portabilitySummary}
+            qscMetric={qscData?.metrics.find((metric) => metric.id === "saldo-portabilidade")}
+          />
+        </div>
       </div>
     </DashboardLayout>
   );

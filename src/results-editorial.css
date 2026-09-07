@@ -1,0 +1,122 @@
+/* Scoped presentation for the executive results workspace. */
+.results-editorial {
+  --report-line: color-mix(in srgb, var(--foreground) 12%, var(--card));
+  --report-muted: color-mix(in srgb, var(--foreground) 3%, var(--card));
+}
+
+.results-highlights {
+  border-block: 1px solid var(--report-line);
+}
+
+.results-highlights > div {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 22px 20px;
+  box-shadow: none;
+  transform: none;
+}
+
+.results-highlights > div:first-child {
+  padding-left: 0;
+}
+.results-highlights > div > div:first-child > div:first-child {
+  background: transparent;
+  box-shadow: none;
+  width: 24px;
+}
+.results-highlights > div > div:last-child > span {
+  font-size: 23px;
+  letter-spacing: -0.04em;
+}
+
+.results-panels > div {
+  background: var(--card);
+  background-image: none;
+  border: 1px solid var(--report-line);
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgb(0 0 0 / 2%);
+}
+
+.results-panels > div > div:first-child {
+  background: transparent;
+  border-color: var(--report-line);
+  padding: 22px 24px;
+}
+
+.results-panels > div > div:first-child .grid {
+  border-radius: 8px;
+  background: var(--report-muted);
+  color: var(--primary);
+  box-shadow: none;
+}
+
+.results-panels h3 {
+  font-size: 20px;
+  letter-spacing: -0.025em;
+}
+.results-panels > div > div:first-child p {
+  color: var(--muted-foreground);
+  letter-spacing: 0.08em;
+}
+.results-panels .overflow-x-auto {
+  border-radius: 6px;
+  border-color: var(--report-line);
+  box-shadow: none;
+}
+.results-panels thead,
+.results-panels th {
+  background: var(--report-muted);
+  color: var(--muted-foreground);
+  border-color: var(--report-line);
+}
+.results-panels th {
+  font-size: 11px;
+  letter-spacing: 0.035em;
+}
+.results-panels tbody tr {
+  border-color: var(--report-line);
+}
+.results-panels td {
+  font-size: 13px;
+}
+.results-panels table {
+  min-width: 1080px;
+}
+.results-panels td > span.w-full {
+  border-radius: 6px;
+  background: var(--report-muted);
+  border-color: var(--report-line);
+  box-shadow: none;
+}
+.results-panels input {
+  border-radius: 6px;
+  box-shadow: none;
+  background: var(--report-muted);
+  border-color: var(--report-line);
+}
+.results-panels [aria-label="Seleção de torre de serviço"] {
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--report-line);
+}
+.results-panels [aria-label="Seleção de torre de serviço"] button {
+  border-radius: 6px;
+  padding: 9px 12px;
+}
+@media (min-width: 768px) {
+  .results-highlights > div + div {
+    border-left: 1px solid var(--report-line);
+  }
+}
+@media (max-width: 767px) {
+  .results-highlights > div {
+    padding: 16px 0;
+  }
+  .results-highlights > div + div {
+    border-top: 1px solid var(--report-line);
+  }
+  .results-panels > div > div:first-child {
+    padding: 18px 16px;
+  }
+}
