@@ -1377,14 +1377,28 @@ function ServiceTowersPanel({
   const [showOthers, setShowOthers] = useState(false);
   const tower = towers[activeIndex] ?? towers[0];
   if (!tower) return null;
+  const rankingColumns = ["bgxpc", "meta", "estxpc"].flatMap((label) =>
+    tower.columns.filter((column) => normalizeCompany(column.label) === label),
+  );
+  const rankedRows = [...tower.rows].sort((left, right) => {
+    for (const column of rankingColumns) {
+      const a = left.values[column.key];
+      const b = right.values[column.key];
+      const aValue = typeof a === "number" && Number.isFinite(a) ? a : -Infinity;
+      const bValue = typeof b === "number" && Number.isFinite(b) ? b : -Infinity;
+      if (aValue !== bValue) return aValue > bValue ? -1 : 1;
+    }
+    return rankingColumns.length ? left.partner.localeCompare(right.partner, "pt-BR") : 0;
+  });
+  const positions = new Map(rankedRows.map((row, index) => [row, index + 1]));
   const focused = selectedCompanies.size > 0;
-  const focusedRows = tower.rows.filter((row) =>
+  const focusedRows = rankedRows.filter((row) =>
     selectedCompanies.has(normalizeCompany(row.partner)),
   );
-  const otherRows = tower.rows.filter(
+  const otherRows = rankedRows.filter(
     (row) => !selectedCompanies.has(normalizeCompany(row.partner)),
   );
-  const displayedRows = focused ? [...focusedRows, ...(showOthers ? otherRows : [])] : tower.rows;
+  const displayedRows = focused && !showOthers ? focusedRows : rankedRows;
   const visibleColumns = tower.columns.filter(
     (column) =>
       !(
@@ -1486,6 +1500,11 @@ function ServiceTowersPanel({
               {displayedRows.map((row) => (
                 <TableRow key={`${tower.id}-${row.partner}`}>
                   <TableCell className="sticky left-0 z-[1] bg-background font-semibold text-foreground group-hover:bg-violet-500/[0.035]">
+                    {rankingColumns.length > 0 && (
+                      <span className="mr-2 inline-flex min-w-7 justify-center rounded-lg bg-violet-500/10 px-1.5 py-1 text-xs font-bold tabular-nums text-violet-700 dark:text-violet-300">
+                        {positions.get(row)}º
+                      </span>
+                    )}
                     {row.partner}
                   </TableCell>
                   {visibleColumns.map((column) => (
