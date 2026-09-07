@@ -759,12 +759,14 @@ function ResultadosPage() {
 
       <div className="space-y-6">
         <ServiceTowersPanel
+          key={[...selectedCompanies].sort().join("|")}
+          selectedCompanies={selectedCompanies}
           towers={completeTowers}
           activeIndex={towerIndex}
           onSelect={setTowerIndex}
           onPrevious={() =>
-            setTowerIndex((current) =>
-              (current - 1 + completeTowers.length) % completeTowers.length,
+            setTowerIndex(
+              (current) => (current - 1 + completeTowers.length) % completeTowers.length,
             )
           }
           onNext={() => setTowerIndex((current) => (current + 1) % completeTowers.length)}
@@ -1359,19 +1361,30 @@ function AnalyticalPortabilityPanel({
 
 function ServiceTowersPanel({
   towers,
+  selectedCompanies,
   activeIndex,
   onSelect,
   onPrevious,
   onNext,
 }: {
   towers: ServiceTower[];
+  selectedCompanies: Set<string>;
   activeIndex: number;
   onSelect: (index: number) => void;
   onPrevious: () => void;
   onNext: () => void;
 }) {
+  const [showOthers, setShowOthers] = useState(false);
   const tower = towers[activeIndex] ?? towers[0];
   if (!tower) return null;
+  const focused = selectedCompanies.size > 0;
+  const focusedRows = tower.rows.filter((row) =>
+    selectedCompanies.has(normalizeCompany(row.partner)),
+  );
+  const otherRows = tower.rows.filter(
+    (row) => !selectedCompanies.has(normalizeCompany(row.partner)),
+  );
+  const displayedRows = focused ? [...focusedRows, ...(showOthers ? otherRows : [])] : tower.rows;
   const visibleColumns = tower.columns.filter(
     (column) =>
       !(
@@ -1410,11 +1423,23 @@ function ServiceTowersPanel({
           <span className="mr-1 text-xs font-medium tabular-nums text-muted-foreground">
             {activeIndex + 1} / {towers.length}
           </span>
-          <Button type="button" variant="outline" size="icon" onClick={onPrevious} className="size-9 rounded-xl border-violet-500/20 bg-background/70">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onPrevious}
+            className="size-9 rounded-xl border-violet-500/20 bg-background/70"
+          >
             <ChevronLeft className="size-4" />
             <span className="sr-only">Torre anterior</span>
           </Button>
-          <Button type="button" variant="outline" size="icon" onClick={onNext} className="size-9 rounded-xl border-violet-500/20 bg-background/70">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={onNext}
+            className="size-9 rounded-xl border-violet-500/20 bg-background/70"
+          >
             <ChevronRight className="size-4" />
             <span className="sr-only">Próxima torre</span>
           </Button>
@@ -1437,14 +1462,28 @@ function ServiceTowersPanel({
           <Table className="min-w-max table-fixed">
             <TableHeader className="bg-violet-500/[0.05] [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-violet-500/15 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="sticky left-0 z-10 min-w-[190px] bg-violet-500/[0.05]">NM_REDE</TableHead>
+                <TableHead className="sticky left-0 z-10 min-w-[190px] bg-violet-500/[0.05]">
+                  NM_REDE
+                </TableHead>
                 {visibleColumns.map((column) => (
-                  <TableHead key={column.key} className="min-w-[116px] text-right">{column.label}</TableHead>
+                  <TableHead key={column.key} className="min-w-[116px] text-right">
+                    {column.label}
+                  </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3.5 [&_tr]:border-violet-500/[0.09] [&_tr]:transition-colors [&_tr:hover]:bg-violet-500/[0.035]">
-              {tower.rows.map((row) => (
+              {focused && focusedRows.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={visibleColumns.length + 1}
+                    className="text-center text-muted-foreground"
+                  >
+                    Nenhum dado para os parceiros selecionados nesta torre.
+                  </TableCell>
+                </TableRow>
+              )}
+              {displayedRows.map((row) => (
                 <TableRow key={`${tower.id}-${row.partner}`}>
                   <TableCell className="sticky left-0 z-[1] bg-background font-semibold text-foreground group-hover:bg-violet-500/[0.035]">
                     {row.partner}
@@ -1459,8 +1498,27 @@ function ServiceTowersPanel({
                   ))}
                 </TableRow>
               ))}
+              {focused && otherRows.length > 0 && (
+                <TableRow>
+                  <TableCell colSpan={visibleColumns.length + 1}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setShowOthers((value) => !value)}
+                      aria-expanded={showOthers}
+                      className="w-full rounded-xl text-violet-700 dark:text-violet-300"
+                    >
+                      {showOthers
+                        ? "Recolher demais parceiros"
+                        : `Expandir demais parceiros (${otherRows.length})`}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )}
               <TableRow className="border-t-2 border-violet-500/20 bg-violet-500/[0.05]">
-                <TableCell className="sticky left-0 z-[1] bg-violet-500/[0.05] font-semibold text-foreground">TT</TableCell>
+                <TableCell className="sticky left-0 z-[1] bg-violet-500/[0.05] font-semibold text-foreground">
+                  {focused ? "TT · Todos os parceiros" : "TT"}
+                </TableCell>
                 {visibleColumns.map((column) => (
                   <TableCell
                     key={column.key}
