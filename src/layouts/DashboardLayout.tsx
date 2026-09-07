@@ -74,7 +74,7 @@ function NavItems({
         to={item.to}
         onClick={onNavigate}
         className={
-          `group relative flex items-center rounded-xl text-sm transition ${nested ? "gap-3 px-3 py-2.5" : mobile ? "gap-3 px-3 py-3" : "gap-2 px-3 py-2"} ` +
+          `group relative flex items-center rounded-xl text-sm transition ${nested ? "gap-3 px-3 py-2.5" : mobile ? "gap-3 px-3 py-3" : "gap-1.5 px-2 py-2 xl:gap-2 xl:px-3"} ` +
           (active
             ? "bg-gradient-brand font-medium text-primary-foreground shadow-elegant"
             : nested
@@ -121,7 +121,7 @@ function NavItems({
           type="button"
           aria-haspopup="menu"
           className={
-            "flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition " +
+            "flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm transition xl:gap-2 xl:px-3 " +
             (opportunitiesActive
               ? "bg-gradient-brand font-medium text-primary-foreground shadow-elegant"
               : "text-foreground/75 hover:bg-primary/[0.06] hover:text-foreground")
@@ -177,18 +177,18 @@ function Header({
           <Button
             variant="ghost"
             size="icon"
-            className="shrink-0 2xl:hidden"
+            className="shrink-0 lg:hidden"
             onClick={onMenu}
             aria-label="Abrir menu"
           >
             <Menu className="size-5" />
           </Button>
-          <div className="hidden min-w-0 flex-1 2xl:block">
+          <div className="hidden min-w-0 flex-1 lg:block">
             <NavItems role={role} />
           </div>
-          <div className="flex-1 2xl:hidden" />
+          <div className="flex-1 lg:hidden" />
           {role !== "admin" && (
-            <div className="hidden xl:block">
+            <div className="hidden 2xl:block">
               <PartnerFilter />
             </div>
           )}
@@ -201,7 +201,7 @@ function Header({
               aria-label="Baixar material em PDF"
             >
               <Download className="size-3.5" />
-              <span className="hidden sm:inline">Baixar material</span>
+              <span className="hidden 2xl:inline">Baixar material</span>
             </Button>
           )}
           <Button
@@ -238,11 +238,11 @@ function Header({
             ) : (
               <LogOut className="size-4" />
             )}
-            <span className="hidden xl:inline">Sair</span>
+            <span className="hidden 2xl:inline">Sair</span>
           </Button>
         </div>
         {role !== "admin" && (
-          <div className="pb-2 xl:hidden">
+          <div className="pb-2 2xl:hidden">
             <PartnerFilter />
           </div>
         )}
