@@ -1425,6 +1425,17 @@ function ServiceTowersPanel({
   ) => {
     const formatted = showValue(value, column.format);
     if (
+      ["forecast", "esteira", "ativado", "recbruta", "recliquida", "emissoes"].includes(
+        normalizeCompany(column.label),
+      )
+    ) {
+      return (
+        <span className="inline-flex h-10 w-full items-center justify-end rounded-xl border border-primary/25 bg-primary/[0.055] px-2.5 text-right text-sm font-semibold tabular-nums text-foreground shadow-sm">
+          {formatted}
+        </span>
+      );
+    }
+    if (
       !["bgxpc", "meta", "estxpc"].includes(normalizeCompany(column.label)) ||
       typeof value !== "number" ||
       !Number.isFinite(value)
