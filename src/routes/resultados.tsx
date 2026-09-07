@@ -1418,6 +1418,34 @@ function ServiceTowersPanel({
     if (value > 0.9) return "font-semibold text-emerald-600 dark:text-emerald-400";
     return "text-foreground";
   };
+  const showPerformance = (
+    value: string | number | null,
+    column: ServiceTower["columns"][number],
+  ) => {
+    const formatted = showValue(value, column.format);
+    if (
+      !["bgxpc", "meta", "estxpc"].includes(normalizeCompany(column.label)) ||
+      typeof value !== "number" ||
+      !Number.isFinite(value) ||
+      (value >= 0.8 && value <= 0.9)
+    )
+      return formatted;
+    const Icon = value > 0.9 ? TrendingUp : TrendingDown;
+    const color =
+      value > 0.9
+        ? "text-emerald-600 dark:text-emerald-400"
+        : value <= 0.5
+          ? "text-rose-600 dark:text-rose-400"
+          : "text-orange-600 dark:text-orange-400";
+    return (
+      <span
+        className={`inline-flex items-center justify-end gap-1.5 font-semibold tabular-nums ${color}`}
+      >
+        <Icon className="size-3.5" aria-hidden="true" />
+        {formatted}
+      </span>
+    );
+  };
 
   return (
     <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.05] shadow-elevated">
@@ -1512,7 +1540,7 @@ function ServiceTowersPanel({
                       key={column.key}
                       className={`text-right font-medium tabular-nums ${performanceClass(row.values[column.key], column.format)}`}
                     >
-                      {showValue(row.values[column.key], column.format)}
+                      {showPerformance(row.values[column.key], column)}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -1543,7 +1571,7 @@ function ServiceTowersPanel({
                     key={column.key}
                     className={`text-right font-semibold tabular-nums ${performanceClass(tower.total[column.key], column.format)}`}
                   >
-                    {showValue(tower.total[column.key], column.format)}
+                    {showPerformance(tower.total[column.key], column)}
                   </TableCell>
                 ))}
               </TableRow>
