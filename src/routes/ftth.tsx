@@ -8,6 +8,7 @@ import { useFtth } from "@/hooks/useData";
 import { fmtInt, fmtPct } from "@/lib/format";
 import { Wifi, MapPin, RefreshCw, Signal } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 
 export const Route = createFileRoute("/ftth")({
   head: () => ({ meta: [{ title: "Oportunidades FTTH — Mapa Parque" }] }),
@@ -69,6 +70,18 @@ function Page() {
               className="rounded-3xl border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.1] p-6 shadow-elegant hover:shadow-elevated"
             />
           </div>
+
+          <OpportunitySimulator
+            rows={(data?.porParceiro ?? []).map((partner) => ({
+              parceiro: partner.parceiro,
+              oportunidades: partner.oportunidades,
+            }))}
+            storageKey="mapa-parque.ftth-simulators.v1"
+            simulatorLabel="Simulador FTTH"
+            opportunityLabel="Oportunidade FTTH"
+            quantityLabel="Acessos"
+            revenueLabel="Receita FTTH"
+          />
 
           <div className="mt-7 grid gap-5 lg:grid-cols-2">
             <ChartCard

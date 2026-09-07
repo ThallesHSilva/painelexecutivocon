@@ -7,9 +7,19 @@ import { BarSimple, DonutChart } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
 import { useLicenses } from "@/hooks/useData";
 import { fmtInt, fmtBRLCompact, fmtPct } from "@/lib/format";
-import { UserCheck, Percent, Target, ShieldCheck, Scale, Rocket, SlidersHorizontal, Sparkles } from "lucide-react";
+import {
+  UserCheck,
+  Percent,
+  Target,
+  ShieldCheck,
+  Scale,
+  Rocket,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 
 export const Route = createFileRoute("/licencas")({
   head: () => ({ meta: [{ title: "Licenças e Serviços Digitais — Mapa Parque" }] }),
@@ -46,14 +56,16 @@ function Page() {
                     Crescimento digital
                   </p>
                   <h2 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-tight md:text-4xl">
-                  Cenários para acelerar a adesão
+                    Cenários para acelerar a adesão
                   </h2>
                 </div>
               </div>
               <div className="flex items-center gap-3 self-start rounded-2xl border border-primary/15 bg-background/75 p-2 pl-3 shadow-sm backdrop-blur md:self-auto">
                 <SlidersHorizontal className="size-4 text-primary" />
                 <div className="leading-tight">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Conversão</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                    Conversão
+                  </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">Taxa aplicada</p>
                 </div>
                 <div className="flex items-center rounded-xl bg-primary/[0.07] px-2">
@@ -75,7 +87,9 @@ function Page() {
           <section>
             <div className="mb-4 flex items-end justify-between gap-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Carteira digital</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                  Carteira digital
+                </p>
                 <h2 className="mt-1 text-xl font-semibold tracking-tight">Oportunidade em foco</h2>
               </div>
               <span className="rounded-full border border-primary/10 bg-primary/[0.06] px-3 py-1.5 text-xs font-medium text-primary">
@@ -83,45 +97,145 @@ function Page() {
               </span>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
-              <KpiCard icon={UserCheck} title="Oportunidade Digital" value={fmtInt(data?.kpis.clientesElegiveis)} tooltip="NR_CNPJ distintos elegíveis com a coluna DIGITAL_1 preenchida." loading={isLoading} className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.08]" />
-              <KpiCard icon={Percent} title="% da base total" value={fmtPct(data?.kpis.percentualBase)} tooltip="Oportunidade Digital dividida por todos os NR_CNPJ distintos da planilha." loading={isLoading} className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]" />
-              <KpiCard icon={Target} title="Potencial de adesão" value={fmtInt(potentialAdoption)} tooltip="Oportunidade Digital multiplicada pela taxa de conversão selecionada." loading={isLoading} className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.1]" />
+              <KpiCard
+                icon={UserCheck}
+                title="Oportunidade Digital"
+                value={fmtInt(data?.kpis.clientesElegiveis)}
+                tooltip="NR_CNPJ distintos elegíveis com a coluna DIGITAL_1 preenchida."
+                loading={isLoading}
+                className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.08]"
+              />
+              <KpiCard
+                icon={Percent}
+                title="% da base total"
+                value={fmtPct(data?.kpis.percentualBase)}
+                tooltip="Oportunidade Digital dividida por todos os NR_CNPJ distintos da planilha."
+                loading={isLoading}
+                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
+              />
+              <KpiCard
+                icon={Target}
+                title="Potencial de adesão"
+                value={fmtInt(potentialAdoption)}
+                tooltip="Oportunidade Digital multiplicada pela taxa de conversão selecionada."
+                loading={isLoading}
+                className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.1]"
+              />
             </div>
           </section>
 
           <section className="mt-7">
             <div className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Projeção comercial</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Projeção comercial
+              </p>
               <h2 className="mt-1 text-xl font-semibold tracking-tight">Cenários por ticket</h2>
             </div>
             <div className="grid gap-3 md:grid-cols-3">
-              <KpiCard icon={ShieldCheck} title="Cenário R$ 34" value={fmtBRLCompact(financialScenarios[0].valor)} description="Ticket conservador" loading={isLoading} className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.08]" />
-              <KpiCard icon={Scale} title="Cenário R$ 62" value={fmtBRLCompact(financialScenarios[1].valor)} description="Ticket médio" loading={isLoading} className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]" />
-              <KpiCard icon={Rocket} title="Cenário R$ 100" value={fmtBRLCompact(financialScenarios[2].valor)} description="Ticket otimista" loading={isLoading} emphasis />
+              <KpiCard
+                icon={ShieldCheck}
+                title="Cenário R$ 34"
+                value={fmtBRLCompact(financialScenarios[0].valor)}
+                description="Ticket conservador"
+                loading={isLoading}
+                className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.08]"
+              />
+              <KpiCard
+                icon={Scale}
+                title="Cenário R$ 62"
+                value={fmtBRLCompact(financialScenarios[1].valor)}
+                description="Ticket médio"
+                loading={isLoading}
+                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
+              />
+              <KpiCard
+                icon={Rocket}
+                title="Cenário R$ 100"
+                value={fmtBRLCompact(financialScenarios[2].valor)}
+                description="Ticket otimista"
+                loading={isLoading}
+                emphasis
+              />
             </div>
           </section>
+
+          <OpportunitySimulator
+            rows={(data?.porParceiro ?? []).map((partner) => ({
+              parceiro: partner.parceiro,
+              oportunidades: partner.elegiveis,
+            }))}
+            storageKey="mapa-parque.digital-simulators.v1"
+            simulatorLabel="Simulador digital"
+            opportunityLabel="Oportunidade Digital"
+            quantityLabel="Licenças"
+            revenueLabel="Receita digital"
+            conversionRate={appliedRate}
+            onConversionRateChange={setConversionRate}
+          />
 
           <div className="mt-7 grid gap-4 lg:grid-cols-2">
             <ChartCard
               title="Base total por parceiro"
-              action={<span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">CNPJs</span>}
+              action={
+                <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">
+                  CNPJs
+                </span>
+              }
               className="border-primary/10 bg-gradient-to-br from-card via-card to-primary/[0.06] shadow-[0_18px_42px_-34px_hsl(var(--primary)/0.6)]"
             >
-              {data && <BarSimple data={data.porParceiro} xKey="parceiro" dataKey="baseElegivel" gradient={{ id: "licenses-partners", from: "var(--chart-1)", to: "var(--primary)" }} />}
+              {data && (
+                <BarSimple
+                  data={data.porParceiro}
+                  xKey="parceiro"
+                  dataKey="baseElegivel"
+                  gradient={{
+                    id: "licenses-partners",
+                    from: "var(--chart-1)",
+                    to: "var(--primary)",
+                  }}
+                />
+              )}
             </ChartCard>
             <ChartCard
               title="Composição das oportunidades digitais"
-              action={<span className="rounded-full bg-violet-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">Mix</span>}
+              action={
+                <span className="rounded-full bg-violet-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">
+                  Mix
+                </span>
+              }
               className="border-violet-400/15 bg-gradient-to-br from-card via-card to-violet-500/[0.06] shadow-[0_18px_42px_-34px_hsl(272_72%_55%/0.45)]"
             >
-              {data && <DonutChart data={data.composicao} nameKey="tipo" dataKey="valor" centerLabel={fmtInt(data.kpis.clientesElegiveis)} />}
+              {data && (
+                <DonutChart
+                  data={data.composicao}
+                  nameKey="tipo"
+                  dataKey="valor"
+                  centerLabel={fmtInt(data.kpis.clientesElegiveis)}
+                />
+              )}
             </ChartCard>
             <ChartCard
               title="Potencial financeiro por cenário"
-              action={<span className="rounded-full bg-cyan/[0.1] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">Receita</span>}
+              action={
+                <span className="rounded-full bg-cyan/[0.1] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">
+                  Receita
+                </span>
+              }
               className="border-cyan/15 bg-gradient-to-br from-card via-card to-cyan/[0.065] shadow-[0_18px_42px_-34px_hsl(190_85%_46%/0.45)] lg:col-span-2"
             >
-              {data && <BarSimple data={financialScenarios} xKey="cenario" dataKey="valor" gradient={{ id: "licenses-financial", from: "var(--chart-2)", to: "var(--primary)" }} valueFormatter={fmtBRLCompact} />}
+              {data && (
+                <BarSimple
+                  data={financialScenarios}
+                  xKey="cenario"
+                  dataKey="valor"
+                  gradient={{
+                    id: "licenses-financial",
+                    from: "var(--chart-2)",
+                    to: "var(--primary)",
+                  }}
+                  valueFormatter={fmtBRLCompact}
+                />
+              )}
             </ChartCard>
           </div>
         </>
