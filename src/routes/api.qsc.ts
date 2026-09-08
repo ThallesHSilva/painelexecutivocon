@@ -8,6 +8,27 @@ type StoredSnapshot = SnapshotFor<"qsc">;
 type StoredScope = StoredSnapshot["scopes"][number];
 type StoredMetric = StoredScope["metrics"][number];
 
+function scoreRulesForMetric(metric: StoredMetric, competence: string) {
+  if (metric.id !== "aceite-digital") return metric.scoreRules;
+  const value = String(competence ?? "")
+    .trim()
+    .toUpperCase();
+  const isAugust = /(?:^|[-/])0?8(?:$|[-/])/.test(value) || /\b(?:AGO|AGOSTO)\b/.test(value);
+  return isAugust
+    ? [
+        { start: 0, end: 85, score: 20, band: "4" },
+        { start: 85, end: 90, score: 20, band: "3" },
+        { start: 90, end: 95, score: 20, band: "2" },
+        { start: 95, end: 100, score: 20, band: "1" },
+      ]
+    : [
+        { start: 0, end: 85, score: 0, band: "4" },
+        { start: 85, end: 90, score: 10, band: "3" },
+        { start: 90, end: 95, score: 14, band: "2" },
+        { start: 95, end: 100, score: 20, band: "1" },
+      ];
+}
+
 async function readQscSnapshot() {
   return getDataSnapshot("qsc");
 }
@@ -44,8 +65,10 @@ function metricForResponse(metric: StoredMetric, history: StoredMetric[] = []) {
     interpretation: metric.interpretation,
     favorableDirection: metric.favorableDirection,
     scoreRules: metric.scoreRules,
-    latest: withMetricScore(metric.latest, metric.scoreRules),
-    history: history.map((point) => withMetricScore(point.latest, metric.scoreRules)),
+    latest: withMetricScore(metric.latest, scoreRulesForMetric(metric, metric.latest.competence)),
+    history: history.map((point) =>
+      withMetricScore(point.latest, scoreRulesForMetric(metric, point.latest.competence)),
+    ),
   } as QscMetricSeries;
 }
 
