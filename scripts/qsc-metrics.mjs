@@ -159,7 +159,7 @@ const METRICS = [
     formula: "CLIENTE BIOMETRADO ÷ (BIOMETRADO + POTENCIAL)",
     interpretation: "Clientes com biometria cadastrada sobre toda a carteira avaliada.",
     favorableDirection: "up",
-    scoreRules: ranges([0, 40, 0, 4], [40, 55, 5, 3], [55, 70, 7, 2], [70, 100, 10, 1]),
+    scoreRules: ranges([0, 40, 0, 4], [40, 50, 5, 3], [50, 60, 7, 2], [60, 100, 10, 1]),
     numerator: {
       movement: "CLIENTE BIOMETRADO",
       subIndicators: ["Parque Biometrado"],
