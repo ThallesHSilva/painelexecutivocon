@@ -55,6 +55,28 @@ function detailValue(records, competence, scopeId, selector) {
 const ranges = (...values) =>
   values.map(([start, end, score, band]) => ({ start, end, score, band: String(band) }));
 
+const ACEITE_DEFAULT_SCORE_RULES = ranges(
+  [0, 85, 0, 4],
+  [85, 90, 10, 3],
+  [90, 95, 14, 2],
+  [95, 100, 20, 1],
+);
+const ACEITE_AUGUST_SCORE_RULES = ranges(
+  [0, 85, 20, 4],
+  [85, 90, 20, 3],
+  [90, 95, 20, 2],
+  [95, 100, 20, 1],
+);
+
+function scoreRulesFor(definition, competence) {
+  if (definition.id !== "aceite-digital") return definition.scoreRules;
+  const value = String(competence ?? "")
+    .trim()
+    .toUpperCase();
+  const isAugust = /(?:^|[-/])0?8(?:$|[-/])/.test(value) || /\b(?:AGO|AGOSTO)\b/.test(value);
+  return isAugust ? ACEITE_AUGUST_SCORE_RULES : ACEITE_DEFAULT_SCORE_RULES;
+}
+
 function scoreMetric(value, scoreRules) {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return { score: null, scoreBand: null };
@@ -384,7 +406,7 @@ function calculateMetric(definition, movements, details, competence, scopeId) {
       denominator,
       available,
       zeroPark: available && numerator === 0 && denominator === 0,
-      ...scoreMetric(value, definition.scoreRules),
+      ...scoreMetric(value, scoreRulesFor(definition, competence)),
     },
   };
 }
