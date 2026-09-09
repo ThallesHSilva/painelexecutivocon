@@ -85,6 +85,18 @@ const PULSE_METRICS = [
   { id: "saldo-portabilidade", label: "Saldo de Portabilidade" },
 ] as const;
 
+const qscPercentFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "percent",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+const fmtQscPct = (value: number | null | undefined) =>
+  value == null ? "—" : qscPercentFormatter.format(value);
+
+const maximumMetricScore = (metric: QscMetricSeries) =>
+  Math.max(0, ...metric.scoreRules.map((rule) => rule.score));
+
 function qscTotalRatingFromTotal(total: number | null) {
   if (total === null) return null;
 
@@ -249,6 +261,7 @@ function SummaryPanel({ domain, metrics }: { domain: QscDomain; metrics: QscMetr
             {metrics.map((metric) => {
               const isExpanded = expandedMetricId === metric.id;
               const history = metric.history.slice(-6);
+              const maximumScore = maximumMetricScore(metric);
 
               return (
                 <Fragment key={metric.id}>
@@ -282,10 +295,17 @@ function SummaryPanel({ domain, metrics }: { domain: QscDomain; metrics: QscMetr
                       {fmtInt(metric.latest?.denominator)}
                     </TableCell>
                     <TableCell className={cn("text-right font-semibold tabular-nums", meta.accent)}>
-                      {fmtPct(metric.latest?.value)}
+                      {fmtQscPct(metric.latest?.value)}
                     </TableCell>
                     <TableCell className="text-right font-bold tabular-nums">
-                      {metric.latest?.score ?? "—"}
+                      {metric.latest?.score == null ? (
+                        "—"
+                      ) : (
+                        <span>
+                          {metric.latest.score}
+                          <span className="font-medium text-muted-foreground">/{maximumScore}</span>
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {metric.latest?.scoreBand ? (
@@ -326,10 +346,12 @@ function SummaryPanel({ domain, metrics }: { domain: QscDomain; metrics: QscMetr
                                 <div
                                   className={cn("mt-1 text-sm font-bold tabular-nums", meta.accent)}
                                 >
-                                  {fmtPct(point.value)}
+                                  {fmtQscPct(point.value)}
                                 </div>
                                 <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-semibold text-muted-foreground">
-                                  <span>Nota {point.score ?? "—"}</span>
+                                  <span>
+                                    Nota {point.score ?? "—"}/{maximumScore}
+                                  </span>
                                   {point.scoreBand ? (
                                     <span
                                       className={cn(
