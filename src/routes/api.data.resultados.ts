@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { readAuthUser } from "@/lib/auth.server";
 import { getDataSnapshot } from "@/lib/snapshots.server";
+import type { Partner, TorresServicoSnapshot } from "@/lib/snapshot-types";
 
 function normalizeCompany(value: string) {
   return value
@@ -8,6 +9,44 @@ function normalizeCompany(value: string) {
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-zA-Z0-9]/g, "")
     .toLowerCase();
+}
+
+function createPartnerNameResolver(partners: Partner[]) {
+  const canonicalNames = partners.map((partner) => ({
+    name: partner.name,
+    key: normalizeCompany(partner.name),
+  }));
+
+  return (sourceName: string) => {
+    const sourceKey = normalizeCompany(sourceName);
+    const exactMatch = canonicalNames.find((partner) => partner.key === sourceKey);
+    if (exactMatch) return exactMatch.name;
+
+    // The commercial workbook commonly abbreviates company names by omitting
+    // suffixes such as "Telecom" or "Business". Only accept a prefix match
+    // when it identifies a single partner, avoiding unsafe fuzzy associations.
+    const prefixMatches = canonicalNames.filter(
+      (partner) => partner.key.startsWith(sourceKey) || sourceKey.startsWith(partner.key),
+    );
+    return prefixMatches.length === 1 ? prefixMatches[0].name : sourceName;
+  };
+}
+
+function reconcileTowerPartnerNames(
+  snapshot: TorresServicoSnapshot,
+  partners: Partner[],
+): TorresServicoSnapshot {
+  const resolvePartnerName = createPartnerNameResolver(partners);
+  return {
+    ...snapshot,
+    towers: snapshot.towers.map((tower) => ({
+      ...tower,
+      rows: tower.rows.map((row) => ({
+        ...row,
+        partner: resolvePartnerName(row.partner),
+      })),
+    })),
+  };
 }
 
 export const Route = createFileRoute("/api/data/resultados")({
@@ -23,7 +62,7 @@ export const Route = createFileRoute("/api/data/resultados")({
         const resultados = getDataSnapshot("resultados-yoy");
         const bestGuess = getDataSnapshot("best-guess");
         const portabilidade = getDataSnapshot("portabilidade-analitica");
-        const torres = getDataSnapshot("torres-servico");
+        const torres = reconcileTowerPartnerNames(getDataSnapshot("torres-servico"), mapa.partners);
         const authorizedNames =
           user.role === "gn"
             ? new Set(
@@ -34,7 +73,9 @@ export const Route = createFileRoute("/api/data/resultados")({
             : null;
         const canSeeCompany = (company: string) =>
           authorizedNames === null || authorizedNames.has(normalizeCompany(company));
-        const bestGuessRecords = bestGuess.records.filter((record) => canSeeCompany(record.company));
+        const bestGuessRecords = bestGuess.records.filter((record) =>
+          canSeeCompany(record.company),
+        );
         const bestGuessTotal = bestGuessRecords.reduce(
           (total, record) => ({
             m0MtdPortIn: total.m0MtdPortIn + record.m0MtdPortIn,
