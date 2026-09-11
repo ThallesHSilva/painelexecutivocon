@@ -17,6 +17,7 @@ import { Route as FtthRouteImport } from './routes/ftth'
 import { Route as LicencasRouteImport } from './routes/licencas'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MovelRouteImport } from './routes/movel'
+import { Route as PbiRouteImport } from './routes/pbi'
 import { Route as QscRouteImport } from './routes/qsc'
 import { Route as ResultadosRouteImport } from './routes/resultados'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
@@ -70,6 +71,11 @@ const LoginRoute = LoginRouteImport.update({
 const MovelRoute = MovelRouteImport.update({
   id: '/movel',
   path: '/movel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PbiRoute = PbiRouteImport.update({
+  id: '/pbi',
+  path: '/pbi',
   getParentRoute: () => rootRouteImport,
 } as any)
 const QscRoute = QscRouteImport.update({
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
+  '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -176,6 +183,7 @@ export interface FileRoutesByTo {
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
+  '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -201,6 +209,7 @@ export interface FileRoutesById {
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
+  '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/licencas'
     | '/login'
     | '/movel'
+    | '/pbi'
     | '/qsc'
     | '/resultados'
     | '/sitemap.xml'
@@ -251,6 +261,7 @@ export interface FileRouteTypes {
     | '/licencas'
     | '/login'
     | '/movel'
+    | '/pbi'
     | '/qsc'
     | '/resultados'
     | '/sitemap.xml'
@@ -275,6 +286,7 @@ export interface FileRouteTypes {
     | '/licencas'
     | '/login'
     | '/movel'
+    | '/pbi'
     | '/qsc'
     | '/resultados'
     | '/sitemap.xml'
@@ -300,6 +312,7 @@ export interface RootRouteChildren {
   LicencasRoute: typeof LicencasRoute
   LoginRoute: typeof LoginRoute
   MovelRoute: typeof MovelRoute
+  PbiRoute: typeof PbiRoute
   QscRoute: typeof QscRoute
   ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
@@ -372,6 +385,13 @@ declare module '@tanstack/react-router' {
       path: '/movel'
       fullPath: '/movel'
       preLoaderRoute: typeof MovelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pbi': {
+      id: '/pbi'
+      path: '/pbi'
+      fullPath: '/pbi'
+      preLoaderRoute: typeof PbiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/qsc': {
@@ -484,6 +504,7 @@ const rootRouteChildren: RootRouteChildren = {
   LicencasRoute: LicencasRoute,
   LoginRoute: LoginRoute,
   MovelRoute: MovelRoute,
+  PbiRoute: PbiRoute,
   QscRoute: QscRoute,
   ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,

@@ -15,6 +15,7 @@ import {
   Upload,
   ChevronDown,
   BriefcaseBusiness,
+  MonitorPlay,
   LogOut,
   LoaderCircle,
   UserCog,
@@ -36,7 +37,10 @@ const OPPORTUNITY_NAV = [
   { to: "/avancada", label: "Oportunidade Avançada", icon: Rocket },
 ] as const;
 
-const SECONDARY_NAV = [{ to: "/qsc", label: "QSC", icon: ClipboardCheck }] as const;
+const SECONDARY_NAV = [
+  { to: "/qsc", label: "QSC", icon: ClipboardCheck },
+  { to: "/pbi", label: "PBI", icon: MonitorPlay },
+] as const;
 const DATA_NAV = { to: "/alimentacao", label: "Alimentar dados", icon: Upload } as const;
 const ADMIN_NAV = { to: "/usuarios", label: "Acessos", icon: UserCog } as const;
 
