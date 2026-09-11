@@ -7,15 +7,19 @@ import { calculateQscSnapshot } from "./qsc-metrics.mjs";
 const requestedInputs = process.argv.slice(2);
 if (!requestedInputs.length) {
   throw new Error(
-    'Informe ao menos um CSV QSC: node scripts/process-qsc.mjs "carteira:QSC_CARTEIRA.csv"',
+    'Informe ao menos um CSV QSC: node scripts/process-qsc.mjs "carteira@h1:QSC_CARTEIRA.csv"',
   );
 }
 const inputs = requestedInputs.map((input) => {
-  const match = input.match(/^(carteira|fixa|movel):(.*)$/i);
-  if (!match || !match[2]) {
-    throw new Error("Use o formato dominio:caminho para cada arquivo QSC.");
+  const match = input.match(/^(carteira|fixa|movel)(?:@(h1|h2))?:(.*)$/i);
+  if (!match || !match[3]) {
+    throw new Error("Use o formato dominio@semestre:caminho para cada arquivo QSC.");
   }
-  return { domain: match[1].toLowerCase(), filePath: match[2] };
+  return {
+    domain: match[1].toLowerCase(),
+    semester: match[2]?.toLowerCase() ?? "h1",
+    filePath: match[3],
+  };
 });
 
 const outputPath = path.resolve(
@@ -64,6 +68,29 @@ function parseNumber(value) {
 function quantityFromObservation(value) {
   const match = normalize(value).match(/quantidade\s+contas?\s+em\s+dauto\s*:\s*([\d.,-]+)/i);
   return match ? parseNumber(match[1]) : 0;
+}
+
+function competenceMonth(value) {
+  const competence = normalize(value);
+  const yearMonth = competence.match(/^\d{4}[-/]([01]?\d)$/);
+  if (yearMonth) {
+    const month = Number(yearMonth[1]);
+    return month >= 1 && month <= 12 ? month : null;
+  }
+
+  const monthYear = competence.match(/^([01]?\d)[-/]\d{4}$/);
+  if (monthYear) {
+    const month = Number(monthYear[1]);
+    return month >= 1 && month <= 12 ? month : null;
+  }
+
+  return null;
+}
+
+function belongsToSemester(competence, semester) {
+  const month = competenceMonth(competence);
+  if (month === null) return true;
+  return semester === "h1" ? month <= 6 : month >= 7;
 }
 
 async function detectEncoding(filePath) {
@@ -210,7 +237,7 @@ const partners = new Map();
 const source = [];
 const competencies = new Set();
 
-for (const { domain, filePath } of inputs) {
+for (const { domain, semester, filePath } of inputs) {
   const absolutePath = path.resolve(filePath);
   const stats = await fs.stat(absolutePath);
   const encoding = await detectEncoding(absolutePath);
@@ -255,6 +282,7 @@ for (const { domain, filePath } of inputs) {
     const indicator = valueAt(row, columns.indicator);
     const subIndicator = valueAt(row, columns.subIndicator);
     const competence = valueAt(row, columns.competence);
+    if (!belongsToSemester(competence, semester)) continue;
     const partnerName = valueAt(row, columns.partnerName) || "Parceiro não informado";
     const partnerDocument = valueAt(row, columns.partnerDocument);
     const partnerId = resolvePartnerId(partnerName, partnerDocument);
@@ -295,6 +323,7 @@ for (const { domain, filePath } of inputs) {
 
   source.push({
     domain,
+    semester,
     fileName: path.basename(absolutePath),
     fileSizeBytes: stats.size,
     encoding,

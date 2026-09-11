@@ -23,6 +23,7 @@ data/*.sqlite-wal
 .data/
 src/data/*.snapshot.json
 .codex/
+.graphify-venv/
 
 # Local Graphify code knowledge graph
 graphify-out/

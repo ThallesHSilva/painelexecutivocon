@@ -234,9 +234,12 @@ async function listQscInputs(qscDirectory: string) {
         new RegExp(`^qsc-${domain}(?:-[a-z0-9-]+)?\\.csv$`, "i").test(path.basename(filePath)),
       )
       .sort()
-      .map((filePath) => `${domain}:${filePath}`),
+      .map((filePath) => {
+        const semester = /-h2\.csv$/i.test(path.basename(filePath)) ? "h2" : "h1";
+        return `${domain}@${semester}:${filePath}`;
+      }),
   );
-  const available = domains.map((domain) => inputs.some((input) => input.startsWith(`${domain}:`)));
+  const available = domains.map((domain) => inputs.some((input) => input.startsWith(`${domain}@`)));
   return { inputs, available };
 }
 

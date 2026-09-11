@@ -115,8 +115,14 @@ const METRICS = [
     interpretation: "Participação das linhas com menos de 17 meses de fidelização.",
     favorableDirection: "up",
     scoreRules: ranges([0, 75, 0, 4], [75, 80, 10, 3], [80, 85, 14, 2], [85, 100, 20, 1]),
-    numerator: { movement: "PARQUE FIDELIZADO M17" },
-    denominator: { movement: "PARQUE MOVEL" },
+    numerator: {
+      movement: "PARQUE FIDELIZADO M17",
+      subIndicators: ["Fidelizacao Movel"],
+    },
+    denominator: {
+      movement: "PARQUE MOVEL",
+      subIndicators: ["Churn/Fidelizacao Movel"],
+    },
   },
   {
     id: "churn-bl",
@@ -218,12 +224,13 @@ const METRICS = [
     id: "early-churn-fixa",
     domain: "fixa",
     label: "Early Churn Banda Larga",
-    formula: "BAIXAS PREMATURAS ÷ ALTAS SAFRA M-9",
+    formula: "BAIXAS PREMATURAS ÷ (BAIXAS PREMATURAS + ALTAS SAFRA M-9)",
     interpretation: "Baixas voluntárias M6 e involuntárias M9 da safra de banda larga.",
     favorableDirection: "down",
     scoreRules: ranges([0, 10, 20, 1], [10, 12.5, 14, 2], [12.5, 17.5, 10, 3], [17.5, 100, 0, 4]),
     numerator: { movement: "BAIXAS PREMATURAS", subIndicators: ["Early Churn Fixa"] },
     denominator: { movement: "ALTAS SAFRA M-9", subIndicators: ["Early Churn Fixa"] },
+    denominatorMode: "plus-numerator",
   },
   {
     id: "totalizacao-fixa",
