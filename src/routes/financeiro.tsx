@@ -15,7 +15,7 @@ function FinancialPage() {
   return (
     <DashboardLayout title="Financeiro">
       <section className="overflow-hidden rounded-[2rem] border border-emerald-500/20 bg-card shadow-elevated">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-emerald-500/15 bg-emerald-500/[0.04] px-5 py-5 md:px-7">
+        <div className="flex flex-col items-start gap-4 bg-emerald-500/[0.04] px-5 py-7 md:px-7">
           <div className="flex items-center gap-3">
             <div className="grid size-10 place-items-center rounded-2xl bg-emerald-500/[0.13] text-emerald-700 dark:text-emerald-300">
               <Landmark className="size-5" />
@@ -25,6 +25,9 @@ function FinancialPage() {
                 Power BI
               </p>
               <h1 className="text-lg font-semibold tracking-tight">Visão financeira</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Acesse a visão completa diretamente no Power BI.
+              </p>
             </div>
           </div>
           <Button asChild variant="outline" size="sm" className="rounded-xl">
@@ -33,12 +36,6 @@ function FinancialPage() {
             </a>
           </Button>
         </div>
-        <iframe
-          title="PBI Financeiro"
-          src={FINANCIAL_POWER_BI_URL}
-          className="min-h-[760px] w-full border-0"
-          allowFullScreen
-        />
       </section>
     </DashboardLayout>
   );

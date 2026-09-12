@@ -907,12 +907,15 @@ export function CertificationPanel() {
       <TabsContent value="current">{renderCycle("current")}</TabsContent>
       <TabsContent value="pbi">
         <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-card shadow-elevated">
-          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-violet-500/15 bg-violet-500/[0.04] px-5 py-5 md:px-7">
+          <div className="flex flex-col items-start gap-4 bg-violet-500/[0.04] px-5 py-7 md:px-7">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
                 Power BI
               </p>
               <h2 className="mt-1 text-lg font-semibold tracking-tight">Certificação</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Acesse a visão completa diretamente no Power BI.
+              </p>
             </div>
             <Button asChild variant="outline" size="sm" className="rounded-xl">
               <a href={CERTIFICATION_POWER_BI_URL} target="_blank" rel="noreferrer">
@@ -920,12 +923,6 @@ export function CertificationPanel() {
               </a>
             </Button>
           </div>
-          <iframe
-            title="PBI de Certificação"
-            src={CERTIFICATION_POWER_BI_URL}
-            className="min-h-[760px] w-full border-0"
-            allowFullScreen
-          />
         </Card>
       </TabsContent>
     </Tabs>

@@ -69,13 +69,11 @@ function QualityPage() {
             </TabsList>
           </Tabs>
         </div>
-        <iframe
-          key={report.id}
-          title={`PBI ${report.label}`}
-          src={report.url}
-          className="min-h-[760px] w-full border-0"
-          allowFullScreen
-        />
+        <div className="px-5 py-7 md:px-7">
+          <p className="text-sm text-muted-foreground">
+            Selecione uma visão acima e abra o relatório diretamente no Power BI.
+          </p>
+        </div>
       </Card>
     </DashboardLayout>
   );

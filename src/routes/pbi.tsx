@@ -14,7 +14,7 @@ export const Route = createFileRoute("/pbi")({
 function PbiPage() {
   return (
     <DashboardLayout title="PBI">
-      <div className="flex min-h-[calc(100vh-9rem)] flex-col gap-4">
+      <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-primary">
@@ -30,13 +30,8 @@ function PbiPage() {
           </Button>
         </div>
 
-        <div className="min-h-[760px] flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
-          <iframe
-            title="Painel Power BI"
-            src={POWER_BI_REPORT_URL}
-            className="h-full min-h-[760px] w-full border-0"
-            allowFullScreen
-          />
+        <div className="rounded-2xl border border-border/60 bg-card p-6 text-sm text-muted-foreground shadow-sm">
+          Acesse o painel diretamente no Power BI pelo botão acima.
         </div>
       </div>
     </DashboardLayout>
