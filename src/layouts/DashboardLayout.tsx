@@ -15,7 +15,8 @@ import {
   Upload,
   ChevronDown,
   BriefcaseBusiness,
-  MonitorPlay,
+  Landmark,
+  ShieldCheck,
   LogOut,
   LoaderCircle,
   UserCog,
@@ -28,6 +29,8 @@ import { PartnerFilter } from "@/components/PartnerFilter";
 const PRIMARY_NAV = [
   { to: "/resultados", label: "Visão resultado", icon: ChartNoAxesCombined },
   { to: "/certificacao", label: "Certificação", icon: Award },
+  { to: "/financeiro", label: "Financeiro", icon: Landmark },
+  { to: "/qualidade", label: "Qualidade", icon: ShieldCheck },
 ] as const;
 
 const OPPORTUNITY_NAV = [
@@ -37,10 +40,7 @@ const OPPORTUNITY_NAV = [
   { to: "/avancada", label: "Oportunidade Avançada", icon: Rocket },
 ] as const;
 
-const SECONDARY_NAV = [
-  { to: "/qsc", label: "QSC", icon: ClipboardCheck },
-  { to: "/pbi", label: "PBI", icon: MonitorPlay },
-] as const;
+const SECONDARY_NAV = [{ to: "/qsc", label: "QSC", icon: ClipboardCheck }] as const;
 const DATA_NAV = { to: "/alimentacao", label: "Alimentar dados", icon: Upload } as const;
 const ADMIN_NAV = { to: "/usuarios", label: "Acessos", icon: UserCog } as const;
 

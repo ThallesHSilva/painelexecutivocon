@@ -19,10 +19,12 @@ export function CertificationQscHistory({
   rows,
   totalPoints,
   onChange,
+  readOnly = false,
 }: {
   rows: CertificationQscRow[];
   totalPoints: string;
   onChange: (rowId: string, field: CertificationQscField, value: string) => void;
+  readOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -55,6 +57,7 @@ export function CertificationQscHistory({
             inputMode="decimal"
             value={totalPoints}
             onChange={(event) => onChange("qsc-total", "points", event.target.value)}
+            disabled={readOnly}
             className="h-9 rounded-xl border-primary/25 bg-primary/[0.07] px-2.5 text-right text-sm font-bold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
           />
         </TableCell>
@@ -74,6 +77,7 @@ export function CertificationQscHistory({
                   inputMode="decimal"
                   value={row[field]}
                   onChange={(event) => onChange(row.id, field, event.target.value)}
+                  disabled={readOnly}
                   className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-right text-sm font-semibold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
                 />
               </TableCell>
@@ -85,6 +89,7 @@ export function CertificationQscHistory({
                 inputMode="decimal"
                 value={row.totalizer}
                 onChange={(event) => onChange(row.id, "totalizer", event.target.value)}
+                disabled={readOnly}
                 className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-right text-sm font-bold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
               />
             </TableCell>
@@ -95,6 +100,7 @@ export function CertificationQscHistory({
                 inputMode="decimal"
                 value={row.points}
                 onChange={(event) => onChange(row.id, "points", event.target.value)}
+                disabled={readOnly}
                 className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-right text-sm font-bold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
               />
             </TableCell>
@@ -104,6 +110,7 @@ export function CertificationQscHistory({
                 type="text"
                 value={row.band}
                 onChange={(event) => onChange(row.id, "band", event.target.value)}
+                disabled={readOnly}
                 className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-left text-sm font-semibold shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
               />
             </TableCell>

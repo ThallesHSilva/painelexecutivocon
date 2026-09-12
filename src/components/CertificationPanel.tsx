@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Award, ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Award, ChevronDown, ExternalLink, LoaderCircle, Save } from "lucide-react";
 import {
   CertificationQscHistory,
   type CertificationQscField,
@@ -7,7 +7,12 @@ import {
 } from "@/components/CertificationQscHistory";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { usePartnerFilter } from "@/contexts/AppContexts";
+import { usePartners } from "@/hooks/useData";
 import { fmtInt } from "@/lib/format";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -22,6 +27,9 @@ type CertificationField =
 
 type CertificationRow = Record<CertificationField, string> & { id: string; indicator: string };
 type CycleId = "previous" | "current";
+
+const CERTIFICATION_POWER_BI_URL =
+  "https://app.powerbi.com/groups/me/reports/6cb65a90-4ea5-4917-8f89-2c588ac43942/d3cdc620745abb5b4843?ctid=9744600e-3e04-492e-baa1-25ec245c6f10&openReportSource=ReportInvitation&experience=power-bi";
 
 const SUMMARY_ROW: CertificationRow = {
   id: "receita-total",
@@ -463,11 +471,85 @@ function certificationStone(revenueTelecom: number, totalPoints: number) {
 
 export function CertificationPanel() {
   const [cycles, setCycles] = useState(INITIAL_CYCLES);
+  const [view, setView] = useState<"previous" | "current" | "pbi">("previous");
   const [expanded, setExpanded] = useState<Record<CycleId, boolean>>({
     previous: false,
     current: false,
   });
+  const [saving, setSaving] = useState(false);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const { effectiveSelected } = usePartnerFilter();
+  const { data: partners = [] } = usePartners();
+  const activePartnerId = effectiveSelected.length === 1 ? effectiveSelected[0] : null;
+  const activePartner = useMemo(
+    () => partners.find((partner) => partner.id === activePartnerId) ?? null,
+    [activePartnerId, partners],
+  );
+
+  useEffect(() => {
+    if (!activePartnerId) {
+      setCycles((current) => ({ ...current, current: INITIAL_CYCLES.current }));
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingPreview(true);
+    void fetch(`/api/certificacao/previa?partnerId=${encodeURIComponent(activePartnerId)}`, {
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Não foi possível carregar a prévia deste PV.");
+        return response.json() as Promise<{ preview?: { payload?: unknown } | null }>;
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        const preview = payload.preview?.payload;
+        const hasExpectedShape =
+          preview &&
+          typeof preview === "object" &&
+          "summary" in preview &&
+          "breakdown" in preview &&
+          "qsc" in preview;
+        setCycles((current) => ({
+          ...current,
+          current: hasExpectedShape
+            ? (preview as (typeof INITIAL_CYCLES)["current"])
+            : INITIAL_CYCLES.current,
+        }));
+      })
+      .catch((error: Error) => {
+        if (!cancelled) toast.error(error.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPreview(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activePartnerId]);
+
+  const savePreview = async () => {
+    if (!activePartnerId || saving) return;
+    setSaving(true);
+    try {
+      const response = await fetch("/api/certificacao/previa", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ partnerId: activePartnerId, payload: cycles.current }),
+      });
+      const payload = (await response.json()) as { message?: string };
+      if (!response.ok) throw new Error(payload.message ?? "Não foi possível salvar a prévia.");
+      toast.success(`Prévia de ${activePartner?.name ?? "PV"} salva com sucesso.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a prévia.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const updateValue = (cycle: CycleId, rowId: string, field: CertificationField, value: string) => {
+    if (cycle !== "current" || !activePartnerId) return;
     const activeCycle = cycles[cycle];
     if (
       (rowId === activeCycle.summary.id && isCalculatedSummaryField(field)) ||
@@ -517,6 +599,7 @@ export function CertificationPanel() {
     field: CertificationQscField,
     value: string,
   ) => {
+    if (cycle !== "current" || !activePartnerId) return;
     setCycles((current) => ({
       ...current,
       [cycle]: {
@@ -560,7 +643,8 @@ export function CertificationPanel() {
           inputMode={column.numeric ? "decimal" : "text"}
           value={row[column.field]}
           onChange={(event) => updateValue(cycle, row.id, column.field, event.target.value)}
-          className={`h-9 rounded-xl border-violet-500/20 px-2.5 text-sm font-semibold shadow-sm focus-visible:border-violet-500/50 focus-visible:ring-violet-500/15 bg-violet-500/[0.045] ${column.numeric ? "text-right tabular-nums" : "text-left"}`}
+          disabled={cycle !== "current" || !activePartnerId}
+          className={`h-9 rounded-xl border-violet-500/20 px-2.5 text-sm font-semibold shadow-sm focus-visible:border-violet-500/50 focus-visible:ring-violet-500/15 bg-violet-500/[0.045] disabled:cursor-not-allowed disabled:opacity-65 ${column.numeric ? "text-right tabular-nums" : "text-left"}`}
         />
       </TableCell>
     );
@@ -586,6 +670,7 @@ export function CertificationPanel() {
     ];
     const cycleLabel =
       cycle === "previous" ? "Certificação · 1º semestre" : "Certificação · 2º semestre";
+    const editable = cycle === "current" && Boolean(activePartnerId);
 
     return (
       <Card
@@ -601,7 +686,16 @@ export function CertificationPanel() {
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
                 {cycleLabel}
               </p>
-              <h2 className="text-lg font-semibold tracking-tight">Resultado Certificação</h2>
+              <h2 className="text-lg font-semibold tracking-tight">
+                {cycle === "previous" ? "Resultado fechado" : "Simulador de prévia"}
+              </h2>
+              {cycle === "current" && (
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {activePartner
+                    ? `PV: ${activePartner.name}`
+                    : "Selecione apenas um PV no filtro para preencher a prévia."}
+                </p>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -627,6 +721,22 @@ export function CertificationPanel() {
                 {stone.bonus}
               </p>
             </div>
+            {cycle === "current" && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={savePreview}
+                disabled={!editable || saving || loadingPreview}
+                className="h-10 rounded-2xl px-3 text-xs font-semibold"
+              >
+                {saving || loadingPreview ? (
+                  <LoaderCircle className="size-3.5 animate-spin" />
+                ) : (
+                  <Save className="size-3.5" />
+                )}
+                Salvar prévia
+              </Button>
+            )}
           </div>
         </div>
 
@@ -765,6 +875,7 @@ export function CertificationPanel() {
                   rows={activeCycle.qsc.rows}
                   totalPoints={activeCycle.qsc.totalPoints}
                   onChange={(rowId, field, value) => updateQscValue(cycle, rowId, field, value)}
+                  readOnly={!editable}
                 />
               </TableBody>
             </Table>
@@ -775,9 +886,48 @@ export function CertificationPanel() {
   };
 
   return (
-    <div className="space-y-7">
-      {renderCycle("previous")}
-      {renderCycle("current")}
-    </div>
+    <Tabs
+      value={view}
+      onValueChange={(value) => setView(value as typeof view)}
+      className="space-y-5"
+    >
+      <TabsList className="h-auto flex-wrap justify-start gap-1 rounded-2xl border border-violet-500/15 bg-violet-500/[0.045] p-1.5">
+        <TabsTrigger value="previous" className="h-10 rounded-xl px-4 text-xs font-semibold">
+          1º Ciclo · Resultado fechado
+        </TabsTrigger>
+        <TabsTrigger value="current" className="h-10 rounded-xl px-4 text-xs font-semibold">
+          2º Ciclo · Simulador
+        </TabsTrigger>
+        <TabsTrigger value="pbi" className="h-10 rounded-xl px-4 text-xs font-semibold">
+          PBI Certificação
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="previous">{renderCycle("previous")}</TabsContent>
+      <TabsContent value="current">{renderCycle("current")}</TabsContent>
+      <TabsContent value="pbi">
+        <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-card shadow-elevated">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-violet-500/15 bg-violet-500/[0.04] px-5 py-5 md:px-7">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
+                Power BI
+              </p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">Certificação</h2>
+            </div>
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <a href={CERTIFICATION_POWER_BI_URL} target="_blank" rel="noreferrer">
+                Abrir no Power BI <ExternalLink className="size-4" />
+              </a>
+            </Button>
+          </div>
+          <iframe
+            title="PBI de Certificação"
+            src={CERTIFICATION_POWER_BI_URL}
+            className="min-h-[760px] w-full border-0"
+            allowFullScreen
+          />
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }

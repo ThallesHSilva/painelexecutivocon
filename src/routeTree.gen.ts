@@ -13,12 +13,14 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
 import { Route as AvancadaRouteImport } from './routes/avancada'
 import { Route as CertificacaoRouteImport } from './routes/certificacao'
+import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as FtthRouteImport } from './routes/ftth'
 import { Route as LicencasRouteImport } from './routes/licencas'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MovelRouteImport } from './routes/movel'
 import { Route as PbiRouteImport } from './routes/pbi'
 import { Route as QscRouteImport } from './routes/qsc'
+import { Route as QualidadeRouteImport } from './routes/qualidade'
 import { Route as ResultadosRouteImport } from './routes/resultados'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
@@ -28,6 +30,7 @@ import { Route as ApiAuthLoginRouteImport } from './routes/api.auth.login'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api.auth.register'
 import { Route as ApiAuthSessionRouteImport } from './routes/api.auth.session'
+import { Route as ApiCertificacaoPreviaRouteImport } from './routes/api.certificacao.previa'
 import { Route as ApiDataMapaRouteImport } from './routes/api.data.mapa'
 import { Route as ApiDataResultadosRouteImport } from './routes/api.data.resultados'
 import { Route as ApiDataUploadRouteImport } from './routes/api.data.upload'
@@ -51,6 +54,11 @@ const AvancadaRoute = AvancadaRouteImport.update({
 const CertificacaoRoute = CertificacaoRouteImport.update({
   id: '/certificacao',
   path: '/certificacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceiroRoute = FinanceiroRouteImport.update({
+  id: '/financeiro',
+  path: '/financeiro',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FtthRoute = FtthRouteImport.update({
@@ -81,6 +89,11 @@ const PbiRoute = PbiRouteImport.update({
 const QscRoute = QscRouteImport.update({
   id: '/qsc',
   path: '/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QualidadeRoute = QualidadeRouteImport.update({
+  id: '/qualidade',
+  path: '/qualidade',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResultadosRoute = ResultadosRouteImport.update({
@@ -128,6 +141,11 @@ const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
   path: '/api/auth/session',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCertificacaoPreviaRoute = ApiCertificacaoPreviaRouteImport.update({
+  id: '/api/certificacao/previa',
+  path: '/api/certificacao/previa',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDataMapaRoute = ApiDataMapaRouteImport.update({
   id: '/api/data/mapa',
   path: '/api/data/mapa',
@@ -154,12 +172,14 @@ export interface FileRoutesByFullPath {
   '/alimentacao': typeof AlimentacaoRoute
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
+  '/financeiro': typeof FinanceiroRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/qualidade': typeof QualidadeRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -169,6 +189,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/certificacao/previa': typeof ApiCertificacaoPreviaRoute
   '/api/data/mapa': typeof ApiDataMapaRoute
   '/api/data/resultados': typeof ApiDataResultadosRoute
   '/api/data/upload': typeof ApiDataUploadRoute
@@ -179,12 +200,14 @@ export interface FileRoutesByTo {
   '/alimentacao': typeof AlimentacaoRoute
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
+  '/financeiro': typeof FinanceiroRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/qualidade': typeof QualidadeRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -194,6 +217,7 @@ export interface FileRoutesByTo {
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/certificacao/previa': typeof ApiCertificacaoPreviaRoute
   '/api/data/mapa': typeof ApiDataMapaRoute
   '/api/data/resultados': typeof ApiDataResultadosRoute
   '/api/data/upload': typeof ApiDataUploadRoute
@@ -205,12 +229,14 @@ export interface FileRoutesById {
   '/alimentacao': typeof AlimentacaoRoute
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
+  '/financeiro': typeof FinanceiroRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/qualidade': typeof QualidadeRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -220,6 +246,7 @@ export interface FileRoutesById {
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/session': typeof ApiAuthSessionRoute
+  '/api/certificacao/previa': typeof ApiCertificacaoPreviaRoute
   '/api/data/mapa': typeof ApiDataMapaRoute
   '/api/data/resultados': typeof ApiDataResultadosRoute
   '/api/data/upload': typeof ApiDataUploadRoute
@@ -232,12 +259,14 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/avancada'
     | '/certificacao'
+    | '/financeiro'
     | '/ftth'
     | '/licencas'
     | '/login'
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/qualidade'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -247,6 +276,7 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/register'
     | '/api/auth/session'
+    | '/api/certificacao/previa'
     | '/api/data/mapa'
     | '/api/data/resultados'
     | '/api/data/upload'
@@ -257,12 +287,14 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/avancada'
     | '/certificacao'
+    | '/financeiro'
     | '/ftth'
     | '/licencas'
     | '/login'
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/qualidade'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -272,6 +304,7 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/register'
     | '/api/auth/session'
+    | '/api/certificacao/previa'
     | '/api/data/mapa'
     | '/api/data/resultados'
     | '/api/data/upload'
@@ -282,12 +315,14 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/avancada'
     | '/certificacao'
+    | '/financeiro'
     | '/ftth'
     | '/licencas'
     | '/login'
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/qualidade'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -297,6 +332,7 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/register'
     | '/api/auth/session'
+    | '/api/certificacao/previa'
     | '/api/data/mapa'
     | '/api/data/resultados'
     | '/api/data/upload'
@@ -308,12 +344,14 @@ export interface RootRouteChildren {
   AlimentacaoRoute: typeof AlimentacaoRoute
   AvancadaRoute: typeof AvancadaRoute
   CertificacaoRoute: typeof CertificacaoRoute
+  FinanceiroRoute: typeof FinanceiroRoute
   FtthRoute: typeof FtthRoute
   LicencasRoute: typeof LicencasRoute
   LoginRoute: typeof LoginRoute
   MovelRoute: typeof MovelRoute
   PbiRoute: typeof PbiRoute
   QscRoute: typeof QscRoute
+  QualidadeRoute: typeof QualidadeRoute
   ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UsuariosRoute: typeof UsuariosRoute
@@ -323,6 +361,7 @@ export interface RootRouteChildren {
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
   ApiAuthSessionRoute: typeof ApiAuthSessionRoute
+  ApiCertificacaoPreviaRoute: typeof ApiCertificacaoPreviaRoute
   ApiDataMapaRoute: typeof ApiDataMapaRoute
   ApiDataResultadosRoute: typeof ApiDataResultadosRoute
   ApiDataUploadRoute: typeof ApiDataUploadRoute
@@ -357,6 +396,13 @@ declare module '@tanstack/react-router' {
       path: '/certificacao'
       fullPath: '/certificacao'
       preLoaderRoute: typeof CertificacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/financeiro': {
+      id: '/financeiro'
+      path: '/financeiro'
+      fullPath: '/financeiro'
+      preLoaderRoute: typeof FinanceiroRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ftth': {
@@ -399,6 +445,13 @@ declare module '@tanstack/react-router' {
       path: '/qsc'
       fullPath: '/qsc'
       preLoaderRoute: typeof QscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qualidade': {
+      id: '/qualidade'
+      path: '/qualidade'
+      fullPath: '/qualidade'
+      preLoaderRoute: typeof QualidadeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/resultados': {
@@ -464,6 +517,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSessionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/certificacao/previa': {
+      id: '/api/certificacao/previa'
+      path: '/api/certificacao/previa'
+      fullPath: '/api/certificacao/previa'
+      preLoaderRoute: typeof ApiCertificacaoPreviaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/data/mapa': {
       id: '/api/data/mapa'
       path: '/api/data/mapa'
@@ -500,12 +560,14 @@ const rootRouteChildren: RootRouteChildren = {
   AlimentacaoRoute: AlimentacaoRoute,
   AvancadaRoute: AvancadaRoute,
   CertificacaoRoute: CertificacaoRoute,
+  FinanceiroRoute: FinanceiroRoute,
   FtthRoute: FtthRoute,
   LicencasRoute: LicencasRoute,
   LoginRoute: LoginRoute,
   MovelRoute: MovelRoute,
   PbiRoute: PbiRoute,
   QscRoute: QscRoute,
+  QualidadeRoute: QualidadeRoute,
   ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UsuariosRoute: UsuariosRoute,
@@ -515,6 +577,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthRegisterRoute: ApiAuthRegisterRoute,
   ApiAuthSessionRoute: ApiAuthSessionRoute,
+  ApiCertificacaoPreviaRoute: ApiCertificacaoPreviaRoute,
   ApiDataMapaRoute: ApiDataMapaRoute,
   ApiDataResultadosRoute: ApiDataResultadosRoute,
   ApiDataUploadRoute: ApiDataUploadRoute,

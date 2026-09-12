@@ -33,6 +33,13 @@ export type DataImportInfo = {
   createdAt: string;
 };
 
+export type CertificationPreview = {
+  partnerId: string;
+  payload: unknown;
+  updatedAt: string;
+  updatedBy: string | null;
+};
+
 export type StoredUser = {
   id: number;
   name: string;
@@ -119,6 +126,12 @@ function getDatabase() {
     );
     CREATE INDEX IF NOT EXISTS idx_data_imports_kind_created_at
       ON data_imports(kind, created_at DESC);
+    CREATE TABLE IF NOT EXISTS certification_previews (
+      partner_id TEXT PRIMARY KEY,
+      payload TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );
   `);
   const columns = database.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
   if (!columns.some((column) => column.name === "role")) {
@@ -385,4 +398,40 @@ export function listDataImports(limit = 10, uploadedBy?: string): DataImportInfo
     message: row.message,
     createdAt: row.created_at,
   }));
+}
+
+export function getCertificationPreview(partnerId: string): CertificationPreview | null {
+  const row = getDatabase()
+    .prepare(
+      "SELECT partner_id, payload, updated_at, updated_by FROM certification_previews WHERE partner_id = ?",
+    )
+    .get(partnerId) as
+    | { partner_id: string; payload: string; updated_at: string; updated_by: string | null }
+    | undefined;
+  if (!row) return null;
+  return {
+    partnerId: row.partner_id,
+    payload: JSON.parse(row.payload),
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  };
+}
+
+export function saveCertificationPreview(input: {
+  partnerId: string;
+  payload: unknown;
+  updatedBy?: string | null;
+}) {
+  const updatedAt = new Date().toISOString();
+  getDatabase()
+    .prepare(
+      `INSERT INTO certification_previews (partner_id, payload, updated_at, updated_by)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(partner_id) DO UPDATE SET
+         payload = excluded.payload,
+         updated_at = excluded.updated_at,
+         updated_by = excluded.updated_by`,
+    )
+    .run(input.partnerId, JSON.stringify(input.payload), updatedAt, input.updatedBy ?? null);
+  return { updatedAt };
 }
