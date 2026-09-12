@@ -13,14 +13,12 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
 import { Route as AvancadaRouteImport } from './routes/avancada'
 import { Route as CertificacaoRouteImport } from './routes/certificacao'
-import { Route as FinanceiroRouteImport } from './routes/financeiro'
 import { Route as FtthRouteImport } from './routes/ftth'
 import { Route as LicencasRouteImport } from './routes/licencas'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MovelRouteImport } from './routes/movel'
 import { Route as PbiRouteImport } from './routes/pbi'
 import { Route as QscRouteImport } from './routes/qsc'
-import { Route as QualidadeRouteImport } from './routes/qualidade'
 import { Route as ResultadosRouteImport } from './routes/resultados'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
@@ -56,11 +54,6 @@ const CertificacaoRoute = CertificacaoRouteImport.update({
   path: '/certificacao',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FinanceiroRoute = FinanceiroRouteImport.update({
-  id: '/financeiro',
-  path: '/financeiro',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FtthRoute = FtthRouteImport.update({
   id: '/ftth',
   path: '/ftth',
@@ -89,11 +82,6 @@ const PbiRoute = PbiRouteImport.update({
 const QscRoute = QscRouteImport.update({
   id: '/qsc',
   path: '/qsc',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QualidadeRoute = QualidadeRouteImport.update({
-  id: '/qualidade',
-  path: '/qualidade',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResultadosRoute = ResultadosRouteImport.update({
@@ -172,14 +160,12 @@ export interface FileRoutesByFullPath {
   '/alimentacao': typeof AlimentacaoRoute
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
-  '/financeiro': typeof FinanceiroRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
-  '/qualidade': typeof QualidadeRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -200,14 +186,12 @@ export interface FileRoutesByTo {
   '/alimentacao': typeof AlimentacaoRoute
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
-  '/financeiro': typeof FinanceiroRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
-  '/qualidade': typeof QualidadeRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -229,14 +213,12 @@ export interface FileRoutesById {
   '/alimentacao': typeof AlimentacaoRoute
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
-  '/financeiro': typeof FinanceiroRoute
   '/ftth': typeof FtthRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
-  '/qualidade': typeof QualidadeRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -259,14 +241,12 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/avancada'
     | '/certificacao'
-    | '/financeiro'
     | '/ftth'
     | '/licencas'
     | '/login'
     | '/movel'
     | '/pbi'
     | '/qsc'
-    | '/qualidade'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -287,14 +267,12 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/avancada'
     | '/certificacao'
-    | '/financeiro'
     | '/ftth'
     | '/licencas'
     | '/login'
     | '/movel'
     | '/pbi'
     | '/qsc'
-    | '/qualidade'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -315,14 +293,12 @@ export interface FileRouteTypes {
     | '/alimentacao'
     | '/avancada'
     | '/certificacao'
-    | '/financeiro'
     | '/ftth'
     | '/licencas'
     | '/login'
     | '/movel'
     | '/pbi'
     | '/qsc'
-    | '/qualidade'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -344,14 +320,12 @@ export interface RootRouteChildren {
   AlimentacaoRoute: typeof AlimentacaoRoute
   AvancadaRoute: typeof AvancadaRoute
   CertificacaoRoute: typeof CertificacaoRoute
-  FinanceiroRoute: typeof FinanceiroRoute
   FtthRoute: typeof FtthRoute
   LicencasRoute: typeof LicencasRoute
   LoginRoute: typeof LoginRoute
   MovelRoute: typeof MovelRoute
   PbiRoute: typeof PbiRoute
   QscRoute: typeof QscRoute
-  QualidadeRoute: typeof QualidadeRoute
   ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UsuariosRoute: typeof UsuariosRoute
@@ -398,13 +372,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CertificacaoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/financeiro': {
-      id: '/financeiro'
-      path: '/financeiro'
-      fullPath: '/financeiro'
-      preLoaderRoute: typeof FinanceiroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/ftth': {
       id: '/ftth'
       path: '/ftth'
@@ -445,13 +412,6 @@ declare module '@tanstack/react-router' {
       path: '/qsc'
       fullPath: '/qsc'
       preLoaderRoute: typeof QscRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qualidade': {
-      id: '/qualidade'
-      path: '/qualidade'
-      fullPath: '/qualidade'
-      preLoaderRoute: typeof QualidadeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/resultados': {
@@ -560,14 +520,12 @@ const rootRouteChildren: RootRouteChildren = {
   AlimentacaoRoute: AlimentacaoRoute,
   AvancadaRoute: AvancadaRoute,
   CertificacaoRoute: CertificacaoRoute,
-  FinanceiroRoute: FinanceiroRoute,
   FtthRoute: FtthRoute,
   LicencasRoute: LicencasRoute,
   LoginRoute: LoginRoute,
   MovelRoute: MovelRoute,
   PbiRoute: PbiRoute,
   QscRoute: QscRoute,
-  QualidadeRoute: QualidadeRoute,
   ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UsuariosRoute: UsuariosRoute,

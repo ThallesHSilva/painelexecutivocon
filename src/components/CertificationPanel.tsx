@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Award, ChevronDown, ExternalLink, LoaderCircle, Save } from "lucide-react";
+import { Award, ChevronDown, LoaderCircle, Save } from "lucide-react";
 import {
   CertificationQscHistory,
   type CertificationQscField,
@@ -27,9 +27,6 @@ type CertificationField =
 
 type CertificationRow = Record<CertificationField, string> & { id: string; indicator: string };
 type CycleId = "previous" | "current";
-
-const CERTIFICATION_POWER_BI_URL =
-  "https://app.powerbi.com/groups/me/reports/6cb65a90-4ea5-4917-8f89-2c588ac43942/d3cdc620745abb5b4843?ctid=9744600e-3e04-492e-baa1-25ec245c6f10&openReportSource=ReportInvitation&experience=power-bi";
 
 const SUMMARY_ROW: CertificationRow = {
   id: "receita-total",
@@ -471,7 +468,7 @@ function certificationStone(revenueTelecom: number, totalPoints: number) {
 
 export function CertificationPanel() {
   const [cycles, setCycles] = useState(INITIAL_CYCLES);
-  const [view, setView] = useState<"previous" | "current" | "pbi">("previous");
+  const [view, setView] = useState<"previous" | "current">("previous");
   const [expanded, setExpanded] = useState<Record<CycleId, boolean>>({
     previous: false,
     current: false,
@@ -898,33 +895,10 @@ export function CertificationPanel() {
         <TabsTrigger value="current" className="h-10 rounded-xl px-4 text-xs font-semibold">
           2º Ciclo · Simulador
         </TabsTrigger>
-        <TabsTrigger value="pbi" className="h-10 rounded-xl px-4 text-xs font-semibold">
-          PBI Certificação
-        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="previous">{renderCycle("previous")}</TabsContent>
       <TabsContent value="current">{renderCycle("current")}</TabsContent>
-      <TabsContent value="pbi">
-        <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-card shadow-elevated">
-          <div className="flex flex-col items-start gap-4 bg-violet-500/[0.04] px-5 py-7 md:px-7">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
-                Power BI
-              </p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight">Certificação</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Acesse a visão completa diretamente no Power BI.
-              </p>
-            </div>
-            <Button asChild variant="outline" size="sm" className="rounded-xl">
-              <a href={CERTIFICATION_POWER_BI_URL} target="_blank" rel="noreferrer">
-                Abrir no Power BI <ExternalLink className="size-4" />
-              </a>
-            </Button>
-          </div>
-        </Card>
-      </TabsContent>
     </Tabs>
   );
 }
