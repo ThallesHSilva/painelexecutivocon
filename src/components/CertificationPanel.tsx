@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Award, ChevronDown, LoaderCircle, Save } from "lucide-react";
+import { Award, ChevronDown, LoaderCircle, Save, UsersRound } from "lucide-react";
 import {
   CertificationQscHistory,
   type CertificationQscField,
@@ -881,6 +881,27 @@ export function CertificationPanel() {
       </Card>
     );
   };
+
+  if (!activePartnerId) {
+    return (
+      <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.06] shadow-elevated">
+        <div className="flex min-h-72 flex-col items-center justify-center px-6 py-12 text-center">
+          <div className="grid size-14 place-items-center rounded-2xl bg-violet-500/[0.12] text-violet-700 ring-8 ring-violet-500/[0.04] dark:text-violet-300">
+            <UsersRound className="size-6" />
+          </div>
+          <h2 className="mt-5 text-xl font-semibold tracking-tight">Selecione um único parceiro</h2>
+          <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
+            A Certificação é um simulador individual por PV. Use o filtro de parceiros no menu
+            superior e mantenha apenas um parceiro selecionado para consultar ou preencher a
+            prévia.
+          </p>
+          <p className="mt-4 rounded-xl border border-violet-500/15 bg-violet-500/[0.05] px-3 py-2 text-xs font-medium text-violet-800 dark:text-violet-200">
+            Cada prévia é salva separadamente para o parceiro selecionado.
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Tabs
