@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Award, ChevronDown, LoaderCircle, Save, UsersRound } from "lucide-react";
+import { Award, ChevronDown, LoaderCircle, UsersRound } from "lucide-react";
 import {
   CertificationQscHistory,
   type CertificationQscField,
@@ -7,7 +7,6 @@ import {
 } from "@/components/CertificationQscHistory";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { usePartners } from "@/hooks/useData";
@@ -473,7 +472,8 @@ export function CertificationPanel() {
     previous: false,
     current: false,
   });
-  const [saving, setSaving] = useState(false);
+  const [hasPendingChanges, setHasPendingChanges] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [loadingPreview, setLoadingPreview] = useState(false);
   const { effectiveSelected } = usePartnerFilter();
   const { data: partners = [] } = usePartners();
@@ -486,10 +486,14 @@ export function CertificationPanel() {
   useEffect(() => {
     if (!activePartnerId) {
       setCycles((current) => ({ ...current, current: INITIAL_CYCLES.current }));
+      setHasPendingChanges(false);
+      setSaveState("idle");
       return;
     }
 
     let cancelled = false;
+    setHasPendingChanges(false);
+    setSaveState("idle");
     setLoadingPreview(true);
     void fetch(`/api/certificacao/previa?partnerId=${encodeURIComponent(activePartnerId)}`, {
       cache: "no-store",
@@ -526,24 +530,31 @@ export function CertificationPanel() {
     };
   }, [activePartnerId]);
 
-  const savePreview = async () => {
-    if (!activePartnerId || saving) return;
-    setSaving(true);
-    try {
-      const response = await fetch("/api/certificacao/previa", {
+  useEffect(() => {
+    if (!activePartnerId || !hasPendingChanges || loadingPreview) return;
+
+    const partnerId = activePartnerId;
+    const preview = cycles.current;
+    const timer = window.setTimeout(() => {
+      setSaveState("saving");
+      void fetch("/api/certificacao/previa", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partnerId: activePartnerId, payload: cycles.current }),
-      });
-      const payload = (await response.json()) as { message?: string };
-      if (!response.ok) throw new Error(payload.message ?? "Não foi possível salvar a prévia.");
-      toast.success(`Prévia de ${activePartner?.name ?? "PV"} salva com sucesso.`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a prévia.");
-    } finally {
-      setSaving(false);
-    }
-  };
+        body: JSON.stringify({ partnerId, payload: preview }),
+      })
+        .then(async (response) => {
+          const payload = (await response.json()) as { message?: string };
+          if (!response.ok) throw new Error(payload.message ?? "Não foi possível salvar a prévia.");
+          setSaveState("saved");
+        })
+        .catch((error: unknown) => {
+          setSaveState("error");
+          toast.error(error instanceof Error ? error.message : "Não foi possível salvar a prévia.");
+        });
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [activePartnerId, cycles.current, hasPendingChanges, loadingPreview]);
 
   const updateValue = (cycle: CycleId, rowId: string, field: CertificationField, value: string) => {
     if (cycle !== "current" || !activePartnerId) return;
@@ -559,6 +570,8 @@ export function CertificationPanel() {
         ["totalizer", "points", "band"].includes(field))
     )
       return;
+    setHasPendingChanges(true);
+    setSaveState("idle");
     setCycles((current) => ({
       ...current,
       [cycle]: {
@@ -597,6 +610,8 @@ export function CertificationPanel() {
     value: string,
   ) => {
     if (cycle !== "current" || !activePartnerId) return;
+    setHasPendingChanges(true);
+    setSaveState("idle");
     setCycles((current) => ({
       ...current,
       [cycle]: {
@@ -640,7 +655,7 @@ export function CertificationPanel() {
           inputMode={column.numeric ? "decimal" : "text"}
           value={row[column.field]}
           onChange={(event) => updateValue(cycle, row.id, column.field, event.target.value)}
-          disabled={cycle !== "current" || !activePartnerId}
+          disabled={cycle !== "current" || !activePartnerId || loadingPreview}
           className={`h-9 rounded-xl border-violet-500/20 px-2.5 text-sm font-semibold shadow-sm focus-visible:border-violet-500/50 focus-visible:ring-violet-500/15 bg-violet-500/[0.045] disabled:cursor-not-allowed disabled:opacity-65 ${column.numeric ? "text-right tabular-nums" : "text-left"}`}
         />
       </TableCell>
@@ -667,7 +682,7 @@ export function CertificationPanel() {
     ];
     const cycleLabel =
       cycle === "previous" ? "Certificação · 1º semestre" : "Certificação · 2º semestre";
-    const editable = cycle === "current" && Boolean(activePartnerId);
+    const editable = cycle === "current" && Boolean(activePartnerId) && !loadingPreview;
 
     return (
       <Card
@@ -719,20 +734,18 @@ export function CertificationPanel() {
               </p>
             </div>
             {cycle === "current" && (
-              <Button
-                type="button"
-                size="sm"
-                onClick={savePreview}
-                disabled={!editable || saving || loadingPreview}
-                className="h-10 rounded-2xl px-3 text-xs font-semibold"
-              >
-                {saving || loadingPreview ? (
+              <div className="flex h-10 items-center gap-2 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-3 text-xs font-semibold text-violet-800 dark:text-violet-200">
+                {saveState === "saving" || loadingPreview ? (
                   <LoaderCircle className="size-3.5 animate-spin" />
-                ) : (
-                  <Save className="size-3.5" />
-                )}
-                Salvar prévia
-              </Button>
+                ) : null}
+                {saveState === "saving"
+                  ? "Salvando automaticamente"
+                  : saveState === "saved"
+                    ? "Prévia salva"
+                    : saveState === "error"
+                      ? "Falha ao salvar"
+                      : "Salvamento automático"}
+              </div>
             )}
           </div>
         </div>
