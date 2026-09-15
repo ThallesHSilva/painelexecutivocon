@@ -106,7 +106,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Una os três resultados e conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}
@@ -129,7 +128,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}
@@ -152,7 +150,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}
@@ -175,7 +172,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}

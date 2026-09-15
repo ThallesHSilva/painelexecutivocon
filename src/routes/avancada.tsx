@@ -71,7 +71,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}
@@ -94,7 +93,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}
@@ -122,7 +120,6 @@ function Page() {
                         rules: [ACTIVE_REVENUE_FILTER],
                       },
                     ]}
-                    note="Conte clientes distintos em cada grupo. Cálculo: Oportunidade Avançada ÷ Base ativa."
                   />
                 }
                 loading={isLoading}
@@ -145,7 +142,6 @@ function Page() {
                         ],
                       },
                     ]}
-                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                   />
                 }
                 loading={isLoading}

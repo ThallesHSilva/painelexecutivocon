@@ -64,7 +64,6 @@ function Page() {
                       ],
                     },
                   ]}
-                  note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
                 />
               }
               loading={isLoading}
@@ -96,7 +95,6 @@ function Page() {
                       ],
                     },
                   ]}
-                  note="Conte clientes distintos em cada grupo. Cálculo: Base ÷ (Base + Oportunidade)."
                 />
               }
               loading={isLoading}

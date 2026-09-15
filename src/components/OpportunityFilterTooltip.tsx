@@ -8,18 +8,9 @@ export type OpportunityFilterGroup = {
   rules: OpportunityFilterRule[];
 };
 
-export function OpportunityFilterTooltip({
-  groups,
-  note,
-}: {
-  groups: OpportunityFilterGroup[];
-  note?: string;
-}) {
+export function OpportunityFilterTooltip({ groups }: { groups: OpportunityFilterGroup[] }) {
   return (
     <div className="max-h-72 w-[min(22rem,calc(100vw-2rem))] space-y-3 overflow-y-auto py-1 text-left">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em]">
-        Filtros no Mapa Parque
-      </p>
       {groups.map((group, groupIndex) => (
         <div key={`${group.title ?? "filtros"}-${groupIndex}`} className="space-y-1.5">
           {group.title && <p className="font-semibold">{group.title}</p>}
@@ -32,7 +23,6 @@ export function OpportunityFilterTooltip({
           </ul>
         </div>
       ))}
-      {note && <p className="border-t border-white/15 pt-2 text-[11px] leading-relaxed">{note}</p>}
     </div>
   );
 }
