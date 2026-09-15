@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
+import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
+import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 import { ChartCard } from "@/components/ChartCard";
 import { BarSimple } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
@@ -56,7 +58,22 @@ function Page() {
                 icon={Rocket}
                 title="Oportunidade Avançada"
                 value={fmtInt(data?.kpis.acquisitionWinback)}
-                tooltip="Clientes distintos com situação ativa ou vazia e AVANCADOS contendo Aquisição, Adesão ou Winback."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "AVANCADOS",
+                            selection: 'contém "Aquisição", "Adesão" ou "Winback"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 emphasis
               />
@@ -64,7 +81,22 @@ function Page() {
                 icon={RefreshCw}
                 title="Renovação de Avançada"
                 value={fmtInt(data?.kpis.renewal)}
-                tooltip="Clientes distintos com situação ativa ou vazia e AVANCADOS contendo Renovação."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "AVANCADOS",
+                            selection: 'contém "Renovação"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -72,7 +104,27 @@ function Page() {
                 icon={Percent}
                 title="% da base total"
                 value={fmtPct(data?.kpis.percentualBase)}
-                tooltip="Oportunidade Avançada dividida por todos os clientes distintos da planilha."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        title: "Numerador — Oportunidade Avançada",
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "AVANCADOS",
+                            selection: 'contém "Aquisição", "Adesão" ou "Winback"',
+                          },
+                        ],
+                      },
+                      {
+                        title: "Denominador — Base ativa",
+                        rules: [ACTIVE_REVENUE_FILTER],
+                      },
+                    ]}
+                    note="Conte clientes distintos em cada grupo. Cálculo: Oportunidade Avançada ÷ Base ativa."
+                  />
+                }
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -80,7 +132,22 @@ function Page() {
                 icon={Cpu}
                 title="Oportunidade Vivo Tech"
                 value={fmtInt(data?.kpis.vivoTech)}
-                tooltip="Clientes distintos com situação ativa ou vazia e VIVO_TECH contendo Capacidade de Pagamento."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "VIVO_TECH",
+                            selection: 'contém "Capacidade de Pagamento"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-sky-400/25 bg-gradient-to-br from-card via-card to-sky-500/[0.1]"
               />

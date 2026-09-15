@@ -2,26 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, Search, Users, X } from "lucide-react";
+import { Check, ChevronDown, Search, Users, X } from "lucide-react";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { usePartners } from "@/hooks/useData";
 
 export function PartnerFilter() {
   const { data: partners = [] } = usePartners();
-  const { selected, toggle, clear, setSelected, allowedPartnerIds, role } =
-    usePartnerFilter();
+  const { selected, toggle, clear, setSelected, allowedPartnerIds, role } = usePartnerFilter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    if (!partners.length || !selected.length) return;
-    const availableIds = new Set(partners.map((partner) => partner.id));
-    const validSelection = selected.filter((id) => availableIds.has(id));
-    if (validSelection.length !== selected.length) setSelected(validSelection);
-  }, [partners, selected, setSelected]);
 
   const availablePartners = useMemo(
     () =>
@@ -30,6 +21,12 @@ export function PartnerFilter() {
         : partners,
     [partners, role, allowedPartnerIds],
   );
+  useEffect(() => {
+    if (!selected.length || role === null) return;
+    const availableIds = new Set(availablePartners.map((partner) => partner.id));
+    const validSelection = selected.filter((id) => availableIds.has(id));
+    if (validSelection.length !== selected.length) setSelected(validSelection);
+  }, [availablePartners, role, selected, setSelected]);
   const filtered = useMemo(
     () => availablePartners.filter((p) => p.name.toLowerCase().includes(q.toLowerCase())),
     [availablePartners, q],
@@ -37,7 +34,9 @@ export function PartnerFilter() {
 
   const hasSelection = selected.length > 0;
   const label = !hasSelection
-    ? "Todos os parceiros"
+    ? role === "gn"
+      ? "Parceiros vinculados"
+      : "Todos os parceiros"
     : selected.length === 1
       ? (availablePartners.find((p) => p.id === selected[0])?.name ?? "1 parceiro")
       : `${selected.length} parceiros`;
@@ -103,9 +102,16 @@ export function PartnerFilter() {
                 <li key={p.id}>
                   <button
                     onClick={() => toggle(p.id)}
+                    role="checkbox"
+                    aria-checked={checked}
                     className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
                   >
-                    <Checkbox checked={checked} className="pointer-events-none" />
+                    <span
+                      aria-hidden="true"
+                      className="grid size-4 shrink-0 place-content-center rounded-full border border-primary/70 text-primary"
+                    >
+                      {checked && <Check className="size-3" strokeWidth={3} />}
+                    </span>
                     <span className="truncate">{p.name}</span>
                   </button>
                 </li>

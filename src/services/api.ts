@@ -234,7 +234,7 @@ export async function fetchAdvanced(partnerIds: string[]) {
   const ids = scope(partnerIds, snapshot.partners);
   const selected = selectedMapaScopes(snapshot, ids);
   const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
-  const totalBase = total((item) => item.totals.allCnpj);
+  const totalBase = total((item) => item.totals.uniqueCnpj);
   const opportunities = total((item) => item.opportunities.advanced);
   const acquisitionWinback = total((item) => item.opportunities.advancedAcquisitionWinback);
   const renewal = total((item) => item.opportunities.advancedRenewal);

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
+import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
+import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 import { ChartCard } from "@/components/ChartCard";
 import { BarSimple, DonutChart } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
@@ -194,7 +196,40 @@ function Page() {
                 icon={UsersRound}
                 title="Oportunidade Móvel"
                 value={fmtInt(data?.kpis.baseRecMovel)}
-                tooltip="União distinta dos públicos de Aquisição Móvel e Renovação FTTH + Totalização."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        title: "Filtro comum aos dois públicos",
+                        rules: [ACTIVE_REVENUE_FILTER],
+                      },
+                      {
+                        title: "1. Aquisição Móvel",
+                        rules: [
+                          {
+                            column: "MOVEL",
+                            selection: 'contém "Aquisição de Móvel"',
+                          },
+                        ],
+                      },
+                      {
+                        title: "2. Renovação FTTH + Totalização",
+                        rules: [
+                          {
+                            column: "FIXA_BASICA",
+                            selection:
+                              'contém "Upgrade de Fixa Básica" ou "Renovação de Fixa Básica"',
+                          },
+                          {
+                            column: "QT_MOVEL_TERM",
+                            selection: "selecione 0 e vazios",
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Una os dois resultados e conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 emphasis
               />
@@ -202,7 +237,22 @@ function Page() {
                 icon={Smartphone}
                 title="Aquisição Móvel"
                 value={fmtInt(data?.kpis.aquisicaoMovel)}
-                tooltip="Clientes distintos com situação ativa ou vazia e MOVEL contendo Aquisição de Móvel."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "MOVEL",
+                            selection: 'contém "Aquisição de Móvel"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.08]"
               />
@@ -210,7 +260,27 @@ function Page() {
                 icon={RefreshCw}
                 title="Renovação FTTH + Totalização"
                 value={fmtInt(data?.kpis.renovacaoFtthTotalizacao)}
-                tooltip="Clientes distintos com situação ativa ou vazia, FIXA_BASICA em Upgrade/Renovação de Fixa Básica e QT_MOVEL_TERM igual a zero ou vazio."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "FIXA_BASICA",
+                            selection:
+                              'contém "Upgrade de Fixa Básica" ou "Renovação de Fixa Básica"',
+                          },
+                          {
+                            column: "QT_MOVEL_TERM",
+                            selection: "selecione 0 e vazios",
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -229,7 +299,22 @@ function Page() {
                 icon={CreditCard}
                 title="Oportunidades Aparelhos"
                 value={fmtInt(data?.kpis.oportunidadesAparelhos)}
-                tooltip="Clientes distintos ativos ou vazios com APARELHOS contendo Capacidade de Pagamento."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "APARELHOS",
+                            selection: 'contém "Capacidade de Pagamento"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 emphasis
               />
@@ -237,7 +322,22 @@ function Page() {
                 icon={Smartphone}
                 title="iPhone"
                 value={fmtInt(data?.kpis.aparelhosIphone)}
-                tooltip="Oportunidades de aparelho com uso ou recomendação de iPhone."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "APARELHOS",
+                            selection: 'contém "Capacidade de Pagamento" e contém "iPhone"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-sky-400/20 bg-gradient-to-br from-card via-card to-sky-500/[0.08]"
               />
@@ -245,7 +345,23 @@ function Page() {
                 icon={Smartphone}
                 title="Galaxy S25/S26/Fold"
                 value={fmtInt(data?.kpis.aparelhosGalaxyPremium)}
-                tooltip="Oportunidades de aparelho com uso ou recomendação de Galaxy S25, S26 ou Fold."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "APARELHOS",
+                            selection:
+                              'contém "Capacidade de Pagamento", contém "Galaxy" e contém S25, S26 ou Fold',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -253,7 +369,26 @@ function Page() {
                 icon={CircleMinus}
                 title="Outros aparelhos"
                 value={fmtInt(data?.kpis.aparelhosOutros)}
-                tooltip="Demais oportunidades de aparelho com pré-aprovação de crédito."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "APARELHOS",
+                            selection: 'contém "Capacidade de Pagamento"',
+                          },
+                          {
+                            column: "APARELHOS",
+                            selection: "exclua iPhone e exclua Galaxy S25, S26 ou Fold",
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.08]"
               />

@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
+import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
+import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 import { ChartCard } from "@/components/ChartCard";
 import { BarSimple, DonutChart } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
@@ -69,7 +71,44 @@ function Page() {
                 icon={UserCheck}
                 title="Oportunidades TI Recorrente"
                 value={fmtInt(data?.kpis.clientesElegiveis)}
-                tooltip="União distinta dos públicos de Segurança em Dados, Google e Microsoft 365 com pré-aprovação."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        title: "Filtro comum aos três públicos",
+                        rules: [ACTIVE_REVENUE_FILTER],
+                      },
+                      {
+                        title: "1. Cross Segurança em Dados",
+                        rules: [
+                          {
+                            column: "QT_AVANCADA_DADOS",
+                            selection: "valor numérico maior que 0",
+                          },
+                        ],
+                      },
+                      {
+                        title: "2. Google com pré-aprovação",
+                        rules: [
+                          {
+                            column: "DIGITAL_1",
+                            selection: 'contém "Capacidade" e contém "Google"',
+                          },
+                        ],
+                      },
+                      {
+                        title: "3. Microsoft 365 com pré-aprovação",
+                        rules: [
+                          {
+                            column: "DIGITAL_1",
+                            selection: 'contém "Capacidade" e contém "Microsoft 365"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Una os três resultados e conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 emphasis
               />
@@ -77,7 +116,22 @@ function Page() {
                 icon={ShieldCheck}
                 title="Cross Segurança em Dados"
                 value={fmtInt(data?.kpis.segurancaEmDados)}
-                tooltip="Clientes distintos ativos ou vazios com QT_AVANCADA_DADOS maior que zero."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "QT_AVANCADA_DADOS",
+                            selection: "valor numérico maior que 0",
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -85,7 +139,22 @@ function Page() {
                 icon={CloudCog}
                 title="Google com pré-aprovação"
                 value={fmtInt(data?.kpis.googleComCredito)}
-                tooltip="DIGITAL_1 contém Capacidade e Google."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "DIGITAL_1",
+                            selection: 'contém "Capacidade" e contém "Google"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.1]"
               />
@@ -93,7 +162,22 @@ function Page() {
                 icon={CloudCog}
                 title="Microsoft 365 com pré-aprovação"
                 value={fmtInt(data?.kpis.microsoft365ComCredito)}
-                tooltip="DIGITAL_1 contém Capacidade e Microsoft 365."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "DIGITAL_1",
+                            selection: 'contém "Capacidade" e contém "Microsoft 365"',
+                          },
+                        ],
+                      },
+                    ]}
+                    note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                  />
+                }
                 loading={isLoading}
                 className="border-sky-400/20 bg-gradient-to-br from-card via-card to-sky-500/[0.1]"
               />

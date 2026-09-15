@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
+import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
+import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 import { ChartCard } from "@/components/ChartCard";
 import { BarSimple } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
@@ -48,7 +50,23 @@ function Page() {
               icon={MapPin}
               title="Aquisição Fixa Básica"
               value={fmtInt(data?.kpis.oportunidades)}
-              tooltip="Clientes distintos com situação ativa ou vazia e FIXA_BASICA contendo Aquisição/Adesão e Capacidade de Pagamento."
+              tooltip={
+                <OpportunityFilterTooltip
+                  groups={[
+                    {
+                      rules: [
+                        ACTIVE_REVENUE_FILTER,
+                        {
+                          column: "FIXA_BASICA",
+                          selection:
+                            'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
+                        },
+                      ],
+                    },
+                  ]}
+                  note="Conte clientes distintos. Use NR_CNPJ; se a coluna não existir, use COD_CLIENTE."
+                />
+              }
               loading={isLoading}
               emphasis
             />
@@ -56,7 +74,31 @@ function Page() {
               icon={Signal}
               title="Penetração na base"
               value={fmtPct(data?.kpis.penetracaoBase)}
-              tooltip="Base BASICA dividida pela soma da Base BASICA com as oportunidades de cobertura FTTH."
+              tooltip={
+                <OpportunityFilterTooltip
+                  groups={[
+                    {
+                      title: "Base Fixa Básica",
+                      rules: [
+                        ACTIVE_REVENUE_FILTER,
+                        { column: "TP_PRODUTO", selection: 'contém "BASICA"' },
+                      ],
+                    },
+                    {
+                      title: "Oportunidade Fixa Básica",
+                      rules: [
+                        ACTIVE_REVENUE_FILTER,
+                        {
+                          column: "FIXA_BASICA",
+                          selection:
+                            'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
+                        },
+                      ],
+                    },
+                  ]}
+                  note="Conte clientes distintos em cada grupo. Cálculo: Base ÷ (Base + Oportunidade)."
+                />
+              }
               loading={isLoading}
               className="rounded-3xl border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.1] p-6 shadow-elegant hover:shadow-elevated"
             />

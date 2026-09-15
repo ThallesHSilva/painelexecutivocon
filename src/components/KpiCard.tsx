@@ -10,7 +10,7 @@ interface Props {
   title: string;
   value: ReactNode;
   description?: string;
-  tooltip?: string;
+  tooltip?: ReactNode;
   loading?: boolean;
   emphasis?: boolean;
   className?: string;
@@ -73,7 +73,7 @@ export function KpiCard({
                     <Info className="size-3.5" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="max-w-xs text-xs">
+                <TooltipContent side="top" className="max-w-none text-xs">
                   {tooltip}
                 </TooltipContent>
               </Tooltip>
