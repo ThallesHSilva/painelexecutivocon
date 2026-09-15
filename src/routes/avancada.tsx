@@ -56,7 +56,7 @@ function Page() {
                 icon={Rocket}
                 title="Oportunidade Avançada"
                 value={fmtInt(data?.kpis.acquisitionWinback)}
-                tooltip="NR_CNPJ distintos elegíveis com AVANCADOS iniciado por Aquisição ou Winback."
+                tooltip="Clientes distintos com situação ativa ou vazia e AVANCADOS contendo Aquisição, Adesão ou Winback."
                 loading={isLoading}
                 emphasis
               />
@@ -64,7 +64,7 @@ function Page() {
                 icon={RefreshCw}
                 title="Renovação de Avançada"
                 value={fmtInt(data?.kpis.renewal)}
-                tooltip="NR_CNPJ distintos elegíveis com AVANCADOS iniciado por Renovação."
+                tooltip="Clientes distintos com situação ativa ou vazia e AVANCADOS contendo Renovação."
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -72,7 +72,7 @@ function Page() {
                 icon={Percent}
                 title="% da base total"
                 value={fmtPct(data?.kpis.percentualBase)}
-                tooltip="Oportunidade Avançada dividida por todos os NR_CNPJ distintos da planilha."
+                tooltip="Oportunidade Avançada dividida por todos os clientes distintos da planilha."
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
@@ -80,7 +80,7 @@ function Page() {
                 icon={Cpu}
                 title="Oportunidade Vivo Tech"
                 value={fmtInt(data?.kpis.vivoTech)}
-                tooltip="NR_CNPJ distintos elegíveis com recomendação preenchida na coluna VIVO_TECH."
+                tooltip="Clientes distintos com situação ativa ou vazia e VIVO_TECH contendo Capacidade de Pagamento."
                 loading={isLoading}
                 className="border-sky-400/25 bg-gradient-to-br from-card via-card to-sky-500/[0.1]"
               />

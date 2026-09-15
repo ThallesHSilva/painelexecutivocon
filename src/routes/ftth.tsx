@@ -6,7 +6,7 @@ import { BarSimple } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
 import { useFtth } from "@/hooks/useData";
 import { fmtInt, fmtPct } from "@/lib/format";
-import { Wifi, MapPin, RefreshCw, Signal } from "lucide-react";
+import { Wifi, MapPin, Signal } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 
@@ -43,23 +43,14 @@ function Page() {
               </div>
             </div>
           </Card>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <KpiCard
               icon={MapPin}
-              title="Oportunidades de FTTH"
+              title="Aquisição Fixa Básica"
               value={fmtInt(data?.kpis.oportunidades)}
-              tooltip="Contagem distinta de NR_CNPJ com situação ativa, FLG_COBERTURA igual a 1, FIXA_BASICA nos grupos de aquisição/adesão de banda larga e TP_PRODUTO sem BASICA. FLG_MEI não é filtrado."
-              loading={isLoading}
-              className="rounded-3xl border-cyan/25 bg-gradient-to-br from-card via-card to-cyan/[0.12] p-6 shadow-elegant hover:shadow-elevated"
-            />
-            <KpiCard
-              icon={RefreshCw}
-              title="Renovação FTTH"
-              value={fmtInt(data?.kpis.renovacao)}
-              tooltip="Contagem distinta de NR_CNPJ com situação ativa e FIXA_BASICA iniciando em Upgrade, Renovação ou Migração. FLG_MEI não é filtrado."
+              tooltip="Clientes distintos com situação ativa ou vazia e FIXA_BASICA contendo Aquisição/Adesão e Capacidade de Pagamento."
               loading={isLoading}
               emphasis
-              className="rounded-3xl p-6 shadow-elevated"
             />
             <KpiCard
               icon={Signal}
@@ -78,7 +69,7 @@ function Page() {
             }))}
             storageKey="mapa-parque.ftth-simulators.v1"
             simulatorLabel="Simulador FTTH"
-            opportunityLabel="Oportunidade FTTH"
+            opportunityLabel="Aquisição Fixa Básica"
             quantityLabel="BLs"
             revenueLabel="Receita FTTH"
           />

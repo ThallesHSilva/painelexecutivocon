@@ -129,6 +129,12 @@ function normalizeUpper(value) {
   return normalize(value).toLocaleUpperCase("pt-BR");
 }
 
+function normalizeBusinessText(value) {
+  return normalizeUpper(value)
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
 function normalizePartnerKey(value) {
   return normalizeUpper(value)
     .normalize("NFD")
@@ -164,6 +170,15 @@ function mobileCategory(value) {
   return "Outras ofertas";
 }
 
+function deviceProfile(value) {
+  const normalized = normalizeBusinessText(value);
+  if (normalized.includes("IPHONE")) return "iPhone";
+  if (normalized.includes("GALAXY") && /(?:\bS?25\b|\bS?26\b|\bZ?\s*FOLD\w*\b)/.test(normalized)) {
+    return "Galaxy S25/S26/Fold";
+  }
+  return "Outros aparelhos";
+}
+
 function orderedEntries(map, limit) {
   return [...map.entries()]
     .map(([label, value]) => ({ label, value }))
@@ -195,12 +210,15 @@ const requiredHeaders = [
   "SITUACAO_RECEITA",
   "FLG_MEI",
   "REC_MOVEL",
+  "MOVEL",
   "FLG_COBERTURA",
   "TP_PRODUTO",
   "FIXA_BASICA",
   "DIGITAL_1",
   "AVANCADOS",
   "VIVO_TECH",
+  "APARELHOS",
+  "QT_AVANCADA_DADOS",
   "QT_MOVEL_TERM",
 ];
 const missingHeaders = requiredHeaders.filter((header) => !indexByHeader.has(header));
@@ -234,12 +252,18 @@ const ftthBasicBaseCnpj = new Set();
 const ftthOpportunityCnpj = new Set();
 const ftthOpportunityCityByCnpj = new Map();
 const mobileOpportunityCnpj = new Set();
+const mobileAcquisitionCnpj = new Set();
+const mobileFtthRenewalTotalizationCnpj = new Set();
 const digitalOpportunityCnpj = new Set();
+const tiSecurityCrossCnpj = new Set();
+const digitalGoogleCreditCnpj = new Set();
+const digitalMicrosoftCreditCnpj = new Set();
 const advancedOpportunityCnpj = new Set();
 const advancedAcquisitionWinbackCnpj = new Set();
 const advancedRenewalCnpj = new Set();
 const vivoTechOpportunityCnpj = new Set();
 const deviceOpportunityCnpj = new Set();
+const deviceProfileByCnpj = new Map();
 const rawCnpjMobilePark = new Map();
 const cityStats = new Map();
 const statusDistribution = new Map();
@@ -297,17 +321,11 @@ for (const row of rows) {
   increment(meiDistribution, valueAt(row, "FLG_MEI"));
 
   const eligibleStatus = ["", "ATIVO", "ATIVA", "2 - ATIVA"].includes(status);
-  const eligibleMei = mei === "" || mei === "NULL";
-  const fixedOffer = normalizeUpper(valueAt(row, "FIXA_BASICA"));
-  const fixedOfferKey = fixedOffer.normalize("NFD").replace(/\p{Diacritic}/gu, "");
-  const hasFtthRenewal = /^(UPGRADE|RENOVA|MIGRA)/.test(fixedOffer);
-  const hasFtthCoverage =
-    /^(AQUISICAO DE 2P BANDA LARGA|AQUISICAO DE BANDA LARGA|ADESAO DE BANDA LARGA)/.test(
-      fixedOfferKey,
-    );
+  const fixedOfferKey = normalizeBusinessText(valueAt(row, "FIXA_BASICA"));
+  const hasFtthRenewal = /^(UPGRADE|RENOVA|MIGRA)/.test(fixedOfferKey);
   const productType = normalizeUpper(valueAt(row, "TP_PRODUTO"));
   const hasFtthOpportunity =
-    hasFtthCoverage && !productType.includes("BASICA") && valueAt(row, "FLG_COBERTURA") === "1";
+    /(AQUISICAO|ADESAO)/.test(fixedOfferKey) && fixedOfferKey.includes("CAPACIDADE DE PAGAMENTO");
 
   if (eligibleStatus && rawCnpj && hasFtthRenewal) {
     ftthRenewalCnpj.add(rawCnpj);
@@ -319,7 +337,7 @@ for (const row of rows) {
     }
   }
 
-  if (!eligibleStatus || !eligibleMei) {
+  if (!eligibleStatus) {
     excludedRecords += 1;
     continue;
   }
@@ -333,33 +351,56 @@ for (const row of rows) {
 
   const recMovel = valueAt(row, "REC_MOVEL");
   const mobileType = recMovel ? mobileCategory(recMovel) : null;
-  const hasMobile = mobileType === "Aquisição" || mobileType === "Winback";
-  const hasFtth = hasFtthCoverage && !productType.includes("BASICA");
+  const mobileOfferKey = normalizeBusinessText(valueAt(row, "MOVEL"));
+  const mobileParkQuantity = parseNumber(valueAt(row, "QT_MOVEL_TERM"));
+  const hasMobileAcquisition = mobileOfferKey.includes("AQUISICAO DE MOVEL");
+  const hasMobileFtthRenewalTotalization =
+    /^(UPGRADE|RENOVACAO) DE FIXA BASICA/.test(fixedOfferKey) && mobileParkQuantity === 0;
+  const hasMobile = hasMobileAcquisition || hasMobileFtthRenewalTotalization;
+  const hasFtth = hasFtthOpportunity;
   if (cnpj && productType.includes("BASICA")) ftthBasicBaseCnpj.add(cnpj);
   const digitalOne = valueAt(row, "DIGITAL_1");
-  const hasDigital1 = digitalOne !== "";
+  const digitalOneKey = normalizeBusinessText(digitalOne);
+  const hasTiSecurityCross = parseNumber(valueAt(row, "QT_AVANCADA_DADOS")) > 0;
+  const hasDigitalGoogleCredit =
+    digitalOneKey.includes("CAPACIDADE") && digitalOneKey.includes("GOOGLE");
+  const hasDigitalMicrosoftCredit =
+    digitalOneKey.includes("CAPACIDADE") && digitalOneKey.includes("MICROSOFT 365");
+  const hasDigital1 = hasTiSecurityCross || hasDigitalGoogleCredit || hasDigitalMicrosoftCredit;
   const advancedOffer = valueAt(row, "AVANCADOS");
-  const hasAdvanced = advancedOffer !== "";
-  const advancedOfferKey = normalizeUpper(advancedOffer)
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "");
-  const hasAdvancedAcquisitionOrWinback = /^(AQUISICAO|WINBACK)/.test(advancedOfferKey);
-  const hasAdvancedRenewal = /^RENOVACAO/.test(advancedOfferKey);
-  const hasVivoTech = valueAt(row, "VIVO_TECH") !== "";
+  const advancedOfferKey = normalizeBusinessText(advancedOffer);
+  const hasAdvancedAcquisitionOrWinback = /(AQUISICAO|ADESAO|WINBACK)/.test(advancedOfferKey);
+  const hasAdvancedRenewal = advancedOfferKey.includes("RENOVACAO");
+  const hasAdvanced = hasAdvancedAcquisitionOrWinback || hasAdvancedRenewal;
+  const vivoTechOfferKey = normalizeBusinessText(valueAt(row, "VIVO_TECH"));
+  const hasVivoTech = vivoTechOfferKey.includes("CAPACIDADE DE PAGAMENTO");
   const devices = valueAt(row, "APARELHOS");
-  const hasDevices = devices !== "";
+  const hasDevices = normalizeBusinessText(devices).includes("CAPACIDADE DE PAGAMENTO");
   const deviceCredit = parseDeviceCredit(devices);
   const has5g = valueAt(row, "COBERTURA_5G") !== "";
   const opportunityCount = Number(hasMobile) + Number(hasFtth) + Number(hasDigital1);
   const contactable = contactHeaders.some((header) => valueAt(row, header) !== "");
 
   if (cnpj && hasMobile) mobileOpportunityCnpj.add(cnpj);
+  if (cnpj && hasMobileAcquisition) mobileAcquisitionCnpj.add(cnpj);
+  if (cnpj && hasMobileFtthRenewalTotalization) mobileFtthRenewalTotalizationCnpj.add(cnpj);
   if (cnpj && hasDigital1) digitalOpportunityCnpj.add(cnpj);
+  if (cnpj && hasTiSecurityCross) tiSecurityCrossCnpj.add(cnpj);
+  if (cnpj && hasDigitalGoogleCredit) digitalGoogleCreditCnpj.add(cnpj);
+  if (cnpj && hasDigitalMicrosoftCredit) digitalMicrosoftCreditCnpj.add(cnpj);
   if (cnpj && hasAdvanced) advancedOpportunityCnpj.add(cnpj);
   if (cnpj && hasAdvancedAcquisitionOrWinback) advancedAcquisitionWinbackCnpj.add(cnpj);
   if (cnpj && hasAdvancedRenewal) advancedRenewalCnpj.add(cnpj);
   if (cnpj && hasVivoTech) vivoTechOpportunityCnpj.add(cnpj);
-  if (cnpj && hasDevices) deviceOpportunityCnpj.add(cnpj);
+  if (cnpj && hasDevices) {
+    deviceOpportunityCnpj.add(cnpj);
+    const profile = deviceProfile(devices);
+    const currentProfile = deviceProfileByCnpj.get(cnpj);
+    const profilePriority = { iPhone: 3, "Galaxy S25/S26/Fold": 2, "Outros aparelhos": 1 };
+    if (!currentProfile || profilePriority[profile] > profilePriority[currentProfile]) {
+      deviceProfileByCnpj.set(cnpj, profile);
+    }
+  }
 
   if (cnpj) {
     const metric = cnpjMetrics.get(cnpj) ?? {
@@ -396,14 +437,12 @@ for (const row of rows) {
     metric.ftthParkLines = Math.max(metric.ftthParkLines, parseNumber(valueAt(row, "QT_BL_FTTH")));
     metric.city ||= valueAt(row, "DS_CIDADE") || "Não informado";
 
-    if (hasMobile && mobileType) metric.mobileTypes.add(mobileType);
+    if (hasMobileAcquisition) metric.mobileTypes.add("Aquisição móvel");
+    if (hasMobileFtthRenewalTotalization) metric.mobileTypes.add("Renovação FTTH + Totalização");
     if (hasDigital1) {
-      const normalizedDigital = normalizeUpper(digitalOne);
-      if (normalizedDigital.includes("MICROSOFT 365")) metric.digitalTypes.add("Microsoft 365");
-      else if (normalizedDigital.includes("GOOGLE WORKSPACE"))
-        metric.digitalTypes.add("Google Workspace");
-      else if (normalizedDigital.includes("SUPORTE VIVO")) metric.digitalTypes.add("Suporte Vivo");
-      else metric.digitalTypes.add("Outras ofertas digitais");
+      if (hasTiSecurityCross) metric.digitalTypes.add("Cross Segurança em Dados");
+      if (hasDigitalGoogleCredit) metric.digitalTypes.add("Google com pré-aprovação");
+      if (hasDigitalMicrosoftCredit) metric.digitalTypes.add("Microsoft 365 com pré-aprovação");
     }
     cnpjMetrics.set(cnpj, metric);
   }
@@ -422,16 +461,14 @@ for (const row of rows) {
   onlyFtth += Number(hasFtth && !hasMobile && !hasDigital1);
   onlyDigital1 += Number(hasDigital1 && !hasMobile && !hasFtth);
 
-  if (hasMobile && mobileType) increment(mobileComposition, mobileType);
+  if (hasMobileAcquisition) increment(mobileComposition, "Aquisição móvel");
+  if (hasMobileFtthRenewalTotalization)
+    increment(mobileComposition, "Renovação FTTH + Totalização");
 
   if (hasDigital1) {
-    const normalizedDigital = normalizeUpper(digitalOne);
-    if (normalizedDigital.includes("MICROSOFT 365")) increment(digitalComposition, "Microsoft 365");
-    else if (normalizedDigital.includes("GOOGLE WORKSPACE"))
-      increment(digitalComposition, "Google Workspace");
-    else if (normalizedDigital.includes("SUPORTE VIVO"))
-      increment(digitalComposition, "Suporte Vivo");
-    else increment(digitalComposition, "Outras ofertas digitais");
+    if (hasTiSecurityCross) increment(digitalComposition, "Cross Segurança em Dados");
+    if (hasDigitalGoogleCredit) increment(digitalComposition, "Google com pré-aprovação");
+    if (hasDigitalMicrosoftCredit) increment(digitalComposition, "Microsoft 365 com pré-aprovação");
   }
 
   mobileParkLines += parseNumber(valueAt(row, "QT_MOVEL_TERM"));
@@ -521,25 +558,11 @@ for (const metric of cnpjMetrics.values()) {
     ftthParkWithoutMobile += Number(hasFtthPark && !hasMobilePark);
   }
 
-  if (metric.hasMobile) {
-    const type = metric.mobileTypes.has("Winback")
-      ? "Winback"
-      : metric.mobileTypes.has("Renovação")
-        ? "Renovação"
-        : metric.mobileTypes.has("Aquisição")
-          ? "Aquisição"
-          : "Outras ofertas";
-    increment(mobileComposition, type);
-  }
+  if (metric.mobileTypes.has("Aquisição móvel")) increment(mobileComposition, "Aquisição móvel");
+  if (metric.mobileTypes.has("Renovação FTTH + Totalização"))
+    increment(mobileComposition, "Renovação FTTH + Totalização");
   if (metric.hasDigital1) {
-    const type = metric.digitalTypes.has("Microsoft 365")
-      ? "Microsoft 365"
-      : metric.digitalTypes.has("Google Workspace")
-        ? "Google Workspace"
-        : metric.digitalTypes.has("Suporte Vivo")
-          ? "Suporte Vivo"
-          : "Outras ofertas digitais";
-    increment(digitalComposition, type);
+    for (const type of metric.digitalTypes) increment(digitalComposition, type);
   }
 
   const cityCurrent = cityStats.get(metric.city) ?? { records: 0, opportunities: 0 };
@@ -612,6 +635,10 @@ for (const cnpj of uniqueCnpj) {
 }
 
 const totalOpportunityEvents = mobile + ftth + digital1 + advanced + vivoTech + aparelhos;
+const deviceProfiles = [...deviceProfileByCnpj.values()].reduce(
+  (result, profile) => ({ ...result, [profile]: (result[profile] ?? 0) + 1 }),
+  {},
+);
 const mobileParkLinesUnfiltered = [...rawCnpjMobilePark.values()].reduce(
   (total, value) => total + value,
   0,
@@ -627,7 +654,7 @@ const snapshot = {
     sourceModifiedAt: stats.mtime.toISOString(),
   },
   rules: {
-    version: "mapa-parque-v2",
+    version: "mapa-parque-v3",
     customerIdentity:
       "NR_CNPJ quando disponível; na ausência da coluna ou do valor, utiliza COD_CLIENTE para deduplicar clientes",
     contactability:
@@ -635,22 +662,30 @@ const snapshot = {
         ? `Qualquer contato preenchido em: ${contactHeaders.join(", ")}`
         : "Indisponível no arquivo: nenhuma coluna de contato foi fornecida",
     situation: "SITUACAO_RECEITA em branco ou equivalente a ATIVO (ATIVO, ATIVA, 2 - ATIVA)",
-    mei: "FLG_MEI vazio ou NULL",
-    mobile: "REC_MOVEL contém Aquisição ou Winback",
+    mei: "FLG_MEI não é aplicado às oportunidades",
+    mobile:
+      "União de MOVEL contendo Aquisição de Móvel com FIXA_BASICA em Upgrade/Renovação de Fixa Básica e QT_MOVEL_TERM igual a zero ou vazio",
+    mobileAcquisition: "MOVEL contém Aquisição de Móvel",
+    mobileFtthRenewalTotalization:
+      "FIXA_BASICA contém Upgrade/Renovação de Fixa Básica e QT_MOVEL_TERM igual a zero ou vazio",
     mobileRenewalWithDevice: "REC_MOVEL contém Renovação e APARELHOS preenchido",
     devicesWithoutMobileRenewal: "APARELHOS preenchido sem REC_MOVEL de Renovação para o CNPJ",
-    ftth: "FIXA_BASICA começa com Aquisição de 2P Banda Larga, Aquisição de Banda Larga ou Adesão de Banda Larga; TP_PRODUTO não contém BASICA",
+    ftth: "FIXA_BASICA contém Aquisição ou Adesão e Capacidade de Pagamento; SITUACAO_RECEITA ativa ou vazia",
     ftthPenetrationBase: "TP_PRODUTO contém BASICA",
     ftthOpportunities:
       "SITUACAO_RECEITA em branco, ATIVO, ATIVA ou 2 - ATIVA; FLG_COBERTURA = 1; FIXA_BASICA nos grupos de aquisição/adesão de banda larga; TP_PRODUTO não contém BASICA; sem filtro de FLG_MEI",
     ftthRenewal:
       "SITUACAO_RECEITA em branco, ATIVO, ATIVA ou 2 - ATIVA; FIXA_BASICA começa com Upgrade, Renovação ou Migração; sem filtro de FLG_MEI",
-    digital1: "DIGITAL_1 preenchido",
-    advanced: "AVANCADOS preenchido",
-    advancedAcquisitionWinback: "AVANCADOS começa com Aquisição ou Winback",
-    advancedRenewal: "AVANCADOS começa com Renovação",
-    vivoTech: "VIVO_TECH preenchido",
-    devices: "APARELHOS preenchido",
+    digital1:
+      "União de QT_AVANCADA_DADOS maior que zero, DIGITAL_1 contendo Capacidade + Google e DIGITAL_1 contendo Capacidade + Microsoft 365",
+    tiSecurityCross: "QT_AVANCADA_DADOS maior que zero",
+    digitalGoogleCredit: "DIGITAL_1 contém Capacidade e Google",
+    digitalMicrosoftCredit: "DIGITAL_1 contém Capacidade e Microsoft 365",
+    advanced: "AVANCADOS contém Aquisição, Adesão, Winback ou Renovação",
+    advancedAcquisitionWinback: "AVANCADOS contém Aquisição, Adesão ou Winback",
+    advancedRenewal: "AVANCADOS contém Renovação",
+    vivoTech: "VIVO_TECH contém Capacidade de Pagamento",
+    devices: "APARELHOS contém Capacidade de Pagamento",
   },
   partners: [{ id: formatPartnerId(partnerName), name: partnerName }],
   totals: {
@@ -672,16 +707,24 @@ const snapshot = {
   },
   opportunities: {
     mobile,
+    mobileAcquisition: mobileAcquisitionCnpj.size,
+    mobileFtthRenewalTotalization: mobileFtthRenewalTotalizationCnpj.size,
     mobileParkLines: mobileParkLinesWithRecMovel,
     mobileRenewalWithDevice,
     devicesWithoutMobileRenewal,
     ftth,
     digital1,
+    tiSecurityCross: tiSecurityCrossCnpj.size,
+    digitalGoogleCredit: digitalGoogleCreditCnpj.size,
+    digitalMicrosoftCredit: digitalMicrosoftCreditCnpj.size,
     advanced,
     advancedAcquisitionWinback: advancedAcquisitionWinbackCnpj.size,
     advancedRenewal: advancedRenewalCnpj.size,
     vivoTech,
     devices: aparelhos,
+    deviceIphone: deviceProfiles.iPhone ?? 0,
+    deviceGalaxyPremium: deviceProfiles["Galaxy S25/S26/Fold"] ?? 0,
+    deviceOther: deviceProfiles["Outros aparelhos"] ?? 0,
     deviceCredit: deviceCreditTotal,
     coverage5g,
     totalEvents: totalOpportunityEvents,
@@ -695,7 +738,7 @@ const snapshot = {
     byType: [
       { tipo: "Móvel", valor: mobile },
       { tipo: "FTTH", valor: ftth },
-      { tipo: "Oferta Digital", valor: digital1 },
+      { tipo: "TI Recorrente", valor: digital1 },
       { tipo: "Avançada", valor: advanced },
       { tipo: "Vivo Tech", valor: vivoTech },
       { tipo: "Aparelhos", valor: aparelhos },
@@ -715,7 +758,7 @@ const snapshot = {
         (a, b) => b.opportunities - a.opportunities || a.cidade.localeCompare(b.cidade, "pt-BR"),
       )
       .slice(0, 12),
-    mobileComposition: ["Aquisição", "Renovação", "Winback", "Outras ofertas"].map((tipo) => ({
+    mobileComposition: ["Aquisição móvel", "Renovação FTTH + Totalização"].map((tipo) => ({
       tipo,
       valor: mobileComposition.get(tipo) ?? 0,
     })),

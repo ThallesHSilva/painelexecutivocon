@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { KpiCard } from "@/components/KpiCard";
 import { ChartCard } from "@/components/ChartCard";
 import { BarSimple, DonutChart } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
@@ -103,12 +104,25 @@ function Page() {
     try {
       window.localStorage.setItem(
         SIMULATOR_STORAGE_KEY,
-        JSON.stringify({ linesPerCnpj, conversionRate, capacityPerPdu, averageActivations, ticketMedio }),
+        JSON.stringify({
+          linesPerCnpj,
+          conversionRate,
+          capacityPerPdu,
+          averageActivations,
+          ticketMedio,
+        }),
       );
     } catch {
       // Keep the simulator usable when browser storage is unavailable.
     }
-  }, [averageActivations, capacityPerPdu, conversionRate, linesPerCnpj, settingsLoaded, ticketMedio]);
+  }, [
+    averageActivations,
+    capacityPerPdu,
+    conversionRate,
+    linesPerCnpj,
+    settingsLoaded,
+    ticketMedio,
+  ]);
 
   const simulation = (data?.porParceiro ?? []).map((partner) => {
     const lines = partner.baseRecMovel * linesPerCnpj;
@@ -168,6 +182,84 @@ function Page() {
               </div>
             </div>
           </Card>
+          <section className="mb-7">
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+                Direcionamento comercial
+              </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight">Oportunidades Móvel</h2>
+            </div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <KpiCard
+                icon={UsersRound}
+                title="Oportunidade Móvel"
+                value={fmtInt(data?.kpis.baseRecMovel)}
+                tooltip="União distinta dos públicos de Aquisição Móvel e Renovação FTTH + Totalização."
+                loading={isLoading}
+                emphasis
+              />
+              <KpiCard
+                icon={Smartphone}
+                title="Aquisição Móvel"
+                value={fmtInt(data?.kpis.aquisicaoMovel)}
+                tooltip="Clientes distintos com situação ativa ou vazia e MOVEL contendo Aquisição de Móvel."
+                loading={isLoading}
+                className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.08]"
+              />
+              <KpiCard
+                icon={RefreshCw}
+                title="Renovação FTTH + Totalização"
+                value={fmtInt(data?.kpis.renovacaoFtthTotalizacao)}
+                tooltip="Clientes distintos com situação ativa ou vazia, FIXA_BASICA em Upgrade/Renovação de Fixa Básica e QT_MOVEL_TERM igual a zero ou vazio."
+                loading={isLoading}
+                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
+              />
+            </div>
+          </section>
+
+          <section className="mb-7">
+            <div className="mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan">
+                Pré-aprovação de crédito
+              </p>
+              <h2 className="mt-1 text-xl font-semibold tracking-tight">Oportunidades Aparelhos</h2>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard
+                icon={CreditCard}
+                title="Oportunidades Aparelhos"
+                value={fmtInt(data?.kpis.oportunidadesAparelhos)}
+                tooltip="Clientes distintos ativos ou vazios com APARELHOS contendo Capacidade de Pagamento."
+                loading={isLoading}
+                emphasis
+              />
+              <KpiCard
+                icon={Smartphone}
+                title="iPhone"
+                value={fmtInt(data?.kpis.aparelhosIphone)}
+                tooltip="Oportunidades de aparelho com uso ou recomendação de iPhone."
+                loading={isLoading}
+                className="border-sky-400/20 bg-gradient-to-br from-card via-card to-sky-500/[0.08]"
+              />
+              <KpiCard
+                icon={Smartphone}
+                title="Galaxy S25/S26/Fold"
+                value={fmtInt(data?.kpis.aparelhosGalaxyPremium)}
+                tooltip="Oportunidades de aparelho com uso ou recomendação de Galaxy S25, S26 ou Fold."
+                loading={isLoading}
+                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
+              />
+              <KpiCard
+                icon={CircleMinus}
+                title="Outros aparelhos"
+                value={fmtInt(data?.kpis.aparelhosOutros)}
+                tooltip="Demais oportunidades de aparelho com pré-aprovação de crédito."
+                loading={isLoading}
+                className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.08]"
+              />
+            </div>
+          </section>
+
           <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
             <Card className="group relative min-h-[184px] overflow-hidden rounded-[2rem] border-cyan/25 bg-gradient-to-br from-card via-card to-cyan/[0.12] p-0 shadow-[0_18px_44px_-30px_hsl(190_85%_46%/0.6)] transition duration-300 hover:-translate-y-1 hover:border-cyan/40 hover:shadow-elevated">
               <div className="pointer-events-none absolute -right-10 -top-12 size-44 rounded-full bg-cyan/25 blur-3xl transition duration-500 group-hover:scale-125" />
@@ -190,7 +282,9 @@ function Page() {
                 >
                   {isLoading ? "—" : fmtBRLCompact(data?.kpis.creditoAparelhos)}
                 </p>
-                <div className="mt-auto pt-5"><div className="h-px bg-gradient-to-r from-cyan/40 via-cyan/10 to-transparent" /></div>
+                <div className="mt-auto pt-5">
+                  <div className="h-px bg-gradient-to-r from-cyan/40 via-cyan/10 to-transparent" />
+                </div>
               </div>
             </Card>
             <Card className="group relative min-h-[184px] overflow-hidden rounded-[2rem] border-violet-400/25 bg-gradient-to-br from-card via-card to-violet-500/[0.12] p-0 shadow-[0_18px_44px_-30px_hsl(272_72%_55%/0.6)] transition duration-300 hover:-translate-y-1 hover:border-violet-400/45 hover:shadow-elevated">
@@ -213,7 +307,9 @@ function Page() {
                 <p className="mt-2 text-4xl font-semibold tracking-tight tabular-nums md:text-[2.7rem]">
                   {isLoading ? "—" : fmtInt(data?.kpis.renovacaoMovelComAparelho)}
                 </p>
-                <div className="mt-auto pt-5"><div className="h-px bg-gradient-to-r from-violet-500/40 via-violet-500/10 to-transparent" /></div>
+                <div className="mt-auto pt-5">
+                  <div className="h-px bg-gradient-to-r from-violet-500/40 via-violet-500/10 to-transparent" />
+                </div>
               </div>
             </Card>
             <Card className="group relative min-h-[184px] overflow-hidden rounded-[2rem] border-sky-400/25 bg-gradient-to-br from-card via-card to-sky-500/[0.12] p-0 shadow-[0_18px_44px_-30px_hsl(199_89%_48%/0.55)] transition duration-300 hover:-translate-y-1 hover:border-sky-400/45 hover:shadow-elevated">
@@ -236,7 +332,9 @@ function Page() {
                 <p className="mt-2 text-4xl font-semibold tracking-tight tabular-nums md:text-[2.7rem]">
                   {isLoading ? "—" : fmtInt(data?.kpis.aparelhoSemRenovacao)}
                 </p>
-                <div className="mt-auto pt-5"><div className="h-px bg-gradient-to-r from-sky-500/40 via-sky-500/10 to-transparent" /></div>
+                <div className="mt-auto pt-5">
+                  <div className="h-px bg-gradient-to-r from-sky-500/40 via-sky-500/10 to-transparent" />
+                </div>
               </div>
             </Card>
           </div>

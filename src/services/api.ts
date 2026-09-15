@@ -90,19 +90,19 @@ export async function fetchDashboard(partnerIds: string[]) {
   const opportunityCnpj = total((item) => item.opportunities.uniqueCnpjWithOpportunity);
   const destaques = [
     {
-      titulo: "CNPJs com REC_MOVEL",
+      titulo: "Oportunidade Móvel",
       valor: total((item) => item.opportunities.mobile),
-      hint: "REC_MOVEL com Aquisição ou Winback",
+      hint: "Aquisição Móvel ou Renovação FTTH + Totalização",
     },
     {
-      titulo: "Oportunidades de FTTH",
+      titulo: "Aquisição Fixa Básica",
       valor: total((item) => item.opportunities.ftth),
-      hint: "Regra comercial de FTTH",
+      hint: "Aquisição/Adesão com capacidade de pagamento",
     },
     {
-      titulo: "Oferta Digital",
+      titulo: "TI Recorrente",
       valor: total((item) => item.opportunities.digital1),
-      hint: "Campo DIGITAL_1 preenchido",
+      hint: "Segurança em Dados, Google ou Microsoft 365",
     },
     {
       titulo: "Múltiplas oportunidades",
@@ -168,8 +168,14 @@ export async function fetchMobile(partnerIds: string[]) {
       alimentacaoComercial: Math.round(elegiveis * 0.35),
       cxNecessario: 0,
       creditoAparelhos: total((item) => item.opportunities.deviceCredit),
+      oportunidadesAparelhos: total((item) => item.opportunities.devices),
       renovacaoMovelComAparelho: total((item) => item.opportunities.mobileRenewalWithDevice),
       aparelhoSemRenovacao: total((item) => item.opportunities.devicesWithoutMobileRenewal),
+      aquisicaoMovel: total((item) => item.opportunities.mobileAcquisition),
+      renovacaoFtthTotalizacao: total((item) => item.opportunities.mobileFtthRenewalTotalization),
+      aparelhosIphone: total((item) => item.opportunities.deviceIphone),
+      aparelhosGalaxyPremium: total((item) => item.opportunities.deviceGalaxyPremium),
+      aparelhosOutros: total((item) => item.opportunities.deviceOther),
     },
     composicao: mergeMapaRows(selected, (item) => item.breakdowns.mobileComposition, "tipo", [
       "valor",
@@ -178,6 +184,8 @@ export async function fetchMobile(partnerIds: string[]) {
       parceiro: partner.name,
       baseRecMovel: partnerScope.opportunities.mobile,
       linhasRecMovel: partnerScope.opportunities.mobileParkLines,
+      aquisicaoMovel: partnerScope.opportunities.mobileAcquisition ?? 0,
+      renovacaoFtthTotalizacao: partnerScope.opportunities.mobileFtthRenewalTotalization ?? 0,
     })),
     volume: [
       { periodo: "Mensal", valor: mensal },
@@ -266,6 +274,9 @@ export async function fetchLicenses(partnerIds: string[]) {
       baseElegivel: base,
       clientesElegiveis: elegiveis,
       percentualBase: percent,
+      segurancaEmDados: total((item) => item.opportunities.tiSecurityCross),
+      googleComCredito: total((item) => item.opportunities.digitalGoogleCredit),
+      microsoft365ComCredito: total((item) => item.opportunities.digitalMicrosoftCredit),
     },
     porParceiro: selected.map(({ partner, scope: partnerScope }) => ({
       parceiro: partner.name,

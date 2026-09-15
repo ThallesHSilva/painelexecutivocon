@@ -6,8 +6,8 @@ import { ChartCard } from "@/components/ChartCard";
 import { BarSimple, DonutChart } from "@/components/charts";
 import { ErrorState } from "@/components/EmptyState";
 import { useLicenses } from "@/hooks/useData";
-import { fmtInt, fmtBRLCompact, fmtPct } from "@/lib/format";
-import { UserCheck, Percent, Target, Sparkles } from "lucide-react";
+import { fmtInt, fmtBRLCompact } from "@/lib/format";
+import { CloudCog, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 
@@ -58,36 +58,44 @@ function Page() {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
                   Carteira digital
                 </p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight">Oportunidade em foco</h2>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight">TI Recorrente em foco</h2>
               </div>
               <span className="rounded-full border border-primary/10 bg-primary/[0.06] px-3 py-1.5 text-xs font-medium text-primary">
                 {data ? `${data.composicao.length} tipos de oferta` : "Carregando ofertas"}
               </span>
             </div>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <KpiCard
                 icon={UserCheck}
-                title="Oportunidade Digital"
+                title="Oportunidades TI Recorrente"
                 value={fmtInt(data?.kpis.clientesElegiveis)}
-                tooltip="NR_CNPJ distintos elegíveis com a coluna DIGITAL_1 preenchida."
+                tooltip="União distinta dos públicos de Segurança em Dados, Google e Microsoft 365 com pré-aprovação."
                 loading={isLoading}
-                className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.08]"
+                emphasis
               />
               <KpiCard
-                icon={Percent}
-                title="% da base total"
-                value={fmtPct(data?.kpis.percentualBase)}
-                tooltip="Oportunidade Digital dividida por todos os NR_CNPJ distintos da planilha."
+                icon={ShieldCheck}
+                title="Cross Segurança em Dados"
+                value={fmtInt(data?.kpis.segurancaEmDados)}
+                tooltip="Clientes distintos ativos ou vazios com QT_AVANCADA_DADOS maior que zero."
                 loading={isLoading}
                 className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
               <KpiCard
-                icon={Target}
-                title="Potencial de adesão"
-                value={fmtInt(potentialAdoption)}
-                tooltip="Oportunidade Digital multiplicada pela taxa de conversão selecionada."
+                icon={CloudCog}
+                title="Google com pré-aprovação"
+                value={fmtInt(data?.kpis.googleComCredito)}
+                tooltip="DIGITAL_1 contém Capacidade e Google."
                 loading={isLoading}
                 className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.1]"
+              />
+              <KpiCard
+                icon={CloudCog}
+                title="Microsoft 365 com pré-aprovação"
+                value={fmtInt(data?.kpis.microsoft365ComCredito)}
+                tooltip="DIGITAL_1 contém Capacidade e Microsoft 365."
+                loading={isLoading}
+                className="border-sky-400/20 bg-gradient-to-br from-card via-card to-sky-500/[0.1]"
               />
             </div>
           </section>
@@ -98,8 +106,8 @@ function Page() {
               oportunidades: partner.elegiveis,
             }))}
             storageKey="mapa-parque.digital-simulators.v1"
-            simulatorLabel="Simulador digital"
-            opportunityLabel="Oportunidade Digital"
+            simulatorLabel="Simulador TI Recorrente"
+            opportunityLabel="Oportunidade TI Recorrente"
             quantityLabel="Licenças"
             revenueLabel="Receita digital"
             conversionRate={appliedRate}
@@ -130,7 +138,7 @@ function Page() {
               )}
             </ChartCard>
             <ChartCard
-              title="Composição das oportunidades digitais"
+              title="Composição das oportunidades TI Recorrente"
               action={
                 <span className="rounded-full bg-violet-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">
                   Mix
