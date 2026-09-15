@@ -350,9 +350,11 @@ export const Route = createFileRoute("/api/data/upload")({
           decodeURIComponent(request.headers.get("x-file-name") ?? "mapa-parque.csv"),
         );
         const validExtension =
-          kind === "Mapa Parque" || isQsc
-            ? /\.csv$/i.test(originalName)
-            : /\.xlsx?$/i.test(originalName);
+          kind === "Mapa Parque"
+            ? /\.(csv|xlsx)$/i.test(originalName)
+            : isQsc
+              ? /\.csv$/i.test(originalName)
+              : /\.xlsx?$/i.test(originalName);
         if (!validExtension) {
           return Response.json(
             { message: `${kind} foi enviado em um formato inválido.` },

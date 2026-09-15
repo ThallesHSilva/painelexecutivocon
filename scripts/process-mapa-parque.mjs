@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { TextDecoder } from "node:util";
+import { readSpreadsheetRows } from "./spreadsheet-reader.mjs";
 
 const inputPath = process.argv[2] ?? process.env.MAPA_PARQUE_PATH;
 const partnerName = process.argv[3] ?? "A7 Connect";
@@ -9,7 +10,7 @@ const partnerFilter = process.argv[5] === "--filter-partner";
 
 if (!inputPath) {
   throw new Error(
-    'Informe o CSV: node scripts/process-mapa-parque.mjs "C:\\caminho\\MAPA PARQUE.csv" "Nome do parceiro"',
+    'Informe o CSV ou XLSX: node scripts/process-mapa-parque.mjs "C:\\caminho\\MAPA PARQUE.csv" "Nome do parceiro"',
   );
 }
 
@@ -197,11 +198,14 @@ function formatPartnerId(name) {
 
 const raw = await fs.readFile(inputPath);
 const stats = await fs.stat(inputPath);
-const decoded = decodeSource(raw);
-const rows = parseDelimited(decoded.text.replaceAll("\u0000", ""));
+const isXlsx = path.extname(inputPath).toLowerCase() === ".xlsx";
+const decoded = isXlsx ? { encoding: "xlsx", text: "" } : decodeSource(raw);
+const rows = isXlsx
+  ? (await readSpreadsheetRows(inputPath)).values()
+  : parseDelimited(decoded.text.replaceAll("\u0000", ""));
 const headerResult = rows.next();
 
-if (headerResult.done) throw new Error("O CSV está vazio.");
+if (headerResult.done) throw new Error("O arquivo está vazio.");
 
 const headers = headerResult.value.map((header) => normalize(header).replace(/^\uFEFF/, ""));
 const indexByHeader = new Map(headers.map((header, index) => [header, index]));
@@ -649,7 +653,7 @@ const snapshot = {
     fileName: path.basename(inputPath),
     fileSizeBytes: raw.length,
     encoding: decoded.encoding,
-    delimiter: ";",
+    delimiter: isXlsx ? null : ";",
     importedAt: new Date().toISOString(),
     sourceModifiedAt: stats.mtime.toISOString(),
   },

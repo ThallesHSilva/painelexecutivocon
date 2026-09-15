@@ -2,13 +2,14 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { TextDecoder } from "node:util";
+import { readSpreadsheetRows } from "./spreadsheet-reader.mjs";
 
 const inputPath = process.argv[2] ?? process.env.MAPA_PARQUE_PATH;
 const outputPath = path.resolve(process.argv[3] ?? ".data/snapshots/mapa-parque.snapshot.json");
 
 if (!inputPath) {
   throw new Error(
-    'Informe o CSV: node scripts/process-mapa-parque-all.mjs "C:\\caminho\\MAPA PARQUE.csv"',
+    'Informe o CSV ou XLSX: node scripts/process-mapa-parque-all.mjs "C:\\caminho\\MAPA PARQUE.csv"',
   );
 }
 
@@ -96,7 +97,10 @@ function mergeRows(scopes, field, valueFields) {
 }
 
 const raw = await fs.readFile(inputPath);
-const parsedRows = parseDelimited(decode(raw).replaceAll("\u0000", ""));
+const parsedRows =
+  path.extname(inputPath).toLowerCase() === ".xlsx"
+    ? (await readSpreadsheetRows(inputPath)).values()
+    : parseDelimited(decode(raw).replaceAll("\u0000", ""));
 const header = parsedRows.next();
 if (header.done) throw new Error("O CSV está vazio.");
 const headers = header.value.map((value) => normalize(value).replace(/^\uFEFF/, ""));
