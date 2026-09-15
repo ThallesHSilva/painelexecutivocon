@@ -225,7 +225,11 @@ async function identifySpreadsheet(file: File): Promise<FileKind> {
   const sampleMatching = (required: string[]) => hasHeaders(combinedHeaders, required);
   const matches = (required: string[]) => firstMatching(required) || sampleMatching(required);
 
-  if (matches(["NRCNPJ", "TPPRODUTO"]) || matches(["NRCNPJ", "SITUACAORECEITA", "RECMOVEL"]))
+  if (
+    matches(["NRCNPJ", "TPPRODUTO"]) ||
+    matches(["NRCNPJ", "SITUACAORECEITA", "RECMOVEL"]) ||
+    matches(["CODCLIENTE", "TPPRODUTO", "SITUACAORECEITA", "RECMOVEL"])
+  )
     return "Mapa Parque";
   if (matches(["NOMEREDE", "META", "REAL"]) || matches(["PRODUTO", "META", "REAL"])) {
     return "Resultados YoY";

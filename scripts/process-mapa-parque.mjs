@@ -191,7 +191,6 @@ if (headerResult.done) throw new Error("O CSV está vazio.");
 const headers = headerResult.value.map((header) => normalize(header).replace(/^\uFEFF/, ""));
 const indexByHeader = new Map(headers.map((header, index) => [header, index]));
 const requiredHeaders = [
-  "NR_CNPJ",
   "COD_CLIENTE",
   "SITUACAO_RECEITA",
   "FLG_MEI",
@@ -211,6 +210,8 @@ if (missingHeaders.length) {
 }
 
 const valueAt = (row, header) => normalize(row[indexByHeader.get(header)]);
+const hasCnpjHeader = indexByHeader.has("NR_CNPJ");
+const customerIdentityAt = (row) => valueAt(row, "NR_CNPJ") || valueAt(row, "COD_CLIENTE");
 const contactHeaders = [
   "EMAIL_CONTATO_PRINCIPAL_SFA",
   "CELULAR_CONTATO_PRINCIPAL_SFA",
@@ -270,6 +271,7 @@ let mobileParkLines = 0;
 let mobilePortfolioValue = 0;
 let fixedPortfolioValue = 0;
 let semanticPartnerAnomalies = 0;
+let identityFallbackRows = 0;
 
 for (const row of rows) {
   if (row.length === 1 && !normalize(row[0])) continue;
@@ -279,7 +281,8 @@ for (const row of rows) {
   }
   rawRecords += 1;
 
-  const rawCnpj = valueAt(row, "NR_CNPJ");
+  const rawCnpj = customerIdentityAt(row);
+  if (!valueAt(row, "NR_CNPJ") && rawCnpj) identityFallbackRows += 1;
   if (rawCnpj) {
     allCnpj.add(rawCnpj);
     rawCnpjMobilePark.set(
@@ -322,7 +325,7 @@ for (const row of rows) {
   }
 
   eligibleRecords += 1;
-  const cnpj = valueAt(row, "NR_CNPJ");
+  const cnpj = customerIdentityAt(row);
   const client = valueAt(row, "COD_CLIENTE");
   if (cnpj) uniqueCnpj.add(cnpj);
   else missingCnpj += 1;
@@ -624,7 +627,13 @@ const snapshot = {
     sourceModifiedAt: stats.mtime.toISOString(),
   },
   rules: {
-    version: "mapa-parque-v1",
+    version: "mapa-parque-v2",
+    customerIdentity:
+      "NR_CNPJ quando disponível; na ausência da coluna ou do valor, utiliza COD_CLIENTE para deduplicar clientes",
+    contactability:
+      contactHeaders.length > 0
+        ? `Qualquer contato preenchido em: ${contactHeaders.join(", ")}`
+        : "Indisponível no arquivo: nenhuma coluna de contato foi fornecida",
     situation: "SITUACAO_RECEITA em branco ou equivalente a ATIVO (ATIVO, ATIVA, 2 - ATIVA)",
     mei: "FLG_MEI vazio ou NULL",
     mobile: "REC_MOVEL contém Aquisição ou Winback",
@@ -652,6 +661,7 @@ const snapshot = {
     allCnpj: allCnpj.size,
     uniqueClients: uniqueClients.size,
     missingCnpj,
+    identityFallbackRows,
     recurringCnpjRows: Math.max(0, eligibleRecords - uniqueCnpj.size),
     contactableRecords,
     mobileParkLines,
@@ -743,6 +753,8 @@ const snapshot = {
   quality: {
     malformedColumnRows: 0,
     semanticPartnerAnomalies,
+    identityUsesCodCliente: Number(!hasCnpjHeader || identityFallbackRows > 0),
+    contactColumnsAvailable: Number(contactHeaders.length > 0),
     sourceMojibakeDetected: /[ÃÂâ]/.test(decoded.text),
   },
 };
