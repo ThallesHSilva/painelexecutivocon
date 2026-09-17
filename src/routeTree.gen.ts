@@ -19,6 +19,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MovelRouteImport } from './routes/movel'
 import { Route as PbiRouteImport } from './routes/pbi'
 import { Route as QscRouteImport } from './routes/qsc'
+import { Route as RelatorioExecutivoRouteImport } from './routes/relatorio-executivo'
 import { Route as ResultadosRouteImport } from './routes/resultados'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
@@ -82,6 +83,11 @@ const PbiRoute = PbiRouteImport.update({
 const QscRoute = QscRouteImport.update({
   id: '/qsc',
   path: '/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelatorioExecutivoRoute = RelatorioExecutivoRouteImport.update({
+  id: '/relatorio-executivo',
+  path: '/relatorio-executivo',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResultadosRoute = ResultadosRouteImport.update({
@@ -166,6 +172,7 @@ export interface FileRoutesByFullPath {
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/relatorio-executivo': typeof RelatorioExecutivoRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -192,6 +199,7 @@ export interface FileRoutesByTo {
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/relatorio-executivo': typeof RelatorioExecutivoRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/relatorio-executivo': typeof RelatorioExecutivoRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
@@ -247,6 +256,7 @@ export interface FileRouteTypes {
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/relatorio-executivo'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -273,6 +283,7 @@ export interface FileRouteTypes {
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/relatorio-executivo'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -299,6 +310,7 @@ export interface FileRouteTypes {
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/relatorio-executivo'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
@@ -326,6 +338,7 @@ export interface RootRouteChildren {
   MovelRoute: typeof MovelRoute
   PbiRoute: typeof PbiRoute
   QscRoute: typeof QscRoute
+  RelatorioExecutivoRoute: typeof RelatorioExecutivoRoute
   ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UsuariosRoute: typeof UsuariosRoute
@@ -412,6 +425,13 @@ declare module '@tanstack/react-router' {
       path: '/qsc'
       fullPath: '/qsc'
       preLoaderRoute: typeof QscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorio-executivo': {
+      id: '/relatorio-executivo'
+      path: '/relatorio-executivo'
+      fullPath: '/relatorio-executivo'
+      preLoaderRoute: typeof RelatorioExecutivoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/resultados': {
@@ -526,6 +546,7 @@ const rootRouteChildren: RootRouteChildren = {
   MovelRoute: MovelRoute,
   PbiRoute: PbiRoute,
   QscRoute: QscRoute,
+  RelatorioExecutivoRoute: RelatorioExecutivoRoute,
   ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UsuariosRoute: UsuariosRoute,

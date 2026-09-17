@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   ArrowRight,
@@ -6,6 +6,7 @@ import {
   BarChart3,
   ChevronLeft,
   ChevronRight,
+  FileDown,
   PencilLine,
   TrendingDown,
   TrendingUp,
@@ -726,6 +727,18 @@ function ResultadosPage() {
         <div className="pointer-events-none absolute -bottom-24 right-0 size-64 rounded-full bg-cyan/25 blur-3xl" />
         <div className="pointer-events-none absolute right-1/3 top-8 size-32 rounded-full bg-violet-500/10 blur-3xl" />
         <div className="relative">
+          <div className="mb-5 flex justify-end">
+            <Button
+              asChild
+              variant="outline"
+              className="rounded-xl border-primary/20 bg-background/75 shadow-sm backdrop-blur"
+            >
+              <Link to="/relatorio-executivo" search={{ tower: completeTowers[towerIndex]?.id }}>
+                <FileDown className="size-4" />
+                Relatório executivo
+              </Link>
+            </Button>
+          </div>
           <div className="flex items-start gap-4">
             <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant ring-4 ring-primary/10">
               <BarChart3 className="size-5" />

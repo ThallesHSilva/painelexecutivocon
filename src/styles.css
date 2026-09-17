@@ -190,3 +190,48 @@
     color: var(--color-foreground);
   }
 }
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: white !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .executive-report {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
+  .executive-report-page {
+    width: 297mm !important;
+    min-width: 297mm !important;
+    max-width: 297mm !important;
+    height: 210mm !important;
+    min-height: 210mm !important;
+    max-height: 210mm !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    break-after: page;
+    page-break-after: always;
+    overflow: hidden !important;
+  }
+
+  .executive-report-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}
