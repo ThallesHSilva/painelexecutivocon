@@ -150,30 +150,32 @@ function qscDomainHistory(domain: QscDomain, metrics: QscMetricSeries[], compete
   return { values, totalizer, ...qscRating(totalizer) };
 }
 
-function buildYtdSummary(
-  tower: ServiceTower,
-  records: SourceRecord[],
-  monthsElapsed: number,
-): YtdSummary {
+function buildYtdSummary(tower: ServiceTower, records: SourceRecord[]): YtdSummary {
   const product = TOWER_PRODUCT_MAP[tower.id] ?? tower.title;
   const matching = records.filter((record) => normalize(record.product) === normalize(product));
   const aggregated = matching.reduce(
     (total, record) => ({
       meta: total.meta + record.meta,
       real: total.real + record.real,
+      attainment: total.attainment + record.attainment,
+      gap: total.gap + record.gap,
+      average: total.average + record.average,
       previousReal: total.previousReal + record.previousReal,
+      yoy: total.yoy + record.yoy,
+      yoyGap: total.yoyGap + record.yoyGap,
     }),
-    { meta: 0, real: 0, previousReal: 0 },
+    { meta: 0, real: 0, attainment: 0, gap: 0, average: 0, previousReal: 0, yoy: 0, yoyGap: 0 },
   );
-  const months = Math.max(1, monthsElapsed);
+  const source = matching.length === 1 ? matching[0] : null;
   return {
     product,
     ...aggregated,
-    attainment: aggregated.meta ? aggregated.real / aggregated.meta : null,
-    gap: aggregated.real - aggregated.meta,
-    average: aggregated.real / months,
-    yoyGap: aggregated.real - aggregated.previousReal,
-    yoy: aggregated.previousReal ? aggregated.real / aggregated.previousReal - 1 : null,
+    attainment: source?.attainment ?? (aggregated.meta ? aggregated.real / aggregated.meta : 0),
+    gap: source?.gap ?? aggregated.gap,
+    average: source?.average ?? aggregated.average,
+    yoyGap: source?.yoyGap ?? aggregated.yoyGap,
+    yoy:
+      source?.yoy ?? (aggregated.previousReal ? aggregated.real / aggregated.previousReal - 1 : 0),
   };
 }
 
@@ -362,7 +364,6 @@ function ExecutiveReportPage() {
           date={reportDate}
           selectedCompanies={selectedCompanies}
           records={scopedSourceRecords}
-          monthsElapsed={results.resultados.source.monthsElapsed}
           period={results.resultados.source.period}
         />
       ))}
@@ -756,7 +757,6 @@ function TowerReportPage({
   date,
   selectedCompanies,
   records,
-  monthsElapsed,
   period,
 }: {
   tower: ServiceTower;
@@ -766,10 +766,9 @@ function TowerReportPage({
   date: string;
   selectedCompanies: Set<string>;
   records: SourceRecord[];
-  monthsElapsed: number;
   period: string;
 }) {
-  const ytd = buildYtdSummary(tower, records, monthsElapsed);
+  const ytd = buildYtdSummary(tower, records);
   const towerRows = selectedCompanies.size
     ? tower.rows.filter((row) => selectedCompanies.has(normalize(row.partner)))
     : tower.rows;

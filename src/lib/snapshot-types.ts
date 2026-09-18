@@ -55,8 +55,16 @@ export type ResultadosYoySnapshot = {
     product: string;
     meta: number;
     real: number;
+    attainment: number;
+    gap: number;
+    average: number;
     previousMeta: number;
     previousReal: number;
+    previousAttainment: number;
+    previousGap: number;
+    previousAverage: number;
+    yoy: number;
+    yoyGap: number;
   }>;
 };
 

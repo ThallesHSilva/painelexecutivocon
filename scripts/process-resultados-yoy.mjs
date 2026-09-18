@@ -8,7 +8,8 @@ if (!inputPath) throw new Error("Informe a planilha Resultados YoY.");
 
 const rows = await readSpreadsheetRows(inputPath);
 const headerIndex = rows.findIndex((row) => String(row[2] ?? "").trim() === "NOME_REDE");
-if (headerIndex < 0) throw new Error("Cabeçalho NOME_REDE não encontrado na planilha Resultados YoY.");
+if (headerIndex < 0)
+  throw new Error("Cabeçalho NOME_REDE não encontrado na planilha Resultados YoY.");
 
 let currentProduct = "";
 const records = rows.slice(headerIndex + 1).flatMap((row) => {
@@ -20,10 +21,18 @@ const records = rows.slice(headerIndex + 1).flatMap((row) => {
     {
       company,
       product: currentProduct.replace(/_\s*PV$/i, "").trim(),
-      meta: parseNumber(row[6]),
-      real: parseNumber(row[7]),
-      previousMeta: parseNumber(row[13]),
-      previousReal: parseNumber(row[14]),
+      meta: parseNumber(row[4]),
+      real: parseNumber(row[5]),
+      attainment: parseNumber(row[6]),
+      gap: parseNumber(row[7]),
+      average: parseNumber(row[9]),
+      previousMeta: parseNumber(row[11]),
+      previousReal: parseNumber(row[12]),
+      previousAttainment: parseNumber(row[13]),
+      previousGap: parseNumber(row[14]),
+      previousAverage: parseNumber(row[16]),
+      yoy: parseNumber(row[18]),
+      yoyGap: parseNumber(row[19]),
     },
   ];
 });

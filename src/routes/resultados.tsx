@@ -37,7 +37,7 @@ import type {
 
 type PeriodInput = { meta: number; real: number };
 type EditableMetric = { previous: PeriodInput; current: PeriodInput };
-type PeriodCalculation = { attainment: number | null; gap: number; average: number };
+type PeriodCalculation = { attainment: number; gap: number; average: number };
 type ResultRow = {
   id: string;
   product: string;
@@ -466,12 +466,6 @@ function buildPortabilitySummary(records: AnalyticalRecord[]): {
     },
   };
 }
-const calculatePeriod = (input: PeriodInput, monthsElapsed: number): PeriodCalculation => ({
-  attainment: input.meta > 0 ? input.real / input.meta : null,
-  gap: input.real - input.meta,
-  average: input.real / monthsElapsed,
-});
-
 export const Route = createFileRoute("/resultados")({
   head: () => ({ meta: [{ title: "Visão resultado — Mapa Parque" }] }),
   component: ResultadosPage,
@@ -551,8 +545,17 @@ function ResultadosPage() {
         product: string;
         meta: number;
         real: number;
+        attainment: number;
+        gap: number;
+        average: number;
         previousMeta: number;
         previousReal: number;
+        previousAttainment: number;
+        previousGap: number;
+        previousAverage: number;
+        yoy: number;
+        yoyGap: number;
+        recordCount: number;
       }
     >();
 
@@ -561,18 +564,46 @@ function ResultadosPage() {
         product: record.product,
         meta: 0,
         real: 0,
+        attainment: 0,
+        gap: 0,
+        average: 0,
         previousMeta: 0,
         previousReal: 0,
+        previousAttainment: 0,
+        previousGap: 0,
+        previousAverage: 0,
+        yoy: 0,
+        yoyGap: 0,
+        recordCount: 0,
       };
       current.meta += record.meta;
       current.real += record.real;
+      current.attainment += record.attainment ?? 0;
+      current.gap += record.gap ?? 0;
+      current.average += record.average ?? 0;
       current.previousMeta += record.previousMeta;
       current.previousReal += record.previousReal;
+      current.previousAttainment += record.previousAttainment ?? 0;
+      current.previousGap += record.previousGap ?? 0;
+      current.previousAverage += record.previousAverage ?? 0;
+      current.yoy += record.yoy ?? 0;
+      current.yoyGap += record.yoyGap ?? 0;
+      current.recordCount += 1;
       byProduct.set(record.product, current);
     }
 
-    return [...byProduct.values()];
-  }, [partners, selected, sourceRecords]);
+    return [...byProduct.values()].map((record) =>
+      record.recordCount === 1
+        ? record
+        : {
+            ...record,
+            attainment: record.meta > 0 ? record.real / record.meta : 0,
+            previousAttainment:
+              record.previousMeta > 0 ? record.previousReal / record.previousMeta : 0,
+            yoy: record.previousReal > 0 ? record.real / record.previousReal - 1 : 0,
+          },
+    );
+  }, [selectedCompanies, sourceRecords]);
 
   const scopedBestGuessRecords = useMemo(
     () =>
@@ -614,14 +645,21 @@ function ResultadosPage() {
           product: record.product,
           previousInput: editable.previous,
           currentInput: editable.current,
-          previous: calculatePeriod(editable.previous, reportSource?.monthsElapsed ?? 1),
-          current: calculatePeriod(editable.current, reportSource?.monthsElapsed ?? 1),
-          yoy:
-            editable.previous.real > 0 ? editable.current.real / editable.previous.real - 1 : null,
-          yoyGap: editable.current.real - editable.previous.real,
+          previous: {
+            attainment: record.previousAttainment,
+            gap: record.previousGap,
+            average: record.previousAverage,
+          },
+          current: {
+            attainment: record.attainment,
+            gap: record.gap,
+            average: record.average,
+          },
+          yoy: record.yoy,
+          yoyGap: record.yoyGap,
         };
       }),
-    [inputs, reportSource?.monthsElapsed, scopeKey, scopedRecords],
+    [inputs, scopeKey, scopedRecords],
   );
 
   const highlights = [
@@ -788,7 +826,6 @@ function ResultadosPage() {
         <PeriodPanel
           rows={rows}
           title={reportSource?.period ?? "YTD por produto"}
-          monthsElapsed={reportSource?.monthsElapsed ?? 1}
           subtitle="Resultado atual"
           tone="current"
           period="current"
@@ -898,7 +935,6 @@ function CertificationPanel({
 function PeriodPanel({
   rows,
   title,
-  monthsElapsed,
   subtitle,
   tone,
   period,
@@ -906,7 +942,6 @@ function PeriodPanel({
 }: {
   rows: ResultRow[];
   title: string;
-  monthsElapsed: number;
   subtitle: string;
   tone: "previous" | "current";
   period: PeriodKey;
@@ -928,7 +963,18 @@ function PeriodPanel({
     }),
     { meta: 0, real: 0 },
   );
-  const totalCalculation = calculatePeriod(totalInput, monthsElapsed);
+  const totalCalculation = rows.reduce<PeriodCalculation>(
+    (total, row) => {
+      const calculation = row[calculationKey];
+      return {
+        attainment: total.attainment + calculation.attainment,
+        gap: total.gap + calculation.gap,
+        average: total.average + calculation.average,
+      };
+    },
+    { attainment: 0, gap: 0, average: 0 },
+  );
+  totalCalculation.attainment = totalInput.meta > 0 ? totalInput.real / totalInput.meta : 0;
   const totalPrevious = rows.reduce((total, row) => total + row.previousInput.real, 0);
   const totalYoy = totalPrevious > 0 ? totalInput.real / totalPrevious - 1 : null;
   const totalYoyGap = totalInput.real - totalPrevious;
@@ -1012,10 +1058,8 @@ function PeriodPanel({
                     />
                     <TableCell className="text-right">
                       <MetricValue
-                        value={
-                          calculation.attainment == null ? "—" : fmtPct(calculation.attainment)
-                        }
-                        positive={calculation.attainment != null && calculation.attainment >= 1}
+                        value={fmtPct(calculation.attainment)}
+                        positive={calculation.attainment >= 1}
                       />
                     </TableCell>
                     <TableCell className="text-right">
@@ -1049,14 +1093,8 @@ function PeriodPanel({
                 </TableCell>
                 <TableCell className="text-right">
                   <MetricValue
-                    value={
-                      totalCalculation.attainment == null
-                        ? "—"
-                        : fmtPct(totalCalculation.attainment)
-                    }
-                    positive={
-                      totalCalculation.attainment != null && totalCalculation.attainment >= 1
-                    }
+                    value={fmtPct(totalCalculation.attainment)}
+                    positive={totalCalculation.attainment >= 1}
                   />
                 </TableCell>
                 <TableCell className="text-right">
