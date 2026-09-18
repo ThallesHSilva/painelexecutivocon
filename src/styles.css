@@ -193,7 +193,7 @@
 
 @media print {
   @page {
-    size: A4 landscape;
+    size: 297mm 210mm;
     margin: 0;
   }
 
@@ -209,6 +209,8 @@
   }
 
   .executive-report {
+    width: 297mm !important;
+    min-width: 297mm !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
