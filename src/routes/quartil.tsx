@@ -67,6 +67,14 @@ function matchesEvolution(value: number | null, status: EvolutionStatus) {
   if (status === "up") return value !== null && value > 0;
   return value !== null && value < 0;
 }
+
+function quartilePoints(value: number | null) {
+  return value === null ? 0 : 6 - value;
+}
+
+function consultantScore(consultant: import("@/lib/quartil").QuartilConsultant) {
+  return metrics.reduce((total, item) => total + quartilePoints(consultant.quartiles[item.id]), 0);
+}
 function Badge({ value }: { value: number | null | undefined }) {
   return (
     <span
@@ -133,26 +141,17 @@ function QuartilPage() {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
-  const rankedConsultants = [...consultants].sort((a, b) => {
-    const aValue = a.values[metric];
-    const bValue = b.values[metric];
-    if (aValue === null && bValue === null) return a.name.localeCompare(b.name);
-    if (aValue === null) return 1;
-    if (bValue === null) return -1;
-    return bValue - aValue || a.name.localeCompare(b.name);
-  });
-  const ranking = new Map<string, number | null>();
-  let lastRankedValue: number | null | undefined;
+  const rankedConsultants = [...consultants].sort(
+    (a, b) => consultantScore(b) - consultantScore(a) || a.name.localeCompare(b.name),
+  );
+  const ranking = new Map<string, number>();
+  let lastRankedScore: number | undefined;
   let currentRank = 0;
   rankedConsultants.forEach((consultant, index) => {
-    const value = consultant.values[metric];
-    if (value === null) {
-      ranking.set(consultant.id, null);
-      return;
-    }
-    if (lastRankedValue === undefined || value !== lastRankedValue) currentRank = index + 1;
+    const score = consultantScore(consultant);
+    if (lastRankedScore === undefined || score !== lastRankedScore) currentRank = index + 1;
     ranking.set(consultant.id, currentRank);
-    lastRankedValue = value;
+    lastRankedScore = score;
   });
   const rows = rankedConsultants
     .filter((c) =>
@@ -444,11 +443,12 @@ function QuartilPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-semibold">Ranking de consultores</h2>
                     <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                      {selectedLabel}
+                      Geral · até 15 pontos
                     </span>
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Ordenado pelo resultado atual. Selecione um consultor para abrir sua análise.
+                    Soma dos três quartis: Q1 vale 5 pontos, Q2 vale 4, Q3 vale 3, Q4 vale 2 e Q5
+                    vale 1. Sem classificação vale 0.
                   </p>
                   {evolutionFilter && (
                     <button
@@ -459,7 +459,8 @@ function QuartilPage() {
                       }}
                       className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
                     >
-                      {evolutionLabels[evolutionFilter.status]} · {evolutionFilter.period} meses
+                      {evolutionLabels[evolutionFilter.status]} · {selectedLabel} ·{" "}
+                      {evolutionFilter.period} meses
                       <X className="size-3.5" />
                     </button>
                   )}
@@ -483,6 +484,7 @@ function QuartilPage() {
                   <thead className="bg-muted/40 text-xs text-muted-foreground">
                     <tr>
                       <th className="px-3 py-3 text-center">Posição</th>
+                      <th className="px-3 py-3 text-center">Pontos</th>
                       <th className="px-5 py-3 text-left">Consultor / parceiro</th>
                       <th className="px-3 py-3 text-center">Tempo de casa</th>
                       {metrics.map((m) => (
@@ -502,7 +504,8 @@ function QuartilPage() {
                       <ConsultantRows
                         key={c.id}
                         consultant={c}
-                        rank={ranking.get(c.id) ?? null}
+                        rank={ranking.get(c.id) ?? 0}
+                        score={consultantScore(c)}
                         metric={metric}
                         months={data.months.slice(-7)}
                         expanded={expanded === c.id}
@@ -620,13 +623,15 @@ function QuartilPage() {
 function ConsultantRows({
   consultant: c,
   rank,
+  score,
   metric,
   months,
   expanded,
   onToggle,
 }: {
   consultant: import("@/lib/quartil").QuartilConsultant;
-  rank: number | null;
+  rank: number;
+  score: number;
   metric: QuartilMetric;
   months: string[];
   expanded: boolean;
@@ -677,7 +682,12 @@ function ConsultantRows({
           <span
             className={`inline-flex min-w-9 items-center justify-center rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${rankStyle}`}
           >
-            {rank === null ? "—" : `${rank}º`}
+            {rank}º
+          </span>
+        </td>
+        <td className="px-3 py-3 text-center">
+          <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-primary/10 px-2 py-1 text-xs font-bold text-primary tabular-nums">
+            {score}/15
           </span>
         </td>
         <td className="px-5 py-3">
@@ -721,7 +731,7 @@ function ConsultantRows({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={9} className="bg-primary/[0.025] px-6 py-5">
+          <td colSpan={10} className="bg-primary/[0.025] px-6 py-5">
             <div className="mb-5 grid gap-3 lg:grid-cols-3">
               <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4">
                 <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
