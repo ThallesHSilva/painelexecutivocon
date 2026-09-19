@@ -19,11 +19,13 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MovelRouteImport } from './routes/movel'
 import { Route as PbiRouteImport } from './routes/pbi'
 import { Route as QscRouteImport } from './routes/qsc'
+import { Route as QuartilRouteImport } from './routes/quartil'
 import { Route as RelatorioExecutivoRouteImport } from './routes/relatorio-executivo'
 import { Route as ResultadosRouteImport } from './routes/resultados'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
 import { Route as ApiQscRouteImport } from './routes/api.qsc'
+import { Route as ApiQuartilRouteImport } from './routes/api.quartil'
 import { Route as ApiAdminUsersRouteImport } from './routes/api.admin.users'
 import { Route as ApiAuthLoginRouteImport } from './routes/api.auth.login'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
@@ -85,6 +87,11 @@ const QscRoute = QscRouteImport.update({
   path: '/qsc',
   getParentRoute: () => rootRouteImport,
 } as any)
+const QuartilRoute = QuartilRouteImport.update({
+  id: '/quartil',
+  path: '/quartil',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RelatorioExecutivoRoute = RelatorioExecutivoRouteImport.update({
   id: '/relatorio-executivo',
   path: '/relatorio-executivo',
@@ -108,6 +115,11 @@ const UsuariosRoute = UsuariosRouteImport.update({
 const ApiQscRoute = ApiQscRouteImport.update({
   id: '/api/qsc',
   path: '/api/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiQuartilRoute = ApiQuartilRouteImport.update({
+  id: '/api/quartil',
+  path: '/api/quartil',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
@@ -172,11 +184,13 @@ export interface FileRoutesByFullPath {
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/quartil': typeof QuartilRoute
   '/relatorio-executivo': typeof RelatorioExecutivoRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
   '/api/qsc': typeof ApiQscRoute
+  '/api/quartil': typeof ApiQuartilRoute
   '/api/admin/users': typeof ApiAdminUsersRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -199,11 +213,13 @@ export interface FileRoutesByTo {
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/quartil': typeof QuartilRoute
   '/relatorio-executivo': typeof RelatorioExecutivoRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
   '/api/qsc': typeof ApiQscRoute
+  '/api/quartil': typeof ApiQuartilRoute
   '/api/admin/users': typeof ApiAdminUsersRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -227,11 +243,13 @@ export interface FileRoutesById {
   '/movel': typeof MovelRoute
   '/pbi': typeof PbiRoute
   '/qsc': typeof QscRoute
+  '/quartil': typeof QuartilRoute
   '/relatorio-executivo': typeof RelatorioExecutivoRoute
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
   '/api/qsc': typeof ApiQscRoute
+  '/api/quartil': typeof ApiQuartilRoute
   '/api/admin/users': typeof ApiAdminUsersRoute
   '/api/auth/login': typeof ApiAuthLoginRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
@@ -256,11 +274,13 @@ export interface FileRouteTypes {
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/quartil'
     | '/relatorio-executivo'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
     | '/api/qsc'
+    | '/api/quartil'
     | '/api/admin/users'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -283,11 +303,13 @@ export interface FileRouteTypes {
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/quartil'
     | '/relatorio-executivo'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
     | '/api/qsc'
+    | '/api/quartil'
     | '/api/admin/users'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -310,11 +332,13 @@ export interface FileRouteTypes {
     | '/movel'
     | '/pbi'
     | '/qsc'
+    | '/quartil'
     | '/relatorio-executivo'
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
     | '/api/qsc'
+    | '/api/quartil'
     | '/api/admin/users'
     | '/api/auth/login'
     | '/api/auth/logout'
@@ -338,11 +362,13 @@ export interface RootRouteChildren {
   MovelRoute: typeof MovelRoute
   PbiRoute: typeof PbiRoute
   QscRoute: typeof QscRoute
+  QuartilRoute: typeof QuartilRoute
   RelatorioExecutivoRoute: typeof RelatorioExecutivoRoute
   ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UsuariosRoute: typeof UsuariosRoute
   ApiQscRoute: typeof ApiQscRoute
+  ApiQuartilRoute: typeof ApiQuartilRoute
   ApiAdminUsersRoute: typeof ApiAdminUsersRoute
   ApiAuthLoginRoute: typeof ApiAuthLoginRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
@@ -427,6 +453,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof QscRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/quartil': {
+      id: '/quartil'
+      path: '/quartil'
+      fullPath: '/quartil'
+      preLoaderRoute: typeof QuartilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/relatorio-executivo': {
       id: '/relatorio-executivo'
       path: '/relatorio-executivo'
@@ -460,6 +493,13 @@ declare module '@tanstack/react-router' {
       path: '/api/qsc'
       fullPath: '/api/qsc'
       preLoaderRoute: typeof ApiQscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/quartil': {
+      id: '/api/quartil'
+      path: '/api/quartil'
+      fullPath: '/api/quartil'
+      preLoaderRoute: typeof ApiQuartilRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/admin/users': {
@@ -546,11 +586,13 @@ const rootRouteChildren: RootRouteChildren = {
   MovelRoute: MovelRoute,
   PbiRoute: PbiRoute,
   QscRoute: QscRoute,
+  QuartilRoute: QuartilRoute,
   RelatorioExecutivoRoute: RelatorioExecutivoRoute,
   ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UsuariosRoute: UsuariosRoute,
   ApiQscRoute: ApiQscRoute,
+  ApiQuartilRoute: ApiQuartilRoute,
   ApiAdminUsersRoute: ApiAdminUsersRoute,
   ApiAuthLoginRoute: ApiAuthLoginRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,

@@ -82,12 +82,12 @@ function parseCsv(text) {
   return rows;
 }
 
-export async function readSpreadsheetRows(filePath) {
+export async function readSpreadsheetRows(filePath, sheetPath = "xl/worksheets/sheet1.xml") {
   const bytes = await fs.readFile(filePath);
   if (path.extname(filePath).toLowerCase() === ".csv")
     return parseCsv(new TextDecoder().decode(bytes));
   const entries = zipEntries(bytes);
-  const sheetEntry = entries.get("xl/worksheets/sheet1.xml");
+  const sheetEntry = entries.get(sheetPath);
   if (!sheetEntry) throw new Error("A primeira aba da planilha não foi encontrada.");
   const sharedEntry = entries.get("xl/sharedStrings.xml");
   const shared = sharedEntry
@@ -104,23 +104,56 @@ export async function readSpreadsheetRows(filePath) {
       )
     : [];
   const sheet = new TextDecoder().decode(unzipEntry(bytes, sheetEntry));
-  return [...sheet.matchAll(/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/g)].map(([, rowXml]) => {
-    const row = [];
-    let nextIndex = 0;
-    for (const [, attributes, body = ""] of rowXml.matchAll(
-      /<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g,
-    )) {
-      const reference = attributes.match(/\br="([A-Z]+\d+)"/)?.[1];
-      const type = attributes.match(/\bt="([^"]+)"/)?.[1] ?? "";
-      const index = reference ? columnIndex(reference) : nextIndex;
-      nextIndex = index + 1;
-      const raw = body.match(/<(?:\w+:)?v>([\s\S]*?)<\/(?:\w+:)?v>/)?.[1] ?? "";
-      const inline = body.match(/<(?:\w+:)?t[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/)?.[1] ?? "";
-      row[index] =
-        type === "s" ? (shared[Number(raw)] ?? "") : type === "inlineStr" ? decodeXml(inline) : raw;
-    }
-    return row;
-  });
+  return [...sheet.matchAll(/<(?:\w+:)?row\b[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/g)].map(
+    ([, rowXml]) => {
+      const row = [];
+      let nextIndex = 0;
+      for (const [, attributes, body = ""] of rowXml.matchAll(
+        /<(?:\w+:)?c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?c>)/g,
+      )) {
+        const reference = attributes.match(/\br="([A-Z]+\d+)"/)?.[1];
+        const type = attributes.match(/\bt="([^"]+)"/)?.[1] ?? "";
+        const index = reference ? columnIndex(reference) : nextIndex;
+        nextIndex = index + 1;
+        const raw = body.match(/<(?:\w+:)?v>([\s\S]*?)<\/(?:\w+:)?v>/)?.[1] ?? "";
+        const inline = body.match(/<(?:\w+:)?t[^>]*>([\s\S]*?)<\/(?:\w+:)?t>/)?.[1] ?? "";
+        row[index] =
+          type === "s"
+            ? (shared[Number(raw)] ?? "")
+            : type === "inlineStr"
+              ? decodeXml(inline)
+              : raw;
+      }
+      return row;
+    },
+  );
+}
+
+export async function readSpreadsheetSheets(filePath) {
+  const bytes = await fs.readFile(filePath);
+  const entries = zipEntries(bytes);
+  const xml = (name) => {
+    const entry = entries.get(name);
+    if (!entry) throw new Error(`Estrutura XLSX ausente: ${name}`);
+    return new TextDecoder().decode(unzipEntry(bytes, entry));
+  };
+  const relationships = new Map(
+    [...xml("xl/_rels/workbook.xml.rels").matchAll(/<Relationship\b([^>]+)\/?\s*>/g)].map(
+      ([, attrs]) => [attrs.match(/\bId="([^"]+)"/)?.[1], attrs.match(/\bTarget="([^"]+)"/)?.[1]],
+    ),
+  );
+  const sheets = [];
+  for (const [, attrs] of xml("xl/workbook.xml").matchAll(/<sheet\b([^>]+)\/?\s*>/g)) {
+    const name = decodeXml(attrs.match(/\bname="([^"]+)"/)?.[1]);
+    if (normalizeHeader(name) === "TABELADECONSULTORES") continue;
+    const target = relationships.get(attrs.match(/\br:id="([^"]+)"/)?.[1]);
+    if (!target) throw new Error(`Aba ${name} sem conteúdo.`);
+    const sheetPath = target.startsWith("/")
+      ? target.slice(1)
+      : path.posix.normalize(`xl/${target}`);
+    sheets.push({ name, rows: await readSpreadsheetRows(filePath, sheetPath) });
+  }
+  return sheets;
 }
 
 export function normalizeHeader(value) {

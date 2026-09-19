@@ -47,7 +47,11 @@ function availablePartners() {
   const bestGuessSnapshot = getDataSnapshot("best-guess");
   const portabilidadeSnapshot = getDataSnapshot("portabilidade-analitica");
   const partners = new Map<string, { id: string; name: string }>();
-  for (const partner of [...mapaParqueSnapshot.partners, ...qscSnapshot.partners]) {
+  for (const partner of [
+    ...getDataSnapshot("quartil").partners,
+    ...mapaParqueSnapshot.partners,
+    ...qscSnapshot.partners,
+  ]) {
     partners.set(normalizePartnerName(partner.name), { id: partner.id, name: partner.name });
   }
 

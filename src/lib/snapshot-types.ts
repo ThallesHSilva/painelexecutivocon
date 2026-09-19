@@ -155,6 +155,7 @@ export type QscSnapshot = {
 };
 
 export type SnapshotKindMap = {
+  quartil: import("./quartil").QuartilSnapshot;
   "mapa-parque": MapaSnapshot;
   "resultados-yoy": ResultadosYoySnapshot;
   "best-guess": BestGuessSnapshot;
@@ -192,6 +193,14 @@ export const EMPTY_MAPA_SNAPSHOT: MapaSnapshot = {
 };
 
 export const EMPTY_SNAPSHOTS: SnapshotKindMap = {
+  quartil: {
+    source: { report: "", importedAt: "" },
+    latestMonth: "",
+    months: [],
+    partners: [],
+    consultants: [],
+    warnings: [],
+  },
   "mapa-parque": EMPTY_MAPA_SNAPSHOT,
   "resultados-yoy": {
     source: {

@@ -19,6 +19,7 @@ import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { readXlsxRows } from "@/lib/xlsx-reader";
 
 type FileKind =
+  | "Quartil"
   | "Mapa Parque"
   | "Resultados YoY"
   | "QSC Carteira"
@@ -112,6 +113,11 @@ const EXPECTED_BASES = [
     title: "QSC Móvel",
     description: "Indicadores de qualidade móvel",
   },
+  {
+    number: "09",
+    title: "Quartil",
+    description: "Consultores por parceiro, abas mensais e evolução de Receita, Móvel e FTTH",
+  },
 ] as const;
 
 const formatFileSize = (bytes: number) =>
@@ -172,6 +178,7 @@ function hasHeaders(headers: Set<string>, required: string[]) {
 
 function identifyByFileName(fileName: string): Exclude<FileKind, "Base não reconhecida"> | null {
   const name = normalizeHeader(fileName.replace(/\.[^.]+$/, ""));
+  if (name.includes("QUARTIL")) return "Quartil";
   if (name.includes("MAPAPARQUE")) return "Mapa Parque";
   if (name.includes("RESULTADO") && name.includes("YOY")) return "Resultados YoY";
   if (name.includes("BESTGUESS")) return "Best Guess";
@@ -224,6 +231,7 @@ async function identifySpreadsheet(file: File): Promise<FileKind> {
   const combinedHeaders = new Set(headers.flatMap((row) => [...row]));
   const sampleMatching = (required: string[]) => hasHeaders(combinedHeaders, required);
   const matches = (required: string[]) => firstMatching(required) || sampleMatching(required);
+  if (matches(["CONSULTOR", "RECEITATELECOMTT", "FISICOSMOVEL", "FISICOSFTTH"])) return "Quartil";
 
   if (
     matches(["NRCNPJ", "TPPRODUTO"]) ||
@@ -348,6 +356,7 @@ const UPLOAD_KIND_LABELS: Record<string, string> = {
   "mapa-parque": "Mapa Parque",
   "resultados-yoy": "Resultados YoY",
   "best-guess": "Best Guess",
+  quartil: "Quartil",
   "portabilidade-analitica": "Portabilidade analítica",
   "torres-servico": "Torres de serviço",
   qsc: "QSC consolidado",
@@ -404,6 +413,7 @@ function AlimentacaoPage() {
                 "Best Guess",
                 "Portabilidade analítica",
                 "Torres de serviço",
+                "Quartil",
                 "QSC Carteira",
                 "QSC Fixa",
                 "QSC Móvel",

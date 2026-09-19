@@ -30,6 +30,7 @@ const MAX_FILE_SIZE = 500 * 1024 * 1024;
 const MAX_CHUNK_SIZE = 20 * 1024 * 1024;
 const QSC_KINDS = ["QSC Carteira", "QSC Fixa", "QSC Móvel"] as const;
 const DIRECTOR_KINDS = [
+  "Quartil",
   "Mapa Parque",
   "Resultados YoY",
   "Best Guess",
@@ -461,6 +462,30 @@ export const Route = createFileRoute("/api/data/upload")({
             );
             await persistSnapshot({
               kind: "mapa-parque",
+              snapshotPath,
+              sourceName: originalName,
+              uploadedBy: user?.email,
+              sizeBytes: declaredFileSize || contentLength,
+            });
+            return importedResponse({
+              imported: true,
+              processed: true,
+              result: JSON.parse(stdout),
+            });
+          }
+
+          if (kind === "Quartil") {
+            const snapshotPath = path.join(
+              snapshotDirectory,
+              `${Date.now()}-quartil.snapshot.json`,
+            );
+            const { stdout } = await execFileAsync(
+              process.execPath,
+              [path.resolve("scripts", "process-quartil.mjs"), uploadedPath, snapshotPath],
+              { maxBuffer: 10 * 1024 * 1024, timeout: 30 * 60 * 1000 },
+            );
+            await persistSnapshot({
+              kind: "quartil",
               snapshotPath,
               sourceName: originalName,
               uploadedBy: user?.email,

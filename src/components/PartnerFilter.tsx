@@ -7,9 +7,22 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Check, ChevronDown, Search, Users, X } from "lucide-react";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { usePartners } from "@/hooks/useData";
+import { useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 
 export function PartnerFilter() {
-  const { data: partners = [] } = usePartners();
+  const { data: mapaPartners = [] } = usePartners();
+  const isQuartil = useRouterState({ select: (state) => state.location.pathname === "/quartil" });
+  const { data: quartilPartners } = useQuery({
+    queryKey: ["quartil-partners"],
+    enabled: isQuartil,
+    queryFn: async (): Promise<{ id: string; name: string }[]> => {
+      const response = await fetch("/api/quartil?partnersOnly=1", { cache: "no-store" });
+      if (!response.ok) throw new Error("Não foi possível carregar os parceiros.");
+      return (await response.json()).partners;
+    },
+  });
+  const partners = isQuartil ? (quartilPartners ?? mapaPartners) : mapaPartners;
   const { selected, toggle, clear, setSelected, allowedPartnerIds, role } = usePartnerFilter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");

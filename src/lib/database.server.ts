@@ -7,6 +7,7 @@ export type UserStatus = "pending" | "approved" | "rejected";
 export type UserRole = "gn" | "director";
 
 export type DataSnapshotKind =
+  | "quartil"
   | "mapa-parque"
   | "resultados-yoy"
   | "best-guess"

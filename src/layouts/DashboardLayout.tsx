@@ -38,6 +38,7 @@ const OPPORTUNITY_NAV = [
 ] as const;
 
 const SECONDARY_NAV = [
+  { to: "/quartil", label: "Quartil", icon: ChartNoAxesCombined },
   { to: "/qsc", label: "QSC", icon: ClipboardCheck },
   { to: "/pbi", label: "PBI", icon: MonitorPlay },
 ] as const;
