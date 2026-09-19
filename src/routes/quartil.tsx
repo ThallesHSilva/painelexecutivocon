@@ -13,6 +13,10 @@ import {
   Wifi,
   Wallet,
   ArrowRight,
+  Award,
+  Target,
+  Activity,
+  X,
 } from "lucide-react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { usePartnerFilter } from "@/contexts/AppContexts";
@@ -21,7 +25,7 @@ import { Input } from "@/components/ui/input";
 import type { QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
 
 export const Route = createFileRoute("/quartil")({
-  head: () => ({ meta: [{ title: "Quartil — Mapa Parque" }] }),
+  head: () => ({ meta: [{ title: "Quartil de Consultores — Mapa Parque" }] }),
   component: QuartilPage,
 });
 const metrics: { id: QuartilMetric; label: string }[] = [
@@ -47,6 +51,22 @@ const labelMonth = (month: string) =>
       })
     : "—";
 const number = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+type EvolutionPeriod = "3" | "6";
+type EvolutionStatus = "up" | "down" | "stable" | "missing";
+type EvolutionFilter = { period: EvolutionPeriod; status: EvolutionStatus } | null;
+const evolutionLabels: Record<EvolutionStatus, string> = {
+  up: "Evoluíram",
+  down: "Regrediram",
+  stable: "Estáveis",
+  missing: "Sem histórico",
+};
+
+function matchesEvolution(value: number | null, status: EvolutionStatus) {
+  if (status === "missing") return value === null;
+  if (status === "stable") return value === 0;
+  if (status === "up") return value !== null && value > 0;
+  return value !== null && value < 0;
+}
 function Badge({ value }: { value: number | null | undefined }) {
   return (
     <span
@@ -77,6 +97,7 @@ function QuartilPage() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [evolutionFilter, setEvolutionFilter] = useState<EvolutionFilter>(null);
   const { data, isPending, error } = useQuery<QuartilSnapshot>({
     queryKey: ["quartil", effectiveSelected],
     queryFn: async () => {
@@ -112,7 +133,28 @@ function QuartilPage() {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
-  const rows = consultants
+  const rankedConsultants = [...consultants].sort((a, b) => {
+    const aValue = a.values[metric];
+    const bValue = b.values[metric];
+    if (aValue === null && bValue === null) return a.name.localeCompare(b.name);
+    if (aValue === null) return 1;
+    if (bValue === null) return -1;
+    return bValue - aValue || a.name.localeCompare(b.name);
+  });
+  const ranking = new Map<string, number | null>();
+  let lastRankedValue: number | null | undefined;
+  let currentRank = 0;
+  rankedConsultants.forEach((consultant, index) => {
+    const value = consultant.values[metric];
+    if (value === null) {
+      ranking.set(consultant.id, null);
+      return;
+    }
+    if (lastRankedValue === undefined || value !== lastRankedValue) currentRank = index + 1;
+    ranking.set(consultant.id, currentRank);
+    lastRankedValue = value;
+  });
+  const rows = rankedConsultants
     .filter((c) =>
       `${c.name} ${c.partnerName}`
         .normalize("NFD")
@@ -120,7 +162,14 @@ function QuartilPage() {
         .toLowerCase()
         .includes(normalizedSearch),
     )
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .filter((c) =>
+      evolutionFilter
+        ? matchesEvolution(
+            c.comparisons[evolutionFilter.period].changes[metric],
+            evolutionFilter.status,
+          )
+        : true,
+    );
   const actualPage = Math.min(page, Math.max(0, Math.ceil(rows.length / 20) - 1));
   const shown = rows.slice(actualPage * 20, actualPage * 20 + 20);
   const selectedLabel = metrics.find((m) => m.id === metric)!.label;
@@ -137,11 +186,8 @@ function QuartilPage() {
               Desempenho dos consultores
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-              Quartil<span className="text-primary">.</span>
+              Quartil de Consultores<span className="text-primary">.</span>
             </h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Três indicadores. Uma visão da performance de cada consultor.
-            </p>
           </div>
         </div>
         {isPending ? (
@@ -211,7 +257,11 @@ function QuartilPage() {
                 {metrics.map((m) => (
                   <button
                     key={m.id}
-                    onClick={() => setMetric(m.id)}
+                    onClick={() => {
+                      setMetric(m.id);
+                      setPage(0);
+                      setExpanded(null);
+                    }}
                     aria-pressed={metric === m.id}
                     className={`rounded-lg px-5 py-2.5 text-sm font-medium transition ${metric === m.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                   >
@@ -330,32 +380,58 @@ function QuartilPage() {
                     <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       {[
                         {
+                          status: "up" as const,
                           label: "Evoluíram",
                           count: changes.filter((v) => v !== null && v > 0).length,
                           color: "text-emerald-600",
                         },
                         {
+                          status: "down" as const,
                           label: "Regrediram",
                           count: changes.filter((v) => v !== null && v < 0).length,
                           color: "text-rose-600",
                         },
                         {
+                          status: "stable" as const,
                           label: "Estáveis",
                           count: changes.filter((v) => v === 0).length,
                           color: "text-foreground",
                         },
                         {
+                          status: "missing" as const,
                           label: "Sem histórico",
                           count: changes.filter((v) => v === null).length,
                           color: "text-muted-foreground",
                         },
                       ].map((item) => (
-                        <div key={item.label} className="rounded-xl bg-muted/35 p-3">
+                        <button
+                          key={item.label}
+                          type="button"
+                          aria-pressed={
+                            evolutionFilter?.period === period &&
+                            evolutionFilter.status === item.status
+                          }
+                          onClick={() => {
+                            setEvolutionFilter((current) =>
+                              current?.period === period && current.status === item.status
+                                ? null
+                                : { period, status: item.status },
+                            );
+                            setPage(0);
+                            setExpanded(null);
+                          }}
+                          className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
+                            evolutionFilter?.period === period &&
+                            evolutionFilter.status === item.status
+                              ? "border-primary bg-primary/[0.08] ring-2 ring-primary/15"
+                              : "border-transparent bg-muted/35 hover:border-primary/20"
+                          }`}
+                        >
                           <p className={`text-2xl font-semibold tabular-nums ${item.color}`}>
                             {item.count}
                           </p>
                           <p className="mt-1 text-xs text-muted-foreground">{item.label}</p>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </Card>
@@ -365,10 +441,28 @@ function QuartilPage() {
             <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
                 <div>
-                  <h2 className="font-semibold">Consultores e trajetória</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-semibold">Ranking de consultores</h2>
+                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+                      {selectedLabel}
+                    </span>
+                  </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Selecione um consultor para abrir seu histórico nos três indicadores.
+                    Ordenado pelo resultado atual. Selecione um consultor para abrir sua análise.
                   </p>
+                  {evolutionFilter && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEvolutionFilter(null);
+                        setPage(0);
+                      }}
+                      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                    >
+                      {evolutionLabels[evolutionFilter.status]} · {evolutionFilter.period} meses
+                      <X className="size-3.5" />
+                    </button>
+                  )}
                 </div>
                 <div className="relative w-full sm:w-72">
                   <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
@@ -388,6 +482,7 @@ function QuartilPage() {
                 <table className="w-full min-w-[950px] text-sm">
                   <thead className="bg-muted/40 text-xs text-muted-foreground">
                     <tr>
+                      <th className="px-3 py-3 text-center">Posição</th>
                       <th className="px-5 py-3 text-left">Consultor / parceiro</th>
                       <th className="px-3 py-3 text-center">Tempo de casa</th>
                       {metrics.map((m) => (
@@ -407,6 +502,7 @@ function QuartilPage() {
                       <ConsultantRows
                         key={c.id}
                         consultant={c}
+                        rank={ranking.get(c.id) ?? null}
                         metric={metric}
                         months={data.months.slice(-7)}
                         expanded={expanded === c.id}
@@ -417,7 +513,7 @@ function QuartilPage() {
                 </table>
                 {!rows.length && (
                   <p className="p-8 text-center text-sm text-muted-foreground">
-                    Nenhum consultor encontrado para esta busca.
+                    Nenhum consultor corresponde aos filtros aplicados.
                   </p>
                 )}
               </div>
@@ -523,20 +619,67 @@ function QuartilPage() {
 
 function ConsultantRows({
   consultant: c,
+  rank,
   metric,
   months,
   expanded,
   onToggle,
 }: {
   consultant: import("@/lib/quartil").QuartilConsultant;
+  rank: number | null;
   metric: QuartilMetric;
   months: string[];
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const classified = metrics
+    .map((item) => ({ ...item, quartile: c.quartiles[item.id] }))
+    .filter(
+      (item): item is (typeof metrics)[number] & { quartile: number } => item.quartile !== null,
+    );
+  const bestQuartile = classified.length
+    ? Math.min(...classified.map((item) => item.quartile))
+    : null;
+  const weakestQuartile = classified.length
+    ? Math.max(...classified.map((item) => item.quartile))
+    : null;
+  const strongest = classified.filter((item) => item.quartile === bestQuartile);
+  const weakest = classified.filter((item) => item.quartile === weakestQuartile);
+  const balanced = bestQuartile !== null && bestQuartile === weakestQuartile;
+  const recentChanges = metrics.map((item) => ({
+    label: item.label,
+    value: c.comparisons["3"].changes[item.id],
+  }));
+  const improving = recentChanges.filter((item) => item.value !== null && item.value > 0);
+  const declining = recentChanges.filter((item) => item.value !== null && item.value < 0);
+  const trendText =
+    improving.length && declining.length
+      ? `Evolução em ${improving.map((item) => item.label).join(", ")} e regressão em ${declining.map((item) => item.label).join(", ")}.`
+      : improving.length
+        ? `Evolução em ${improving.map((item) => item.label).join(", ")} nos últimos 3 meses.`
+        : declining.length
+          ? `Regressão em ${declining.map((item) => item.label).join(", ")} nos últimos 3 meses.`
+          : recentChanges.every((item) => item.value === null)
+            ? "Ainda não há histórico suficiente para avaliar a trajetória."
+            : "Desempenho estável nos últimos 3 meses.";
+  const rankStyle =
+    rank === 1
+      ? "bg-amber-400/20 text-amber-700 dark:text-amber-300"
+      : rank === 2
+        ? "bg-slate-400/20 text-slate-700 dark:text-slate-300"
+        : rank === 3
+          ? "bg-orange-500/15 text-orange-700 dark:text-orange-300"
+          : "bg-muted text-muted-foreground";
   return (
     <>
       <tr className="border-t border-border/50 hover:bg-muted/20">
+        <td className="px-3 py-3 text-center">
+          <span
+            className={`inline-flex min-w-9 items-center justify-center rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${rankStyle}`}
+          >
+            {rank === null ? "—" : `${rank}º`}
+          </span>
+        </td>
         <td className="px-5 py-3">
           <button
             className="flex items-center gap-2 text-left"
@@ -578,37 +721,82 @@ function ConsultantRows({
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={8} className="bg-primary/[0.025] px-6 py-5">
-            <table className="w-full text-xs">
-              <thead>
-                <tr>
-                  <th className="p-2 text-left">Histórico</th>
-                  {months.map((month) => (
-                    <th key={month} className="p-2 text-center capitalize">
-                      {labelMonth(month)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.map((m) => (
-                  <tr key={m.id}>
-                    <td className="p-2 font-medium">{m.label}</td>
-                    {months.map((month) => {
-                      const point = c.history.find((p) => p.month === month);
-                      return (
-                        <td key={month} className="p-2 text-center">
-                          <Badge value={point?.quartiles[m.id]} />
-                          <span className="mt-1 block text-muted-foreground tabular-nums">
-                            {point?.values[m.id] != null ? number(point.values[m.id]!) : "Sem dado"}
-                          </span>
-                        </td>
-                      );
-                    })}
+          <td colSpan={9} className="bg-primary/[0.025] px-6 py-5">
+            <div className="mb-5 grid gap-3 lg:grid-cols-3">
+              <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                  <Award className="size-4" /> Ponto forte
+                </div>
+                <p className="mt-2 text-sm font-medium">
+                  {bestQuartile === null
+                    ? "Dados insuficientes para classificação."
+                    : balanced
+                      ? `Desempenho equilibrado nos três indicadores · Q${bestQuartile}`
+                      : `${strongest.map((item) => item.label).join(" e ")} · Q${bestQuartile}`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Melhor posição atual entre os três indicadores.
+                </p>
+              </div>
+              <div className="rounded-xl border border-orange-500/15 bg-orange-500/[0.06] p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
+                  <Target className="size-4" /> Ponto de atenção
+                </div>
+                <p className="mt-2 text-sm font-medium">
+                  {weakestQuartile === null
+                    ? "Dados insuficientes para classificação."
+                    : balanced
+                      ? `Os três indicadores estão no Q${weakestQuartile}`
+                      : `${weakest.map((item) => item.label).join(" e ")} · Q${weakestQuartile}`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Indicador com maior espaço para evolução.
+                </p>
+              </div>
+              <div className="rounded-xl border border-primary/15 bg-primary/[0.06] p-4">
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
+                  <Activity className="size-4" /> Trajetória
+                </div>
+                <p className="mt-2 text-sm font-medium">{trendText}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Leitura baseada na variação dos quartis.
+                </p>
+              </div>
+            </div>
+            <div className="overflow-x-auto rounded-xl border bg-card/70">
+              <table className="w-full min-w-[720px] text-xs">
+                <thead>
+                  <tr>
+                    <th className="p-2 text-left">Histórico</th>
+                    {months.map((month) => (
+                      <th key={month} className="p-2 text-center capitalize">
+                        {labelMonth(month)}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {metrics.map((m) => (
+                    <tr key={m.id}>
+                      <td className="p-2 font-medium">{m.label}</td>
+                      {months.map((month) => {
+                        const point = c.history.find((p) => p.month === month);
+                        return (
+                          <td key={month} className="p-2 text-center">
+                            <Badge value={point?.quartiles[m.id]} />
+                            <span className="mt-1 block text-muted-foreground tabular-nums">
+                              {point?.values[m.id] != null
+                                ? number(point.values[m.id]!)
+                                : "Sem dado"}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </td>
         </tr>
       )}
