@@ -1,7 +1,19 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownRight, ArrowUpRight, Minus, Users, ChevronDown, Search } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Minus,
+  Users,
+  ChevronDown,
+  Search,
+  BarChart3,
+  Smartphone,
+  Wifi,
+  Wallet,
+  ArrowRight,
+} from "lucide-react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { Card } from "@/components/ui/card";
@@ -18,6 +30,7 @@ const metrics: { id: QuartilMetric; label: string }[] = [
   { id: "ftth", label: "FTTH" },
 ];
 const colors = ["bg-emerald-500", "bg-teal-500", "bg-amber-400", "bg-orange-500", "bg-rose-500"];
+const metricIcons = { receita: Wallet, movel: Smartphone, ftth: Wifi };
 const badges = [
   "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
   "bg-teal-500/10 text-teal-700 dark:text-teal-300",
@@ -110,15 +123,25 @@ function QuartilPage() {
     .sort((a, b) => a.name.localeCompare(b.name));
   const actualPage = Math.min(page, Math.max(0, Math.ceil(rows.length / 20) - 1));
   const shown = rows.slice(actualPage * 20, actualPage * 20 + 20);
+  const selectedLabel = metrics.find((m) => m.id === metric)!.label;
+  const bandTotals = Array.from(
+    { length: 5 },
+    (_, i) => consultants.filter((c) => c.quartiles[metric] === i + 1).length,
+  );
   return (
     <DashboardLayout title="Quartil">
-      <div className="space-y-6">
+      <div className="space-y-6 [&_table_th]:whitespace-nowrap [&_table_th]:font-medium [&_button]:focus-visible:outline-primary [&_table_tbody_tr]:transition-colors">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-primary">
               Desempenho dos consultores
             </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Quartil</h1>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
+              Quartil<span className="text-primary">.</span>
+            </h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Três indicadores. Uma visão da performance de cada consultor.
+            </p>
           </div>
         </div>
         {isPending ? (
@@ -138,28 +161,49 @@ function QuartilPage() {
         ) : (
           <>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="flex items-center justify-between p-5">
+              <Card className="relative flex items-center justify-between overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary to-violet-950 p-6 text-white shadow-lg shadow-primary/10">
                 <div>
-                  <p className="text-sm text-muted-foreground">Consultores atuais</p>
+                  <p className="text-sm text-white/75">Consultores acompanhados</p>
                   <p className="mt-2 text-3xl font-semibold tabular-nums">
                     {number(consultants.length)}
                   </p>
                 </div>
-                <Users className="size-7 text-primary/70" />
+                <Users className="size-10 text-white/40" />
               </Card>
-              {metrics.map((m) => (
-                <Card key={m.id} className="p-5">
-                  <p className="text-sm text-muted-foreground">{m.label} · Quartil 1</p>
-                  <p className="mt-2 text-3xl font-semibold tabular-nums">
-                    {consultants.filter((c) => c.quartiles[m.id] === 1).length}
-                    <span className="ml-2 text-sm font-normal text-muted-foreground">
-                      consultores
-                    </span>
-                  </p>
-                </Card>
-              ))}
+              {metrics.map((m) => {
+                const Icon = metricIcons[m.id];
+                const count = consultants.filter((c) => c.quartiles[m.id] === 1).length;
+                const share = consultants.length ? (count / consultants.length) * 100 : 0;
+                return (
+                  <Card key={m.id} className="rounded-2xl border-border/60 p-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium">{m.label}</p>
+                      <Icon className="size-4 text-primary" />
+                    </div>
+                    <p className="mt-2 text-3xl font-semibold tabular-nums">
+                      {count}
+                      <span className="ml-2 text-sm font-normal text-muted-foreground">no Q1</span>
+                    </p>
+                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-primary/70"
+                        style={{ width: `${share}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      {number(share)}% dos consultores na melhor faixa
+                    </p>
+                  </Card>
+                );
+              })}
             </div>
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/10 bg-primary/[0.035] p-4">
+              <div>
+                <p className="text-sm font-semibold">Explore por indicador</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  A seleção atualiza a distribuição e a evolução abaixo.
+                </p>
+              </div>
               <div
                 className="inline-flex rounded-xl border bg-muted/40 p-1"
                 aria-label="Indicador do quartil"
@@ -169,19 +213,54 @@ function QuartilPage() {
                     key={m.id}
                     onClick={() => setMetric(m.id)}
                     aria-pressed={metric === m.id}
-                    className={`rounded-lg px-5 py-2 text-sm font-medium transition ${metric === m.id ? "bg-card text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                    className={`rounded-lg px-5 py-2.5 text-sm font-medium transition ${metric === m.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
                   >
                     {m.label}
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Q1 é o melhor desempenho · classificação por tempo de casa
-              </p>
             </div>
-            <Card className="overflow-hidden">
-              <div className="border-b px-5 py-4">
-                <h2 className="font-semibold">Distribuição por parceiro</h2>
+            <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
+              <div className="space-y-5 border-b p-5 sm:p-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="flex items-center gap-2 font-semibold">
+                    <BarChart3 className="size-4 text-primary" />
+                    Distribuição por parceiro
+                  </h2>
+                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
+                    {selectedLabel}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                  {bandTotals.map((count, i) => (
+                    <div key={i} className="rounded-xl border border-border/50 bg-muted/20 p-3">
+                      <div className="flex items-center justify-between">
+                        <Badge value={i + 1} />
+                        <span className="text-lg font-semibold tabular-nums">{count}</span>
+                      </div>
+                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={`h-full ${colors[i]}`}
+                          style={{
+                            width: `${consultants.length ? (count / consultants.length) * 100 : 0}%`,
+                          }}
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {number(consultants.length ? (count / consultants.length) * 100 : 0)}% da
+                        equipe
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                    Q1 · melhor desempenho
+                  </span>
+                  <ArrowRight className="size-3" />
+                  <span>Q5 · maior espaço para evolução</span>
+                  <span className="sm:ml-auto">Faixas conforme o tempo de casa</span>
+                </p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-sm">
@@ -241,14 +320,14 @@ function QuartilPage() {
                 const changes = consultants.map((c) => c.comparisons[period].changes[metric]);
                 const before = consultants[0]?.comparisons[period].month;
                 return (
-                  <Card key={period} className="p-5">
-                    <div className="flex items-center justify-between">
+                  <Card key={period} className="rounded-2xl border-border/60 p-5 shadow-sm sm:p-6">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <h2 className="font-semibold">Evolução em {period} meses</h2>
                       <span className="text-xs text-muted-foreground">
                         {before ? `${labelMonth(before)} → ${labelMonth(data.latestMonth)}` : "—"}
                       </span>
                     </div>
-                    <div className="mt-5 grid grid-cols-4 gap-2">
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       {[
                         {
                           label: "Evoluíram",
@@ -271,7 +350,7 @@ function QuartilPage() {
                           color: "text-muted-foreground",
                         },
                       ].map((item) => (
-                        <div key={item.label}>
+                        <div key={item.label} className="rounded-xl bg-muted/35 p-3">
                           <p className={`text-2xl font-semibold tabular-nums ${item.color}`}>
                             {item.count}
                           </p>
@@ -283,9 +362,14 @@ function QuartilPage() {
                 );
               })}
             </div>
-            <Card className="overflow-hidden">
+            <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-                <h2 className="font-semibold">Consultores e trajetória</h2>
+                <div>
+                  <h2 className="font-semibold">Consultores e trajetória</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Selecione um consultor para abrir seu histórico nos três indicadores.
+                  </p>
+                </div>
                 <div className="relative w-full sm:w-72">
                   <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
                   <Input
@@ -331,6 +415,11 @@ function QuartilPage() {
                     ))}
                   </tbody>
                 </table>
+                {!rows.length && (
+                  <p className="p-8 text-center text-sm text-muted-foreground">
+                    Nenhum consultor encontrado para esta busca.
+                  </p>
+                )}
               </div>
               <div className="flex items-center justify-between border-t px-5 py-3 text-xs text-muted-foreground">
                 <span>
@@ -341,14 +430,14 @@ function QuartilPage() {
                   <button
                     disabled={actualPage === 0}
                     onClick={() => setPage(actualPage - 1)}
-                    className="disabled:opacity-30"
+                    className="rounded-lg border px-3 py-2 hover:bg-muted disabled:opacity-30"
                   >
                     Anterior
                   </button>
                   <button
                     disabled={(actualPage + 1) * 20 >= rows.length}
                     onClick={() => setPage(actualPage + 1)}
-                    className="disabled:opacity-30"
+                    className="rounded-lg border px-3 py-2 hover:bg-muted disabled:opacity-30"
                   >
                     Próxima
                   </button>
