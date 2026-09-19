@@ -120,10 +120,6 @@ function QuartilPage() {
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight">Quartil</h1>
           </div>
-          <div className="rounded-xl border border-primary/10 bg-card px-4 py-2 text-sm">
-            Base atual{" "}
-            <strong className="ml-2 capitalize">{labelMonth(data?.latestMonth ?? "")}</strong>
-          </div>
         </div>
         {isPending ? (
           <Card className="p-8 text-muted-foreground">Carregando quartis…</Card>
