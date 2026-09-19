@@ -141,17 +141,24 @@ function QuartilPage() {
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
-  const rankedConsultants = [...consultants].sort(
-    (a, b) => consultantScore(b) - consultantScore(a) || a.name.localeCompare(b.name),
-  );
+  const rankedConsultants = [...consultants].sort((a, b) => {
+    const scoreDifference = consultantScore(b) - consultantScore(a);
+    if (scoreDifference) return scoreDifference;
+    const revenueDifference = (b.values.receita ?? -Infinity) - (a.values.receita ?? -Infinity);
+    return revenueDifference || a.name.localeCompare(b.name);
+  });
   const ranking = new Map<string, number>();
   let lastRankedScore: number | undefined;
+  let lastRankedRevenue: number | null | undefined;
   let currentRank = 0;
   rankedConsultants.forEach((consultant, index) => {
     const score = consultantScore(consultant);
-    if (lastRankedScore === undefined || score !== lastRankedScore) currentRank = index + 1;
+    const revenue = consultant.values.receita;
+    if (lastRankedScore === undefined || score !== lastRankedScore || revenue !== lastRankedRevenue)
+      currentRank = index + 1;
     ranking.set(consultant.id, currentRank);
     lastRankedScore = score;
+    lastRankedRevenue = revenue;
   });
   const rows = rankedConsultants
     .filter((c) =>
@@ -448,7 +455,8 @@ function QuartilPage() {
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Soma dos três quartis: Q1 vale 5 pontos, Q2 vale 4, Q3 vale 3, Q4 vale 2 e Q5
-                    vale 1. Sem classificação vale 0.
+                    vale 1. Sem classificação vale 0. Em caso de empate, a maior Receita define a
+                    posição.
                   </p>
                   {evolutionFilter && (
                     <button
