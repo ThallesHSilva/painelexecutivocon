@@ -146,11 +146,16 @@ export function buildQuartilSnapshot(sheets, sourceName) {
         .map((month) => recordMap.get(`${current.id}:${month}`))
         .filter(Boolean);
       const comparisons = Object.fromEntries(
-        [3, 6].map((offset) => {
-          const month = monthOffset(latestMonth, -offset);
+        // O mês corrente faz parte da janela: 3 meses = atual + 2 anteriores;
+        // 6 meses = atual + 5 anteriores.
+        [
+          [3, -2],
+          [6, -5],
+        ].map(([period, offset]) => {
+          const month = monthOffset(latestMonth, offset);
           const previous = recordMap.get(`${current.id}:${month}`);
           return [
-            offset,
+            period,
             {
               month,
               changes: Object.fromEntries(

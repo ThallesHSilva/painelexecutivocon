@@ -56,14 +56,15 @@ test("coorte atual, parceiros separados, 3/6 meses, nomes normalizados e dedupli
         name: "Mai_26",
         rows: [headers, row("ANA", "a7", 500), row("ANA", "a7", 500), row("Saiu", "A7", 2000)],
       },
-      { name: "Fev_26", rows: [headers, row("Ana", "A7", 1500)] },
+      { name: "Jun_26", rows: [headers, row("ANA", "a7", 500)] },
+      { name: "Mar_26", rows: [headers, row("Ana", "A7", 1500)] },
     ],
     "modelo.xlsx",
   );
   assert.equal(data.consultants.length, 3);
   assert.equal(data.partners.length, 2);
   const ana = data.consultants.find((c) => c.name === "Ana" && c.partnerName === "A7");
-  assert.equal(ana.history.length, 3);
+  assert.equal(ana.history.length, 4);
   assert.equal(ana.comparisons[3].changes.receita, 3);
   assert.equal(ana.comparisons[6].changes.receita, 1);
   assert.equal(data.consultants.find((c) => c.name === "Bia").comparisons[3].changes.receita, null);
