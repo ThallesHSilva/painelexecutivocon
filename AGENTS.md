@@ -21,3 +21,20 @@ Rules:
 - If graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update .` to keep the graph current (AST-only, no API cost).
+
+## Frontend
+
+Para qualquer tarefa que crie, altere ou refatore significativamente uma
+interface de usuário, use a skill `$frontend-premium`.
+
+Não considere trabalho de frontend concluído apenas porque compila.
+
+Quando ferramentas de browser estiverem disponíveis, execute um ciclo de
+visual QA após mudanças relevantes:
+
+implementação → renderização → inspeção → correção → validação.
+
+Se o projeto possuir `DESIGN.md`, siga-o como fonte de verdade visual.
+
+Para dashboards e aplicações analíticas, priorize clareza, hierarquia,
+densidade de informação e utilidade gerencial sobre decoração.
