@@ -29,6 +29,9 @@ src/data/*.snapshot.json
 graphify-out/
 .graphify_version
 
+# Local visual QA evidence (may contain screenshots)
+.tmp-validation/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

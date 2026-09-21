@@ -315,11 +315,12 @@ async function uploadFileInChunks(
           break;
         }
 
-        lastError = new UploadChunkError(
+        const chunkError = new UploadChunkError(
           payload.message ?? `Falha temporária no envio (${response.status}).`,
           RETRYABLE_UPLOAD_STATUS.has(response.status),
         );
-        if (!lastError.retryable) throw lastError;
+        lastError = chunkError;
+        if (!chunkError.retryable) throw chunkError;
       } catch (error) {
         lastError = error instanceof Error ? error : new Error("Falha de conexão durante o envio.");
         if (lastError instanceof UploadChunkError && !lastError.retryable) throw lastError;
@@ -499,6 +500,45 @@ function AlimentacaoPage() {
     void addFiles(event.dataTransfer.files);
   };
 
+  const retryFile = async (selectedFile: SelectedFile) => {
+    if (selectedFile.status === "uploading" || selectedFile.status === "reading") return;
+    try {
+      const kind = await identifySpreadsheet(selectedFile.source);
+      if (!permittedTitles.has(kind)) {
+        setFiles((current) =>
+          current.map((item) =>
+            item.id === selectedFile.id
+              ? { ...item, kind, status: "error", error: "Sem permissÃ£o para esta base." }
+              : item,
+          ),
+        );
+        return;
+      }
+      setFiles((current) =>
+        current.map((item) =>
+          item.id === selectedFile.id
+            ? { ...item, kind, status: "ready", error: undefined, progress: 0 }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setFiles((current) =>
+        current.map((item) =>
+          item.id === selectedFile.id
+            ? {
+                ...item,
+                status: "error",
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : "NÃ£o foi possÃ­vel reconhecer o arquivo.",
+              }
+            : item,
+        ),
+      );
+    }
+  };
+
   const importFile = async (
     selectedFile: SelectedFile,
     failureMessage: string,
@@ -578,28 +618,26 @@ function AlimentacaoPage() {
   return (
     <DashboardLayout title="Alimentar dados">
       <div className="space-y-6">
-        <section className="relative overflow-hidden rounded-[2rem] border border-primary/15 bg-gradient-to-br from-primary/[0.16] via-card/95 to-cyan/[0.12] p-6 shadow-elevated sm:p-8">
-          <div className="pointer-events-none absolute -left-16 -top-24 size-72 rounded-full bg-primary/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-28 right-0 size-72 rounded-full bg-cyan/20 blur-3xl" />
+        <section className="relative overflow-hidden rounded-xl border border-border bg-card p-5 shadow-sm sm:p-6">
           <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-2xl">
-              <div className="mb-4 flex items-center gap-3">
-                <span className="grid size-11 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant ring-4 ring-primary/10">
+              <div className="flex items-center gap-2">
+                <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">
                   <UploadCloud className="size-5" />
                 </span>
                 <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
                   Central de alimentação
                 </span>
               </div>
-              <h1 className="bg-gradient-brand bg-clip-text text-3xl font-semibold tracking-tight text-transparent sm:text-4xl">
-                Atualize suas bases em um só lugar.
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[28px]">
+                Atualizar bases
               </h1>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                Anexe todas as planilhas que alimentam o Mapa Parque. Os arquivos ficam organizados
-                nesta área para uma atualização segura e concentrada.
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                Selecione um ou mais arquivos. Cada item é reconhecido, processado e registrado
+                separadamente.
               </p>
             </div>
-            <div className="flex items-center gap-2 rounded-2xl border border-primary/15 bg-background/65 px-4 py-3 text-xs font-medium text-muted-foreground backdrop-blur-sm">
+            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
               <ShieldCheck className="size-4 text-emerald-600 dark:text-emerald-400" />
               Ambiente protegido
             </div>
@@ -607,13 +645,13 @@ function AlimentacaoPage() {
         </section>
 
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-          <Card className="overflow-hidden rounded-[2rem] border-primary/15 bg-card/85 shadow-elevated">
-            <div className="border-b border-primary/10 bg-primary/[0.035] px-5 py-5 sm:px-7">
+          <Card className="overflow-hidden rounded-xl border-border bg-card">
+            <div className="border-b border-border px-5 py-4 sm:px-6">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
                 Entrada de dados
               </p>
               <div className="mt-1 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                <h2 className="text-xl font-semibold tracking-tight">Envie suas planilhas</h2>
+                <h2 className="text-lg font-semibold tracking-tight">Fila de arquivos</h2>
                 <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-primary/15 bg-background/70 px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
                   <FileSpreadsheet className="size-3.5 text-primary" /> XLSX, XLS ou CSV
                 </span>
@@ -643,17 +681,17 @@ function AlimentacaoPage() {
                 onDragOver={(event) => event.preventDefault()}
                 onDragLeave={() => setDragging(false)}
                 onDrop={handleDrop}
-                className={`group grid min-h-[280px] cursor-pointer place-items-center rounded-3xl border border-dashed p-8 text-center transition ${dragging ? "border-primary bg-primary/[0.09]" : "border-primary/25 bg-primary/[0.025] hover:border-primary/50 hover:bg-primary/[0.06]"}`}
+                className={`group grid min-h-[220px] cursor-pointer place-items-center rounded-xl border border-dashed p-6 text-center transition ${dragging ? "border-primary bg-primary/[0.09]" : "border-border bg-muted/20 hover:border-primary/50 hover:bg-primary/[0.06]"}`}
               >
                 <div>
-                  <div className="mx-auto grid size-16 place-items-center rounded-3xl bg-gradient-brand text-primary-foreground shadow-elevated transition group-hover:scale-105">
+                  <div className="mx-auto grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground transition group-hover:scale-105">
                     <UploadCloud className="size-7" />
                   </div>
                   <h3 className="mt-5 text-base font-semibold">Arraste os arquivos para cá</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     ou selecione várias planilhas no computador
                   </p>
-                  <Button type="button" className="mt-5 gap-2 rounded-2xl px-5 shadow-elevated">
+                  <Button type="button" className="mt-4 gap-2 px-4">
                     Selecionar arquivos <ArrowRight className="size-4" />
                   </Button>
                   <p className="mt-4 text-[11px] text-muted-foreground">Até 500 MB por arquivo</p>
@@ -751,6 +789,18 @@ function AlimentacaoPage() {
                             Importar
                           </Button>
                         )}
+                        {file.status === "error" && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            disabled={batchImporting}
+                            className="shrink-0 px-3 text-xs"
+                            onClick={() => void retryFile(file)}
+                          >
+                            Tentar novamente
+                          </Button>
+                        )}
                         <button
                           type="button"
                           aria-label={`Remover ${file.name}`}
@@ -770,18 +820,19 @@ function AlimentacaoPage() {
           </Card>
 
           <div className="space-y-6">
-            <Card className="rounded-[2rem] border-primary/15 bg-card/85 p-5 shadow-elevated sm:p-6">
+            <Card className="rounded-xl border-border bg-card p-5 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-                    Checklist
+                    Tipos reconhecidos
                   </p>
-                  <h2 className="mt-1 text-lg font-semibold tracking-tight">
-                    Bases de arquivo esperadas
-                  </h2>
+                  <h2 className="mt-1 text-lg font-semibold tracking-tight">Tipos na seleção</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Nenhum tipo é obrigatório; os arquivos reconhecidos aparecem abaixo.
+                  </p>
                 </div>
-                <span className="rounded-full bg-primary/[0.08] px-3 py-1.5 text-xs font-semibold text-primary">
-                  {matchedBaseCount}/{permittedBases.length} identificadas
+                <span className="shrink-0 rounded-full bg-primary/[0.08] px-3 py-1.5 text-xs font-semibold text-primary">
+                  {matchedBaseCount} reconhecido{matchedBaseCount === 1 ? "" : "s"}
                 </span>
               </div>
               <div className="mt-5 space-y-1">
@@ -815,7 +866,7 @@ function AlimentacaoPage() {
                 })}
               </div>
             </Card>
-            <Card className="rounded-[2rem] border-primary/15 bg-card/85 p-5 shadow-elevated sm:p-6">
+            <Card className="rounded-xl border-border bg-card p-5 sm:p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
@@ -872,8 +923,8 @@ function AlimentacaoPage() {
                 )}
               </div>
             </Card>
-            <Card className="relative overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-violet-500/[0.12] via-card to-cyan/[0.08] p-5 shadow-elevated sm:p-6">
-              <Sparkles className="absolute -right-2 -top-2 size-20 text-primary/10" />
+            <Card className="rounded-xl border-border bg-card p-5 sm:p-6">
+              <Sparkles className="hidden" />
               <p className="relative text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
                 Fluxo recomendado
               </p>

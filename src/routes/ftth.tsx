@@ -1,109 +1,164 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useMemo, useState, type ReactNode } from "react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
 import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
 import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 import { ChartCard } from "@/components/ChartCard";
-import { BarSimple } from "@/components/charts";
-import { ErrorState } from "@/components/EmptyState";
-import { useFtth } from "@/hooks/useData";
+import { BarRanked, CategoryDistribution } from "@/components/charts";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/EmptyState";
+import { useFtth, usePartners } from "@/hooks/useData";
 import { fmtInt, fmtPct } from "@/lib/format";
-import { Wifi, MapPin, Signal } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { MapPin, Signal } from "lucide-react";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
+import { usePartnerFilter } from "@/contexts/AppContexts";
 
 export const Route = createFileRoute("/ftth")({
   head: () => ({ meta: [{ title: "Oportunidades FTTH — Mapa Parque" }] }),
   component: Page,
 });
 
+/** Recorte inicial do gráfico de cidades; a lista completa continua acessível no próprio card. */
+const CITY_PREVIEW = 12;
+
 function Page() {
   const { data, isLoading, error, refetch } = useFtth();
+  const { selected, role, allowedPartnerIds } = usePartnerFilter();
+  const { data: partners = [] } = usePartners();
+  const [allCities, setAllCities] = useState(false);
+
+  /**
+   * Recorte em texto, com a mesma semântica da Visão resultado: nenhuma seleção
+   * continua significando o consolidado dos parceiros permitidos ao perfil.
+   */
+  const selectedNames = useMemo(
+    () => selected.map((id) => partners.find((partner) => partner.id === id)?.name ?? id),
+    [partners, selected],
+  );
+  const allowedCount = allowedPartnerIds?.length ?? 0;
+  const scopeLabel = selected.length
+    ? selected.length === 1
+      ? selectedNames[0]
+      : `${selected.length} parceiros selecionados`
+    : role === "gn"
+      ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
+      : "Todos os parceiros (consolidado)";
+
+  const cities = useMemo(
+    () =>
+      [...(data?.geo ?? [])].sort(
+        (left, right) => (Number(right.oportunidades) || 0) - (Number(left.oportunidades) || 0),
+      ),
+    [data],
+  );
+  const visibleCities = allCities ? cities : cities.slice(0, CITY_PREVIEW);
+  const partnerRows = data?.porParceiro ?? [];
 
   return (
     <DashboardLayout title="Oportunidades FTTH">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
+          Oportunidades FTTH
+        </h1>
+        <p className="mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
+          Quanta oportunidade de fixa básica existe no recorte, onde ela está e o que ela projeta em
+          conversão, capacidade e receita.
+        </p>
+        <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-muted-foreground">
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <dt className="font-medium text-foreground">Recorte:</dt>
+            <dd className="min-w-0 truncate" title={selectedNames.join(", ") || undefined}>
+              {scopeLabel}
+            </dd>
+          </div>
+          {!isLoading && !error && (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Parceiros no recorte:</dt>
+                <dd className="tabular-nums">{fmtInt(partnerRows.length)}</dd>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Cidades com oportunidade:</dt>
+                <dd className="tabular-nums">{fmtInt(cities.length)}</dd>
+              </div>
+            </>
+          )}
+        </dl>
+      </header>
+
       {error ? (
         <ErrorState onRetry={() => refetch()} />
       ) : (
-        <div className="relative isolate">
-          <div className="pointer-events-none absolute -left-20 -top-16 -z-10 size-72 rounded-full bg-cyan/10 blur-3xl" />
-          <div className="pointer-events-none absolute right-0 top-40 -z-10 size-80 rounded-full bg-primary/10 blur-3xl" />
-          <Card className="relative mb-7 overflow-hidden rounded-[2rem] border-cyan/20 bg-gradient-to-br from-cyan/[0.14] via-card to-primary/[0.12] p-6 shadow-elegant md:p-7">
-            <div className="pointer-events-none absolute -left-12 -top-16 size-52 rounded-full bg-cyan/20 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 right-8 size-56 rounded-full bg-primary/20 blur-3xl" />
-            <div className="relative flex items-center gap-4">
-              <div className="grid size-11 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant">
-                <Wifi className="size-5" />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  Conectividade FTTH
-                </p>
-                <h2 className="mt-2 text-3xl font-semibold leading-[1.08] tracking-tight md:text-4xl">
-                  Cobertura e renovação em foco.
-                </h2>
-              </div>
+        <div className="space-y-6">
+          <section aria-labelledby="ftth-oportunidade">
+            <h2
+              id="ftth-oportunidade"
+              className="mb-2 text-[13px] font-semibold text-muted-foreground"
+            >
+              Oportunidade de fixa básica · CNPJs do Mapa Parque no recorte
+            </h2>
+            <div className="grid gap-3 md:grid-cols-2">
+              <KpiCard
+                icon={MapPin}
+                title="Aquisição Fixa Básica"
+                value={fmtInt(data?.kpis.oportunidades)}
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "FIXA_BASICA",
+                            selection:
+                              'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                }
+                loading={isLoading}
+                emphasis
+              />
+              <KpiCard
+                icon={Signal}
+                title="Penetração na base"
+                value={fmtPct(data?.kpis.penetracaoBase)}
+                description="Base Fixa Básica sobre base mais oportunidade."
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        title: "Base Fixa Básica",
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          { column: "TP_PRODUTO", selection: 'contém "BASICA"' },
+                        ],
+                      },
+                      {
+                        title: "Oportunidade Fixa Básica",
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          {
+                            column: "FIXA_BASICA",
+                            selection:
+                              'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                }
+                loading={isLoading}
+              />
             </div>
-          </Card>
-          <div className="grid gap-4 md:grid-cols-2">
-            <KpiCard
-              icon={MapPin}
-              title="Aquisição Fixa Básica"
-              value={fmtInt(data?.kpis.oportunidades)}
-              tooltip={
-                <OpportunityFilterTooltip
-                  groups={[
-                    {
-                      rules: [
-                        ACTIVE_REVENUE_FILTER,
-                        {
-                          column: "FIXA_BASICA",
-                          selection:
-                            'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
-                        },
-                      ],
-                    },
-                  ]}
-                />
-              }
-              loading={isLoading}
-              emphasis
-            />
-            <KpiCard
-              icon={Signal}
-              title="Penetração na base"
-              value={fmtPct(data?.kpis.penetracaoBase)}
-              tooltip={
-                <OpportunityFilterTooltip
-                  groups={[
-                    {
-                      title: "Base Fixa Básica",
-                      rules: [
-                        ACTIVE_REVENUE_FILTER,
-                        { column: "TP_PRODUTO", selection: 'contém "BASICA"' },
-                      ],
-                    },
-                    {
-                      title: "Oportunidade Fixa Básica",
-                      rules: [
-                        ACTIVE_REVENUE_FILTER,
-                        {
-                          column: "FIXA_BASICA",
-                          selection:
-                            'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
-                        },
-                      ],
-                    },
-                  ]}
-                />
-              }
-              loading={isLoading}
-              className="rounded-3xl border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.1] p-6 shadow-elegant hover:shadow-elevated"
-            />
-          </div>
+          </section>
 
           <OpportunitySimulator
-            rows={(data?.porParceiro ?? []).map((partner) => ({
+            rows={partnerRows.map((partner) => ({
               parceiro: partner.parceiro,
               oportunidades: partner.oportunidades,
             }))}
@@ -112,48 +167,90 @@ function Page() {
             opportunityLabel="Aquisição Fixa Básica"
             quantityLabel="BLs"
             revenueLabel="Receita FTTH"
+            loading={isLoading}
           />
 
-          <div className="mt-7 grid gap-5 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
               title="Oportunidade por cidade"
-              action={
-                <span className="rounded-full bg-cyan/[0.1] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">
-                  CNPJs
-                </span>
+              description={
+                isLoading
+                  ? "Distribuição por cidade do recorte."
+                  : cities.length > CITY_PREVIEW && !allCities
+                    ? `${CITY_PREVIEW} cidades com maior oportunidade, de ${fmtInt(cities.length)}. Valores em CNPJs.`
+                    : `${fmtInt(cities.length)} ${cities.length === 1 ? "cidade" : "cidades"} com oportunidade. Valores em CNPJs.`
               }
-              className="border-cyan/15 bg-gradient-to-br from-card via-card to-cyan/[0.065] shadow-[0_18px_42px_-34px_hsl(190_85%_46%/0.45)]"
             >
-              {data && (
-                <BarSimple
-                  data={data.geo}
-                  xKey="cidade"
-                  dataKey="oportunidades"
-                  gradient={{ id: "ftth-city", from: "var(--chart-3)", to: "var(--chart-1)" }}
-                />
-              )}
+              <DistributionBody
+                loading={isLoading}
+                empty={cities.length === 0}
+                emptyTitle="Sem base de cidades"
+                emptyDescription="A base do Mapa Parque não retornou cidades com oportunidade para este recorte."
+              >
+                <BarRanked data={visibleCities} categoryKey="cidade" dataKey="oportunidades" />
+                {cities.length > CITY_PREVIEW && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setAllCities((current) => !current)}
+                    aria-expanded={allCities}
+                    className="mt-2 w-full text-primary"
+                  >
+                    {allCities
+                      ? "Mostrar apenas as principais"
+                      : `Ver todas as ${cities.length} cidades`}
+                  </Button>
+                )}
+              </DistributionBody>
             </ChartCard>
             <ChartCard
               title="Oportunidade por parceiro"
-              action={
-                <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">
-                  Carteira
-                </span>
+              description={
+                isLoading
+                  ? "Distribuição por parceiro do recorte."
+                  : `${fmtInt(partnerRows.length)} ${partnerRows.length === 1 ? "parceiro" : "parceiros"} no recorte, em CNPJs.`
               }
-              className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.065] shadow-[0_18px_42px_-34px_hsl(var(--primary)/0.45)]"
             >
-              {data && (
-                <BarSimple
-                  data={data.porParceiro}
-                  xKey="parceiro"
+              <DistributionBody
+                loading={isLoading}
+                empty={partnerRows.length === 0}
+                emptyTitle="Sem parceiros no recorte"
+                emptyDescription="Nenhum parceiro foi retornado para este recorte. Ajuste o filtro de parceiros ou verifique a disponibilidade da base."
+              >
+                <CategoryDistribution
+                  data={partnerRows}
+                  categoryKey="parceiro"
                   dataKey="oportunidades"
-                  gradient={{ id: "ftth-partners", from: "var(--chart-1)", to: "var(--primary)" }}
                 />
-              )}
+              </DistributionBody>
             </ChartCard>
           </div>
         </div>
       )}
     </DashboardLayout>
   );
+}
+
+/**
+ * Base em carregamento, base indisponível e resultado zero são estados distintos:
+ * enquanto a consulta não responde, nada é apresentado como zero; um recorte sem
+ * linhas mostra a ausência em texto, não um gráfico vazio.
+ */
+function DistributionBody({
+  loading,
+  empty,
+  emptyTitle,
+  emptyDescription,
+  children,
+}: {
+  loading: boolean;
+  empty: boolean;
+  emptyTitle: string;
+  emptyDescription: string;
+  children: ReactNode;
+}) {
+  if (loading) return <Skeleton className="h-[240px] w-full" aria-hidden="true" />;
+  if (empty) return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  return <>{children}</>;
 }

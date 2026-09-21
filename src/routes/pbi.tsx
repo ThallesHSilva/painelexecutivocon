@@ -43,23 +43,19 @@ export const Route = createFileRoute("/pbi")({
 function PbiPage() {
   return (
     <DashboardLayout title="PBI">
-      <section className="space-y-6">
-        <div className="relative overflow-hidden rounded-[2rem] border border-primary/15 bg-gradient-to-br from-primary/[0.16] via-card to-cyan/[0.10] px-6 py-7 shadow-elevated sm:px-8">
-          <div className="pointer-events-none absolute -right-14 -top-20 size-64 rounded-full bg-primary/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-24 left-1/3 size-56 rounded-full bg-cyan/15 blur-3xl" />
-          <div className="relative flex items-center gap-4">
-            <div className="grid size-12 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant ring-4 ring-primary/10">
-              <MonitorPlay className="size-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                Power BI
-              </p>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Painéis</h1>
-            </div>
+      <section className="space-y-5">
+        <header className="flex items-center gap-3 border-b border-border pb-5">
+          <div className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
+            <MonitorPlay className="size-5" />
           </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+              Power BI
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Painéis</h1>
+          </div>
+        </header>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {POWER_BI_REPORTS.map((report) => (
             <a
               key={report.id}
@@ -67,18 +63,16 @@ function PbiPage() {
               target="_blank"
               rel="noreferrer"
               aria-label={`Abrir ${report.label} no Power BI`}
-              className="group relative min-h-44 overflow-hidden rounded-3xl border border-primary/15 bg-card p-6 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/35 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+              className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/35 hover:bg-muted/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             >
-              <div className="pointer-events-none absolute -right-10 -top-10 size-32 rounded-full bg-primary/[0.08] transition-transform duration-500 group-hover:scale-150" />
-              <div className="pointer-events-none absolute -bottom-12 -left-10 size-28 rounded-full bg-cyan/[0.08] blur-2xl" />
-              <div className="relative flex h-full flex-col justify-between gap-8">
+              <div className="relative flex items-center justify-between gap-4">
                 <div className="flex items-start justify-between">
-                  <div className="grid size-11 place-items-center rounded-2xl bg-primary/[0.10] text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
+                  <div className="grid size-9 place-items-center rounded-lg bg-primary/[0.10] text-primary transition-colors duration-300 group-hover:bg-primary group-hover:text-primary-foreground">
                     <MonitorPlay className="size-5" />
                   </div>
                   <ArrowUpRight className="size-5 text-muted-foreground transition-all duration-300 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
                 </div>
-                <h2 className="text-lg font-semibold tracking-tight">{report.label}</h2>
+                <h2 className="text-base font-semibold tracking-tight">{report.label}</h2>
               </div>
             </a>
           ))}

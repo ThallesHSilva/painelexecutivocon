@@ -1,16 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { useMemo, type ReactNode } from "react";
+import { Cpu, Percent, RefreshCw, Rocket } from "lucide-react";
+import { ChartCard } from "@/components/ChartCard";
+import { EmptyState, ErrorState } from "@/components/EmptyState";
 import { KpiCard } from "@/components/KpiCard";
 import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
-import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
-import { ChartCard } from "@/components/ChartCard";
-import { BarSimple } from "@/components/charts";
-import { ErrorState } from "@/components/EmptyState";
-import { useAdvanced } from "@/hooks/useData";
-import { fmtInt, fmtPct } from "@/lib/format";
-import { Cpu, Percent, RefreshCw, Rocket, Sparkles } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
+import { BarSimple, CategoryDistribution } from "@/components/charts";
+import { Skeleton } from "@/components/ui/skeleton";
+import { usePartnerFilter } from "@/contexts/AppContexts";
+import { useAdvanced, usePartners } from "@/hooks/useData";
+import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { fmtInt, fmtPct } from "@/lib/format";
+import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 
 export const Route = createFileRoute("/avancada")({
   head: () => ({ meta: [{ title: "Oportunidade Avançada — Mapa Parque" }] }),
@@ -19,40 +21,61 @@ export const Route = createFileRoute("/avancada")({
 
 function Page() {
   const { data, isLoading, error, refetch } = useAdvanced();
+  const { selected, role, allowedPartnerIds } = usePartnerFilter();
+  const { data: partners = [] } = usePartners();
+
+  const selectedNames = useMemo(
+    () => selected.map((id) => partners.find((partner) => partner.id === id)?.name ?? id),
+    [partners, selected],
+  );
+  const allowedCount = allowedPartnerIds?.length ?? 0;
+  const scopeLabel = selected.length
+    ? selected.length === 1
+      ? selectedNames[0]
+      : `${selected.length} parceiros selecionados`
+    : role === "gn"
+      ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
+      : "Todos os parceiros (consolidado)";
+  const partnerRows = data?.porParceiro ?? [];
+  const comparison = data?.comparativo ?? [];
 
   return (
     <DashboardLayout title="Oportunidade Avançada">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
+          Oportunidade Avançada
+        </h1>
+        <p className="mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
+          Quantos CNPJs têm oportunidade de aquisição, winback, renovação e Vivo Tech no recorte, e
+          o que esse potencial projeta em conversão, capacidade e receita.
+        </p>
+        <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-muted-foreground">
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <dt className="font-medium text-foreground">Recorte:</dt>
+            <dd className="min-w-0 truncate" title={selectedNames.join(", ") || undefined}>
+              {scopeLabel}
+            </dd>
+          </div>
+          {!isLoading && !error && (
+            <div className="flex items-baseline gap-1.5">
+              <dt className="font-medium text-foreground">Parceiros no recorte:</dt>
+              <dd className="tabular-nums">{fmtInt(partnerRows.length)}</dd>
+            </div>
+          )}
+        </dl>
+      </header>
+
       {error ? (
         <ErrorState onRetry={() => refetch()} />
       ) : (
-        <>
-          <Card className="relative mb-7 overflow-hidden rounded-[2rem] border-violet-400/20 bg-gradient-to-br from-violet-500/[0.15] via-card to-primary/[0.12] p-6 shadow-elegant md:p-7">
-            <div className="pointer-events-none absolute -left-12 -top-16 size-52 rounded-full bg-violet-500/20 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 right-8 size-56 rounded-full bg-primary/20 blur-3xl" />
-            <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-              <div className="max-w-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-11 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant">
-                    <Sparkles className="size-5" />
-                  </div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    Portfólio especialista
-                  </p>
-                </div>
-                <h2 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-tight md:text-4xl">
-                  Oportunidades avançadas em foco.
-                </h2>
-              </div>
-            </div>
-          </Card>
-
-          <section>
-            <div className="mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                Potencial mapeado
-              </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight">Visão da oportunidade</h2>
-            </div>
+        <div className="space-y-6">
+          <section aria-labelledby="avancada-oportunidade">
+            <h2
+              id="avancada-oportunidade"
+              className="mb-2 text-[13px] font-semibold text-muted-foreground"
+            >
+              Portfólio especialista · CNPJs do Mapa Parque no recorte
+            </h2>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <KpiCard
                 icon={Rocket}
@@ -86,17 +109,13 @@ function Page() {
                       {
                         rules: [
                           ACTIVE_REVENUE_FILTER,
-                          {
-                            column: "AVANCADOS",
-                            selection: 'contém "Renovação"',
-                          },
+                          { column: "AVANCADOS", selection: 'contém "Renovação"' },
                         ],
                       },
                     ]}
                   />
                 }
                 loading={isLoading}
-                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
               <KpiCard
                 icon={Percent}
@@ -115,15 +134,11 @@ function Page() {
                           },
                         ],
                       },
-                      {
-                        title: "Denominador — Base ativa",
-                        rules: [ACTIVE_REVENUE_FILTER],
-                      },
+                      { title: "Denominador — Base ativa", rules: [ACTIVE_REVENUE_FILTER] },
                     ]}
                   />
                 }
                 loading={isLoading}
-                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
               <KpiCard
                 icon={Cpu}
@@ -145,13 +160,12 @@ function Page() {
                   />
                 }
                 loading={isLoading}
-                className="border-sky-400/25 bg-gradient-to-br from-card via-card to-sky-500/[0.1]"
               />
             </div>
           </section>
 
           <OpportunitySimulator
-            rows={(data?.porParceiro ?? []).map((partner) => ({
+            rows={partnerRows.map((partner) => ({
               parceiro: partner.parceiro,
               oportunidades: partner.oportunidades,
             }))}
@@ -160,56 +174,65 @@ function Page() {
             opportunityLabel="Oportunidade Avançada"
             quantityLabel="Soluções"
             revenueLabel="Receita avançada"
+            loading={isLoading}
           />
 
-          <div className="mt-7 grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
               title="Oportunidade por parceiro"
-              action={
-                <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">
-                  CNPJs
-                </span>
+              description={
+                isLoading
+                  ? "Distribuição por parceiro do recorte."
+                  : `${fmtInt(partnerRows.length)} ${partnerRows.length === 1 ? "parceiro" : "parceiros"} no recorte, em CNPJs.`
               }
-              className="border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.065] shadow-[0_18px_42px_-34px_hsl(var(--primary)/0.45)]"
             >
-              {data && (
-                <BarSimple
-                  data={data.porParceiro}
-                  xKey="parceiro"
+              <DistributionBody
+                loading={isLoading}
+                empty={partnerRows.length === 0}
+                emptyTitle="Sem parceiros no recorte"
+                emptyDescription="Nenhum parceiro foi retornado para este recorte. Ajuste o filtro de parceiros ou verifique a disponibilidade da base."
+              >
+                <CategoryDistribution
+                  data={partnerRows}
+                  categoryKey="parceiro"
                   dataKey="oportunidades"
-                  gradient={{
-                    id: "advanced-partners",
-                    from: "var(--chart-1)",
-                    to: "var(--primary)",
-                  }}
                 />
-              )}
+              </DistributionBody>
             </ChartCard>
             <ChartCard
               title="Oportunidade Avançada x Renovação"
-              action={
-                <span className="rounded-full bg-violet-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">
-                  CNPJs
-                </span>
-              }
-              className="border-violet-400/15 bg-gradient-to-br from-card via-card to-violet-500/[0.065] shadow-[0_18px_42px_-34px_hsl(272_72%_55%/0.45)]"
+              description="Comparativo em CNPJs entre aquisição ou winback e renovação no mesmo recorte."
             >
-              {data && (
-                <BarSimple
-                  data={data.comparativo}
-                  xKey="tipo"
-                  dataKey="valor"
-                  gradient={{
-                    id: "advanced-comparison",
-                    from: "var(--chart-4)",
-                    to: "var(--primary)",
-                  }}
-                />
-              )}
+              <DistributionBody
+                loading={isLoading}
+                empty={comparison.length === 0}
+                emptyTitle="Sem comparativo disponível"
+                emptyDescription="A base do Mapa Parque não retornou valores para aquisição, winback ou renovação neste recorte."
+              >
+                <BarSimple data={comparison} xKey="tipo" dataKey="valor" />
+              </DistributionBody>
             </ChartCard>
           </div>
-        </>
+        </div>
       )}
     </DashboardLayout>
   );
+}
+
+function DistributionBody({
+  loading,
+  empty,
+  emptyTitle,
+  emptyDescription,
+  children,
+}: {
+  loading: boolean;
+  empty: boolean;
+  emptyTitle: string;
+  emptyDescription: string;
+  children: ReactNode;
+}) {
+  if (loading) return <Skeleton className="h-[240px] w-full" aria-hidden="true" />;
+  if (empty) return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  return <>{children}</>;
 }

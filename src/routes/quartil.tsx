@@ -1,27 +1,26 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  Minus,
-  Users,
-  ChevronDown,
-  Search,
-  BarChart3,
-  Smartphone,
-  Wifi,
-  Wallet,
-  ArrowRight,
-  Award,
-  Target,
-  Activity,
-  X,
-} from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Minus, ChevronDown, Search, X } from "lucide-react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { usePartnerFilter } from "@/contexts/AppContexts";
+import { usePartners } from "@/hooks/useData";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TableScroll } from "@/components/TableScroll";
+import { EmptyState, ErrorState } from "@/components/EmptyState";
+import { fmtBRL, fmtInt, fmtPct } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
 
 export const Route = createFileRoute("/quartil")({
@@ -33,15 +32,44 @@ const metrics: { id: QuartilMetric; label: string }[] = [
   { id: "movel", label: "Móvel" },
   { id: "ftth", label: "FTTH" },
 ];
-const colors = ["bg-emerald-500", "bg-teal-500", "bg-amber-400", "bg-orange-500", "bg-rose-500"];
-const metricIcons = { receita: Wallet, movel: Smartphone, ftth: Wifi };
-const badges = [
-  "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  "bg-teal-500/10 text-teal-700 dark:text-teal-300",
-  "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  "bg-orange-500/10 text-orange-700 dark:text-orange-300",
-  "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+
+/**
+ * Faixa do quartil de consultor: Q1 é o melhor colocado e Q5 o que tem mais espaço
+ * para evolução.
+ *
+ * Mapa dedicado a esta escala. Não é compartilhado com as faixas do QSC — lá o
+ * número da faixa tem outro sentido — e o quartil nunca aparece só como cor: o
+ * rótulo "Q1…Q5" acompanha a faixa em todos os lugares. Pares texto/fundo vêm dos
+ * tokens semânticos, já verificados nos temas claro e escuro.
+ */
+const QUARTILE_STYLE = [
+  "border-success/40 bg-success/10 text-success",
+  "border-info/40 bg-info/10 text-info",
+  "border-warning/40 bg-warning/10 text-warning",
+  "border-critical/40 bg-critical/10 text-critical",
+  "border-destructive/40 bg-destructive/10 text-destructive",
 ];
+const QUARTILE_FILL = ["bg-success", "bg-info", "bg-warning", "bg-critical", "bg-destructive"];
+const QUARTILE_TEXT = [
+  "text-success",
+  "text-info",
+  "text-warning",
+  "text-critical",
+  "text-destructive",
+];
+
+const TABLE_HEADER_CLASS =
+  "bg-muted [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-foreground";
+const TABLE_BODY_CLASS =
+  "[&_td]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_tr]:border-border [&_tr:hover]:bg-transparent";
+/**
+ * Identificação persistente: a primeira coluna acompanha a rolagem horizontal para
+ * que a linha continue identificável no celular, sem retirar nenhuma coluna. No
+ * ranking essa coluna reúne posição, nome e parceiro, o que devolve largura ao nome
+ * real do consultor em telas estreitas.
+ */
+const STICKY_ID_CLASS = "sticky left-0 z-[1] !whitespace-normal";
+
 const labelMonth = (month: string) =>
   month
     ? new Date(`${month}-01T12:00:00Z`).toLocaleDateString("pt-BR", {
@@ -50,7 +78,6 @@ const labelMonth = (month: string) =>
         timeZone: "UTC",
       })
     : "—";
-const number = (value: number) => value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
 type EvolutionPeriod = "3" | "6";
 type EvolutionStatus = "up" | "down" | "stable" | "missing";
 type EvolutionFilter = { period: EvolutionPeriod; status: EvolutionStatus } | null;
@@ -60,6 +87,8 @@ const evolutionLabels: Record<EvolutionStatus, string> = {
   stable: "Estáveis",
   missing: "Sem histórico",
 };
+/** Quantas competências cada janela usa, incluindo o mês corrente. Regra do cálculo. */
+const evolutionWindow: Record<EvolutionPeriod, number> = { "3": 3, "6": 6 };
 
 function matchesEvolution(value: number | null, status: EvolutionStatus) {
   if (status === "missing") return value === null;
@@ -75,12 +104,32 @@ function quartilePoints(value: number | null) {
 function consultantScore(consultant: import("@/lib/quartil").QuartilConsultant) {
   return metrics.reduce((total, item) => total + quartilePoints(consultant.quartiles[item.id]), 0);
 }
-function Badge({ value }: { value: number | null | undefined }) {
+
+/** Valor do indicador: dinheiro em Receita, contagem em Móvel e FTTH; ausência é "—". */
+function metricValue(metric: QuartilMetric, value: number | null | undefined) {
+  return metric === "receita" ? fmtBRL(value) : fmtInt(value);
+}
+
+/** Participação sobre um total, sem inventar 0% quando não há base para comparar. */
+function share(count: number, total: number) {
+  return total ? fmtPct(count / total) : "—";
+}
+
+function Quartile({ value }: { value: number | null | undefined }) {
+  if (!value)
+    return (
+      <span className="inline-flex min-w-11 justify-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+        Sem Q
+      </span>
+    );
   return (
     <span
-      className={`inline-flex min-w-10 justify-center rounded-lg px-2 py-1 text-xs font-semibold ${value ? badges[value - 1] : "bg-muted text-muted-foreground"}`}
+      className={cn(
+        "inline-flex min-w-11 justify-center rounded-md border px-2 py-0.5 text-xs font-semibold tabular-nums",
+        QUARTILE_STYLE[value - 1],
+      )}
     >
-      {value ? `Q${value}` : "—"}
+      Q{value}
     </span>
   );
 }
@@ -88,25 +137,61 @@ function Change({ value }: { value: number | null }) {
   const Icon = value === null || value === 0 ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight;
   return (
     <span
-      className={`inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium ${value === null || value === 0 ? "text-muted-foreground" : value > 0 ? "text-emerald-600" : "text-rose-600"}`}
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium",
+        value === null || value === 0
+          ? "text-muted-foreground"
+          : value > 0
+            ? "text-success"
+            : "text-destructive",
+      )}
     >
-      <Icon className="size-3.5" />
+      <Icon className="size-3.5" aria-hidden />
       {value === null
         ? "Sem histórico"
         : value === 0
           ? "Estável"
-          : `${Math.abs(value)} ${Math.abs(value) === 1 ? "faixa" : "faixas"}`}
+          : `${value > 0 ? "Subiu" : "Caiu"} ${Math.abs(value)} ${Math.abs(value) === 1 ? "faixa" : "faixas"}`}
     </span>
   );
 }
+
+function Section({
+  title,
+  description,
+  actions,
+  children,
+}: {
+  title: string;
+  description?: React.ReactNode;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold leading-[22px] text-foreground">{title}</h2>
+          {description && (
+            <p className="mt-1 max-w-3xl text-xs leading-4 text-muted-foreground">{description}</p>
+          )}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+      </div>
+      {children}
+    </Card>
+  );
+}
+
 function QuartilPage() {
-  const { effectiveSelected, role } = usePartnerFilter();
+  const { effectiveSelected, selected, role, allowedPartnerIds } = usePartnerFilter();
+  const { data: partnerList = [] } = usePartners();
   const [metric, setMetric] = useState<QuartilMetric>("receita");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [evolutionFilter, setEvolutionFilter] = useState<EvolutionFilter>(null);
-  const { data, isPending, error } = useQuery<QuartilSnapshot>({
+  const { data, isPending, error, refetch } = useQuery<QuartilSnapshot>({
     queryKey: ["quartil", effectiveSelected],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -118,6 +203,23 @@ function QuartilPage() {
     enabled: role === "director" || role === "gn",
   });
   const consultants = useMemo(() => data?.consultants ?? [], [data]);
+  /**
+   * Recorte em texto, sem alterar o filtro: nenhuma seleção continua significando
+   * consolidado, e o GN sem seleção continua vendo apenas os parceiros vinculados.
+   */
+  const selectedNames = useMemo(
+    () => selected.map((id) => partnerList.find((partner) => partner.id === id)?.name ?? id),
+    [partnerList, selected],
+  );
+  const allowedCount = allowedPartnerIds?.length ?? 0;
+  const hasNoAuthorizedPartners = role === "gn" && allowedCount === 0;
+  const scopeLabel = selected.length
+    ? selected.length === 1
+      ? selectedNames[0]
+      : `${selected.length} parceiros selecionados`
+    : role === "gn"
+      ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
+      : "Todos os parceiros (consolidado)";
   const distribution = useMemo(
     () =>
       [...new Set(consultants.map((c) => c.partnerId))]
@@ -183,240 +285,310 @@ function QuartilPage() {
     { length: 5 },
     (_, i) => consultants.filter((c) => c.quartiles[metric] === i + 1).length,
   );
+  const unclassified = consultants.filter((c) => c.quartiles[metric] === null).length;
+  const clearFilters = () => {
+    setSearch("");
+    setEvolutionFilter(null);
+    setPage(0);
+    setExpanded(null);
+  };
+
   return (
-    <DashboardLayout title="Quartil">
-      <div className="space-y-6 [&_table_th]:whitespace-nowrap [&_table_th]:font-medium [&_button]:focus-visible:outline-primary [&_table_tbody_tr]:transition-colors">
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-primary">
-              Desempenho dos consultores
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight">
-              Quartil de Consultores<span className="text-primary">.</span>
-            </h1>
-          </div>
+    <DashboardLayout title="Quartil de Consultores">
+      <header className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
+            Quartil de Consultores
+          </h1>
+          <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-muted-foreground">
+            <div className="flex min-w-0 items-baseline gap-1.5">
+              <dt className="font-medium text-foreground">Recorte:</dt>
+              <dd className="min-w-0 truncate">{scopeLabel}</dd>
+            </div>
+            {data?.latestMonth && (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Competência:</dt>
+                <dd className="capitalize">{labelMonth(data.latestMonth)}</dd>
+              </div>
+            )}
+            {data?.months?.length ? (
+              <div className="flex min-w-0 items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Competências na base:</dt>
+                <dd className="min-w-0 truncate capitalize">
+                  {data.months.length === 1
+                    ? labelMonth(data.months[0])
+                    : `${labelMonth(data.months[0])} a ${labelMonth(data.months.at(-1)!)} (${data.months.length})`}
+                </dd>
+              </div>
+            ) : null}
+            {data?.latestMonth ? (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Consultores:</dt>
+                <dd className="tabular-nums">{fmtInt(consultants.length)}</dd>
+              </div>
+            ) : null}
+          </dl>
         </div>
-        {isPending ? (
-          <Card className="p-8 text-muted-foreground">Carregando quartis…</Card>
-        ) : error ? (
-          <Card className="p-8 text-destructive">{error.message}</Card>
-        ) : !data?.latestMonth ? (
-          <Card className="p-8">
-            <h2 className="font-semibold">Aguardando a base de consultores</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Importe a planilha Quartil com uma aba por mês em Alimentar dados.
-            </p>
-            <Link to="/alimentacao" className="mt-4 inline-block text-sm font-medium text-primary">
-              Abrir Alimentar dados
-            </Link>
-          </Card>
-        ) : (
-          <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card className="relative flex items-center justify-between overflow-hidden rounded-2xl border-primary/20 bg-gradient-to-br from-primary to-violet-950 p-6 text-white shadow-lg shadow-primary/10">
+      </header>
+
+      {isPending ? (
+        <div className="space-y-6">
+          <Skeleton className="h-[340px] w-full" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Skeleton className="h-[172px] w-full" />
+            <Skeleton className="h-[172px] w-full" />
+          </div>
+          <Skeleton className="h-[520px] w-full" />
+        </div>
+      ) : error ? (
+        <ErrorState onRetry={() => refetch()} />
+      ) : hasNoAuthorizedPartners ? (
+        <EmptyState
+          title="Nenhum parceiro autorizado"
+          description="Seu perfil de GN ainda não possui vínculo com um parceiro. Procure o Diretor para liberar o recorte antes de consultar os quartis."
+        />
+      ) : !data?.latestMonth ? (
+        <EmptyState
+          title="Aguardando a base de consultores"
+          description="A planilha Quartil, com uma aba por mês, ainda não foi importada para este recorte. Os quartis e o ranking aparecem aqui logo após a importação."
+          action={
+            <Button asChild variant="outline" size="sm" className="mt-1">
+              <Link to="/alimentacao">Abrir Alimentar dados</Link>
+            </Button>
+          }
+        />
+      ) : (
+        <div className="space-y-6">
+          {/*
+            Escopo do indicador. A seleção recorta distribuição, evolução e as colunas
+            de valor/variação do ranking; a ordem do ranking continua vindo da soma dos
+            três quartis e não muda com esta escolha.
+          */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                Indicador da distribuição e da evolução
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Altera a distribuição, a evolução e as colunas de valor do indicador. Não altera a
+                ordem do ranking geral, que soma os três quartis.
+              </p>
+            </div>
+            <div
+              role="group"
+              aria-label="Indicador do quartil"
+              className="inline-flex shrink-0 rounded-md border border-border p-0.5"
+            >
+              {metrics.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    setMetric(m.id);
+                    setPage(0);
+                    setExpanded(null);
+                  }}
+                  aria-pressed={metric === m.id}
+                  className={cn(
+                    "rounded-[4px] px-4 py-2 text-sm font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                    metric === m.id
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Section
+            title={`Distribuição por parceiro · ${selectedLabel}`}
+            description="Q1 reúne o melhor desempenho e Q5 o maior espaço para evolução. As faixas consideram o tempo de casa. Sem classificação é ausência de faixa no mês, diferente de um resultado igual a zero."
+          >
+            <div className="space-y-4 px-4 py-4 md:px-5">
+              {consultants.length > 0 && (
                 <div>
-                  <p className="text-sm text-white/75">Consultores acompanhados</p>
-                  <p className="mt-2 text-3xl font-semibold tabular-nums">
-                    {number(consultants.length)}
-                  </p>
-                </div>
-                <Users className="size-10 text-white/40" />
-              </Card>
-              {metrics.map((m) => {
-                const Icon = metricIcons[m.id];
-                const count = consultants.filter((c) => c.quartiles[m.id] === 1).length;
-                const share = consultants.length ? (count / consultants.length) * 100 : 0;
-                return (
-                  <Card key={m.id} className="rounded-2xl border-border/60 p-6 shadow-sm">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">{m.label}</p>
-                      <Icon className="size-4 text-primary" />
-                    </div>
-                    <p className="mt-2 text-3xl font-semibold tabular-nums">
-                      {count}
-                      <span className="ml-2 text-sm font-normal text-muted-foreground">no Q1</span>
-                    </p>
-                    <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="flex h-3 overflow-hidden rounded-md bg-muted" aria-hidden>
+                    {bandTotals.map((count, i) => (
                       <div
-                        className="h-full rounded-full bg-primary/70"
-                        style={{ width: `${share}%` }}
+                        key={i}
+                        className={QUARTILE_FILL[i]}
+                        style={{ width: `${(count / consultants.length) * 100}%` }}
                       />
-                    </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      {number(share)}% dos consultores na melhor faixa
-                    </p>
-                  </Card>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-primary/10 bg-primary/[0.035] p-4">
-              <div>
-                <p className="text-sm font-semibold">Explore por indicador</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  A seleção atualiza a distribuição e a evolução abaixo.
-                </p>
-              </div>
-              <div
-                className="inline-flex rounded-xl border bg-muted/40 p-1"
-                aria-label="Indicador do quartil"
-              >
-                {metrics.map((m) => (
-                  <button
-                    key={m.id}
-                    onClick={() => {
-                      setMetric(m.id);
-                      setPage(0);
-                      setExpanded(null);
-                    }}
-                    aria-pressed={metric === m.id}
-                    className={`rounded-lg px-5 py-2.5 text-sm font-medium transition ${metric === m.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    {m.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
-              <div className="space-y-5 border-b p-5 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h2 className="flex items-center gap-2 font-semibold">
-                    <BarChart3 className="size-4 text-primary" />
-                    Distribuição por parceiro
-                  </h2>
-                  <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                    {selectedLabel}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-                  {bandTotals.map((count, i) => (
-                    <div key={i} className="rounded-xl border border-border/50 bg-muted/20 p-3">
-                      <div className="flex items-center justify-between">
-                        <Badge value={i + 1} />
-                        <span className="text-lg font-semibold tabular-nums">{count}</span>
-                      </div>
-                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className={`h-full ${colors[i]}`}
-                          style={{
-                            width: `${consultants.length ? (count / consultants.length) * 100 : 0}%`,
-                          }}
-                        />
-                      </div>
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        {number(consultants.length ? (count / consultants.length) * 100 : 0)}% da
-                        equipe
-                      </p>
-                    </div>
-                  ))}
-                </div>
-                <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="font-medium text-emerald-700 dark:text-emerald-300">
-                    Q1 · melhor desempenho
-                  </span>
-                  <ArrowRight className="size-3" />
-                  <span>Q5 · maior espaço para evolução</span>
-                  <span className="sm:ml-auto">Faixas conforme o tempo de casa</span>
-                </p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead className="bg-muted/40 text-xs text-muted-foreground">
-                    <tr>
-                      <th className="px-5 py-3 text-left">Parceiro</th>
-                      <th className="px-3 py-3 text-center">Consultores</th>
-                      <th className="w-[25%] px-4 py-3 text-left">Distribuição</th>
-                      {[1, 2, 3, 4, 5].map((q) => (
-                        <th key={q} className="px-3 py-3 text-center">
-                          Q{q}
-                        </th>
-                      ))}
-                      <th className="px-3 py-3 text-center">Sem classificação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {distribution.map((p) => (
-                      <tr key={p.id} className="border-t border-border/50">
-                        <td className="px-5 py-4 font-medium">{p.name}</td>
-                        <td className="px-3 py-4 text-center tabular-nums">{p.count}</td>
-                        <td className="px-4 py-4">
-                          <div className="flex h-3 overflow-hidden rounded-full bg-muted">
-                            {p.bands.map((n, i) => (
-                              <div
-                                key={i}
-                                title={`Q${i + 1}: ${n} (${number((n / p.count) * 100)}%)`}
-                                className={colors[i]}
-                                style={{ width: `${(n / p.count) * 100}%` }}
-                              />
-                            ))}
-                          </div>
-                        </td>
-                        {p.bands.map((n, i) => (
-                          <td key={i} className="px-3 py-4 text-center tabular-nums">
-                            <span className={`rounded-lg px-2.5 py-1 font-semibold ${badges[i]}`}>
-                              {n}
-                            </span>
-                          </td>
-                        ))}
-                        <td className="px-3 py-4 text-center tabular-nums text-muted-foreground">
-                          {p.missing || "—"}
-                        </td>
-                      </tr>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-              {!distribution.length && (
-                <p className="p-6 text-sm text-muted-foreground">
-                  Nenhum consultor do mês atual para os parceiros selecionados.
-                </p>
-              )}
-            </Card>
-            <div className="grid gap-4 md:grid-cols-2">
-              {(["3", "6"] as const).map((period) => {
-                const changes = consultants.map((c) => c.comparisons[period].changes[metric]);
-                const before = consultants[0]?.comparisons[period].month;
-                return (
-                  <Card key={period} className="rounded-2xl border-border/60 p-5 shadow-sm sm:p-6">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h2 className="font-semibold">Evolução em {period} meses</h2>
-                      <span className="text-xs text-muted-foreground">
-                        {before ? `${labelMonth(before)} → ${labelMonth(data.latestMonth)}` : "—"}
-                      </span>
+                  </div>
+                  <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
+                    {bandTotals.map((count, i) => (
+                      <div key={i} className="flex items-baseline justify-between gap-2">
+                        <dt className={cn("text-xs font-semibold", QUARTILE_TEXT[i])}>Q{i + 1}</dt>
+                        <dd className="text-sm tabular-nums text-foreground">
+                          {fmtInt(count)}
+                          <span className="ml-1.5 text-xs text-muted-foreground">
+                            {share(count, consultants.length)}
+                          </span>
+                        </dd>
+                      </div>
+                    ))}
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs font-semibold text-muted-foreground">Sem Q</dt>
+                      <dd className="text-sm tabular-nums text-foreground">
+                        {fmtInt(unclassified)}
+                        <span className="ml-1.5 text-xs text-muted-foreground">
+                          {share(unclassified, consultants.length)}
+                        </span>
+                      </dd>
                     </div>
-                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {[
-                        {
-                          status: "up" as const,
-                          label: "Evoluíram",
-                          count: changes.filter((v) => v !== null && v > 0).length,
-                          color: "text-emerald-600",
-                        },
-                        {
-                          status: "down" as const,
-                          label: "Regrediram",
-                          count: changes.filter((v) => v !== null && v < 0).length,
-                          color: "text-rose-600",
-                        },
-                        {
-                          status: "stable" as const,
-                          label: "Estáveis",
-                          count: changes.filter((v) => v === 0).length,
-                          color: "text-foreground",
-                        },
-                        {
-                          status: "missing" as const,
-                          label: "Sem histórico",
-                          count: changes.filter((v) => v === null).length,
-                          color: "text-muted-foreground",
-                        },
-                      ].map((item) => (
+                  </dl>
+                </div>
+              )}
+              {!distribution.length ? (
+                <EmptyState
+                  title="Sem consultores no recorte"
+                  description="Nenhum consultor da competência atual pertence aos parceiros selecionados. Ajuste ou limpe o filtro de parceiros."
+                />
+              ) : (
+                <TableScroll>
+                  <Table className="min-w-[860px] table-fixed">
+                    <colgroup>
+                      <col className="w-[184px] sm:w-[260px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[180px]" />
+                      {[1, 2, 3, 4, 5].map((q) => (
+                        <col key={q} className="w-[72px]" />
+                      ))}
+                      <col className="w-[130px]" />
+                    </colgroup>
+                    <TableHeader className={TABLE_HEADER_CLASS}>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Parceiro</TableHead>
+                        <TableHead align="numeric">Consultores</TableHead>
+                        <TableHead>Distribuição</TableHead>
+                        {[1, 2, 3, 4, 5].map((q) => (
+                          <TableHead key={q} align="numeric" className={QUARTILE_TEXT[q - 1]}>
+                            Q{q}
+                          </TableHead>
+                        ))}
+                        <TableHead align="numeric">Sem classificação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className={TABLE_BODY_CLASS}>
+                      {distribution.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell
+                            className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}
+                          >
+                            {p.name}
+                          </TableCell>
+                          <TableCell align="numeric">{fmtInt(p.count)}</TableCell>
+                          <TableCell>
+                            <div className="flex h-2.5 overflow-hidden rounded-md bg-muted">
+                              {p.bands.map((n, i) => (
+                                <div
+                                  key={i}
+                                  title={`Q${i + 1}: ${fmtInt(n)} (${share(n, p.count)})`}
+                                  className={QUARTILE_FILL[i]}
+                                  style={{ width: p.count ? `${(n / p.count) * 100}%` : "0%" }}
+                                />
+                              ))}
+                            </div>
+                          </TableCell>
+                          {p.bands.map((n, i) => (
+                            <TableCell key={i} align="numeric" className="text-foreground">
+                              {fmtInt(n)}
+                            </TableCell>
+                          ))}
+                          <TableCell align="numeric" className="text-muted-foreground">
+                            {fmtInt(p.missing)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableScroll>
+              )}
+            </div>
+          </Section>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {(["3", "6"] as const).map((period) => {
+              const changes = consultants.map((c) => c.comparisons[period].changes[metric]);
+              const before = consultants[0]?.comparisons[period].month;
+              const beforeInBase = before ? (data.months?.includes(before) ?? false) : false;
+              /**
+               * Competências reais da base dentro da janela comparada. É leitura, não
+               * cálculo: a variação continua vindo de `comparisons[period]`.
+               */
+              const windowMonths = (data.months ?? []).filter(
+                (month) => (!before || month >= before) && month <= data.latestMonth,
+              );
+              return (
+                <Section
+                  key={period}
+                  title={`Evolução em ${period} meses · ${selectedLabel}`}
+                  description={
+                    <>
+                      Janela de {evolutionWindow[period]} competências: o mês corrente e os{" "}
+                      {evolutionWindow[period] - 1} anteriores. A comparação usa o quartil de{" "}
+                      <span className="font-medium capitalize text-foreground">
+                        {labelMonth(before ?? "")}
+                      </span>{" "}
+                      contra{" "}
+                      <span className="font-medium capitalize text-foreground">
+                        {labelMonth(data.latestMonth)}
+                      </span>
+                      {before && !beforeInBase
+                        ? " — essa competência inicial não está na base importada, por isso os consultores sem o mês aparecem como sem histórico."
+                        : "."}{" "}
+                      {windowMonths.length ? (
+                        <>
+                          Competências da base nessa janela:{" "}
+                          <span className="font-medium capitalize text-foreground">
+                            {windowMonths.map((month) => labelMonth(month)).join(", ")}
+                          </span>{" "}
+                          ({windowMonths.length} de {evolutionWindow[period]}).{" "}
+                        </>
+                      ) : null}
+                      Filtrar aqui recorta a lista do ranking, sem alterar a ordem nem a pontuação
+                      do ranking geral.
+                    </>
+                  }
+                >
+                  <div className="grid grid-cols-2 gap-2 px-4 py-4 sm:grid-cols-4 md:px-5">
+                    {[
+                      {
+                        status: "up" as const,
+                        label: "Evoluíram",
+                        count: changes.filter((v) => v !== null && v > 0).length,
+                        color: "text-success",
+                      },
+                      {
+                        status: "down" as const,
+                        label: "Regrediram",
+                        count: changes.filter((v) => v !== null && v < 0).length,
+                        color: "text-destructive",
+                      },
+                      {
+                        status: "stable" as const,
+                        label: "Estáveis",
+                        count: changes.filter((v) => v === 0).length,
+                        color: "text-foreground",
+                      },
+                      {
+                        status: "missing" as const,
+                        label: "Sem histórico",
+                        count: changes.filter((v) => v === null).length,
+                        color: "text-muted-foreground",
+                      },
+                    ].map((item) => {
+                      const active =
+                        evolutionFilter?.period === period &&
+                        evolutionFilter.status === item.status;
+                      return (
                         <button
                           key={item.label}
                           type="button"
-                          aria-pressed={
-                            evolutionFilter?.period === period &&
-                            evolutionFilter.status === item.status
-                          }
+                          aria-pressed={active}
                           onClick={() => {
                             setEvolutionFilter((current) =>
                               current?.period === period && current.status === item.status
@@ -426,134 +598,157 @@ function QuartilPage() {
                             setPage(0);
                             setExpanded(null);
                           }}
-                          className={`rounded-xl border p-3 text-left transition hover:-translate-y-0.5 hover:shadow-sm ${
-                            evolutionFilter?.period === period &&
-                            evolutionFilter.status === item.status
-                              ? "border-primary bg-primary/[0.08] ring-2 ring-primary/15"
-                              : "border-transparent bg-muted/35 hover:border-primary/20"
-                          }`}
+                          className={cn(
+                            "rounded-md border px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            active ? "border-primary bg-selection" : "border-border hover:bg-muted",
+                          )}
                         >
-                          <p className={`text-2xl font-semibold tabular-nums ${item.color}`}>
-                            {item.count}
+                          <p className={cn("text-xl font-semibold tabular-nums", item.color)}>
+                            {fmtInt(item.count)}
                           </p>
-                          <p className="mt-1 text-xs text-muted-foreground">{item.label}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
                         </button>
-                      ))}
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
-            <Card className="overflow-hidden rounded-2xl border-border/60 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b px-5 py-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-semibold">Ranking de consultores</h2>
-                    <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
-                      Geral · até 15 pontos
-                    </span>
+                      );
+                    })}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Soma dos três quartis: Q1 vale 5 pontos, Q2 vale 4, Q3 vale 3, Q4 vale 2 e Q5
-                    vale 1. Sem classificação vale 0. Em caso de empate, a maior Receita define a
-                    posição.
-                  </p>
-                  {evolutionFilter && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEvolutionFilter(null);
-                        setPage(0);
-                      }}
-                      className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
-                    >
-                      {evolutionLabels[evolutionFilter.status]} · {selectedLabel} ·{" "}
-                      {evolutionFilter.period} meses
-                      <X className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-                <div className="relative w-full sm:w-72">
-                  <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
-                  <Input
-                    aria-label="Buscar consultor"
-                    placeholder="Buscar consultor ou parceiro"
-                    className="pl-9"
-                    value={search}
-                    onChange={(e) => {
-                      setSearch(e.target.value);
-                      setPage(0);
-                    }}
-                  />
-                </div>
+                </Section>
+              );
+            })}
+          </div>
+
+          <Section
+            title="Ranking geral de consultores"
+            description="Ordem pela soma dos três quartis, de 0 a 15 pontos: Q1 vale 5, Q2 vale 4, Q3 vale 3, Q4 vale 2, Q5 vale 1 e sem classificação vale 0. Empate é decidido pela maior Receita. A ordem é a mesma para qualquer indicador selecionado; o indicador só define as colunas de valor e variação."
+            actions={
+              <div className="relative w-full sm:w-72">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden
+                />
+                <Input
+                  aria-label="Buscar consultor ou parceiro"
+                  placeholder="Buscar consultor ou parceiro"
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(0);
+                  }}
+                />
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[950px] text-sm">
-                  <thead className="bg-muted/40 text-xs text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-3 text-center">Posição</th>
-                      <th className="px-3 py-3 text-center">Pontos</th>
-                      <th className="px-5 py-3 text-left">Consultor / parceiro</th>
-                      <th className="px-3 py-3 text-center">Tempo de casa</th>
-                      {metrics.map((m) => (
-                        <th key={m.id} className="px-3 py-3 text-center">
-                          {m.label}
-                        </th>
-                      ))}
-                      <th className="px-3 py-3 text-right">
-                        {metrics.find((m) => m.id === metric)?.label} atual
-                      </th>
-                      <th className="px-4 py-3 text-center">Evolução 3 meses</th>
-                      <th className="px-4 py-3 text-center">Evolução 6 meses</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shown.map((c) => (
-                      <ConsultantRows
-                        key={c.id}
-                        consultant={c}
-                        rank={ranking.get(c.id) ?? 0}
-                        score={consultantScore(c)}
-                        metric={metric}
-                        months={data.months.slice(-7)}
-                        expanded={expanded === c.id}
-                        onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-                {!rows.length && (
-                  <p className="p-8 text-center text-sm text-muted-foreground">
-                    Nenhum consultor corresponde aos filtros aplicados.
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center justify-between border-t px-5 py-3 text-xs text-muted-foreground">
-                <span>
-                  {rows.length} consultores · página {actualPage + 1} de{" "}
-                  {Math.max(1, Math.ceil(rows.length / 20))}
+            }
+          >
+            {evolutionFilter && (
+              <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs md:px-5">
+                <span className="text-muted-foreground">Recorte da lista:</span>
+                <span className="font-medium text-foreground">
+                  {evolutionLabels[evolutionFilter.status]} · {selectedLabel} ·{" "}
+                  {evolutionFilter.period} meses
                 </span>
-                <div className="flex gap-4">
-                  <button
-                    disabled={actualPage === 0}
-                    onClick={() => setPage(actualPage - 1)}
-                    className="rounded-lg border px-3 py-2 hover:bg-muted disabled:opacity-30"
-                  >
-                    Anterior
-                  </button>
-                  <button
-                    disabled={(actualPage + 1) * 20 >= rows.length}
-                    onClick={() => setPage(actualPage + 1)}
-                    className="rounded-lg border px-3 py-2 hover:bg-muted disabled:opacity-30"
-                  >
-                    Próxima
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEvolutionFilter(null);
+                    setPage(0);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  Remover
+                  <X className="size-3.5" aria-hidden />
+                </button>
               </div>
-            </Card>
-          </>
-        )}
-      </div>
+            )}
+            {!rows.length ? (
+              <div className="px-4 py-4 md:px-5">
+                <EmptyState
+                  title="Nenhum consultor no recorte"
+                  description="A busca e o filtro de evolução foram preservados. Ajuste os termos ou limpe os filtros para ver a lista completa."
+                  action={
+                    <Button variant="outline" size="sm" className="mt-1" onClick={clearFilters}>
+                      Limpar filtros da lista
+                    </Button>
+                  }
+                />
+              </div>
+            ) : (
+              <div className="px-4 py-4 md:px-5">
+                <TableScroll hint="Role na horizontal para ver todas as colunas. O consultor permanece visível.">
+                  <Table className="min-w-[1076px] table-fixed">
+                    <colgroup>
+                      <col className="w-[196px] sm:w-[268px]" />
+                      <col className="w-[92px]" />
+                      <col className="w-[132px]" />
+                      <col className="w-[84px]" />
+                      <col className="w-[84px]" />
+                      <col className="w-[84px]" />
+                      <col className="w-[132px]" />
+                      <col className="w-[136px]" />
+                      <col className="w-[136px]" />
+                    </colgroup>
+                    <TableHeader className={TABLE_HEADER_CLASS}>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>
+                          Posição e consultor
+                        </TableHead>
+                        <TableHead align="numeric">Pontos</TableHead>
+                        <TableHead>Tempo de casa</TableHead>
+                        {metrics.map((m) => (
+                          <TableHead key={m.id} align="state">
+                            {m.label}
+                          </TableHead>
+                        ))}
+                        <TableHead align="numeric">{selectedLabel} atual</TableHead>
+                        <TableHead>Evolução 3 meses</TableHead>
+                        <TableHead>Evolução 6 meses</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className={TABLE_BODY_CLASS}>
+                      {shown.map((c) => (
+                        <ConsultantRows
+                          key={c.id}
+                          consultant={c}
+                          rank={ranking.get(c.id) ?? 0}
+                          score={consultantScore(c)}
+                          metric={metric}
+                          months={data.months.slice(-7)}
+                          expanded={expanded === c.id}
+                          onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
+                        />
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableScroll>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground md:px-5">
+              <span>
+                <span className="tabular-nums">{fmtInt(rows.length)}</span> de{" "}
+                <span className="tabular-nums">{fmtInt(consultants.length)}</span> consultores ·
+                página <span className="tabular-nums">{actualPage + 1}</span> de{" "}
+                <span className="tabular-nums">{Math.max(1, Math.ceil(rows.length / 20))}</span>
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={actualPage === 0}
+                  onClick={() => setPage(actualPage - 1)}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={(actualPage + 1) * 20 >= rows.length}
+                  onClick={() => setPage(actualPage + 1)}
+                >
+                  Próxima
+                </Button>
+              </div>
+            </div>
+          </Section>
+        </div>
+      )}
     </DashboardLayout>
   );
 }
@@ -605,148 +800,157 @@ function ConsultantRows({
           : recentChanges.every((item) => item.value === null)
             ? "Ainda não há histórico suficiente para avaliar a trajetória."
             : "Desempenho estável nos últimos 3 meses.";
-  const rankStyle =
-    rank === 1
-      ? "bg-amber-400/20 text-amber-700 dark:text-amber-300"
-      : rank === 2
-        ? "bg-slate-400/20 text-slate-700 dark:text-slate-300"
-        : rank === 3
-          ? "bg-orange-500/15 text-orange-700 dark:text-orange-300"
-          : "bg-muted text-muted-foreground";
+  const tenureLabel =
+    c.tenure === null
+      ? "Não informado"
+      : c.tenure === "experienced"
+        ? "Acima de 3 meses"
+        : "Até 3 meses";
   return (
     <>
-      <tr className="border-t border-border/50 hover:bg-muted/20">
-        <td className="px-3 py-3 text-center">
-          <span
-            className={`inline-flex min-w-9 items-center justify-center rounded-lg px-2 py-1 text-xs font-bold tabular-nums ${rankStyle}`}
-          >
-            {rank}º
-          </span>
-        </td>
-        <td className="px-3 py-3 text-center">
-          <span className="inline-flex min-w-12 items-center justify-center rounded-lg bg-primary/10 px-2 py-1 text-xs font-bold text-primary tabular-nums">
-            {score}/15
-          </span>
-        </td>
-        <td className="px-5 py-3">
+      <TableRow>
+        {/*
+          Identificação da linha: posição, consultor e parceiro no mesmo bloco fixo.
+          No celular isso devolve largura ao nome real e mantém a linha reconhecível
+          durante a rolagem horizontal, sem esconder nenhuma coluna.
+        */}
+        <TableCell className={cn(STICKY_ID_CLASS, "bg-card align-top")}>
           <button
-            className="flex items-center gap-2 text-left"
+            type="button"
+            className="flex w-full items-start gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             aria-expanded={expanded}
             onClick={onToggle}
           >
             <ChevronDown
-              className={`size-4 shrink-0 text-primary transition ${expanded ? "rotate-180" : ""}`}
+              aria-hidden
+              className={cn(
+                "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                expanded && "rotate-180",
+              )}
             />
-            <span>
-              <span className="block font-medium">{c.name}</span>
-              <span className="text-xs text-muted-foreground">{c.partnerName}</span>
+            <span className="min-w-0">
+              <span className="block text-xs font-semibold tabular-nums text-muted-foreground">
+                {rank}º
+              </span>
+              <span className="block font-medium text-foreground">{c.name}</span>
+              <span className="block text-xs text-muted-foreground">{c.partnerName}</span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {expanded ? "Ocultar análise individual" : "Ver análise individual"}
+              </span>
             </span>
           </button>
-        </td>
-        <td className="px-3 py-3 text-center text-xs text-muted-foreground">
-          {c.tenure === null
-            ? "Não informado"
-            : c.tenure === "experienced"
-              ? "Acima de 3 meses"
-              : "Até 3 meses"}
-        </td>
+        </TableCell>
+        <TableCell align="numeric" className="align-top font-medium text-foreground">
+          {score}
+          <span className="text-xs font-normal text-muted-foreground">/15</span>
+        </TableCell>
+        <TableCell className="align-top text-xs text-muted-foreground">{tenureLabel}</TableCell>
         {metrics.map((m) => (
-          <td key={m.id} className="px-3 py-3 text-center">
-            <Badge value={c.quartiles[m.id]} />
-          </td>
+          <TableCell key={m.id} align="state" className="align-top">
+            <Quartile value={c.quartiles[m.id]} />
+          </TableCell>
         ))}
-        <td className="px-3 py-3 text-right tabular-nums">
-          {c.values[metric] === null
-            ? "—"
-            : `${metric === "receita" ? "R$ " : ""}${number(c.values[metric])}`}
-        </td>
-        <td className="px-4 py-3 text-center">
+        <TableCell align="numeric" className="align-top text-foreground">
+          {metricValue(metric, c.values[metric])}
+        </TableCell>
+        <TableCell className="align-top">
           <Change value={c.comparisons["3"].changes[metric]} />
-        </td>
-        <td className="px-4 py-3 text-center">
+        </TableCell>
+        <TableCell className="align-top">
           <Change value={c.comparisons["6"].changes[metric]} />
-        </td>
-      </tr>
+        </TableCell>
+      </TableRow>
       {expanded && (
-        <tr>
-          <td colSpan={10} className="bg-primary/[0.025] px-6 py-5">
-            <div className="mb-5 grid gap-3 lg:grid-cols-3">
-              <div className="rounded-xl border border-emerald-500/15 bg-emerald-500/[0.06] p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                  <Award className="size-4" /> Ponto forte
-                </div>
-                <p className="mt-2 text-sm font-medium">
+        <TableRow className="hover:bg-transparent">
+          <TableCell colSpan={9} className="bg-muted/40 !whitespace-normal !px-4 !py-4 md:!px-5">
+            <h3 className="text-[15px] font-semibold leading-[22px] text-foreground">
+              Análise individual · {c.name}
+            </h3>
+            <dl className="mt-3 grid gap-x-6 gap-y-3 md:grid-cols-3">
+              <div>
+                <dt className="text-xs font-semibold text-foreground">Ponto forte</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {bestQuartile === null
                     ? "Dados insuficientes para classificação."
                     : balanced
                       ? `Desempenho equilibrado nos três indicadores · Q${bestQuartile}`
                       : `${strongest.map((item) => item.label).join(" e ")} · Q${bestQuartile}`}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                </dd>
+                <dd className="mt-0.5 text-xs text-muted-foreground">
                   Melhor posição atual entre os três indicadores.
-                </p>
+                </dd>
               </div>
-              <div className="rounded-xl border border-orange-500/15 bg-orange-500/[0.06] p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-orange-700 dark:text-orange-300">
-                  <Target className="size-4" /> Ponto de atenção
-                </div>
-                <p className="mt-2 text-sm font-medium">
+              <div>
+                <dt className="text-xs font-semibold text-foreground">Ponto de atenção</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {weakestQuartile === null
                     ? "Dados insuficientes para classificação."
                     : balanced
                       ? `Os três indicadores estão no Q${weakestQuartile}`
                       : `${weakest.map((item) => item.label).join(" e ")} · Q${weakestQuartile}`}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                </dd>
+                <dd className="mt-0.5 text-xs text-muted-foreground">
                   Indicador com maior espaço para evolução.
-                </p>
+                </dd>
               </div>
-              <div className="rounded-xl border border-primary/15 bg-primary/[0.06] p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-primary">
-                  <Activity className="size-4" /> Trajetória
-                </div>
-                <p className="mt-2 text-sm font-medium">{trendText}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Leitura baseada na variação dos quartis.
-                </p>
+              <div>
+                <dt className="text-xs font-semibold text-foreground">Trajetória</dt>
+                <dd className="mt-1 text-sm text-foreground">{trendText}</dd>
+                <dd className="mt-0.5 text-xs text-muted-foreground">
+                  Leitura baseada na variação dos quartis nos últimos 3 meses.
+                </dd>
               </div>
-            </div>
-            <div className="overflow-x-auto rounded-xl border bg-card/70">
-              <table className="w-full min-w-[720px] text-xs">
-                <thead>
-                  <tr>
-                    <th className="p-2 text-left">Histórico</th>
+            </dl>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Histórico por competência: quartil e valor apurado. &quot;Sem dado&quot; indica
+              competência sem apuração para este consultor, diferente de um valor igual a zero.
+            </p>
+            <TableScroll className="mt-2 rounded-md border border-border bg-card">
+              <Table className="min-w-[640px] table-fixed text-xs">
+                <colgroup>
+                  <col className="w-[120px]" />
+                  {months.map((month) => (
+                    <col key={month} className="w-[104px]" />
+                  ))}
+                </colgroup>
+                <TableHeader className={TABLE_HEADER_CLASS}>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Indicador</TableHead>
                     {months.map((month) => (
-                      <th key={month} className="p-2 text-center capitalize">
+                      <TableHead key={month} align="state" className="capitalize">
                         {labelMonth(month)}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={TABLE_BODY_CLASS}>
                   {metrics.map((m) => (
-                    <tr key={m.id}>
-                      <td className="p-2 font-medium">{m.label}</td>
+                    <TableRow key={m.id}>
+                      <TableCell
+                        className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}
+                      >
+                        {m.label}
+                      </TableCell>
                       {months.map((month) => {
                         const point = c.history.find((p) => p.month === month);
                         return (
-                          <td key={month} className="p-2 text-center">
-                            <Badge value={point?.quartiles[m.id]} />
-                            <span className="mt-1 block text-muted-foreground tabular-nums">
-                              {point?.values[m.id] != null
-                                ? number(point.values[m.id]!)
-                                : "Sem dado"}
+                          <TableCell key={month} align="state">
+                            <Quartile value={point?.quartiles[m.id]} />
+                            <span className="mt-1 block tabular-nums text-muted-foreground">
+                              {point?.values[m.id] == null
+                                ? "Sem dado"
+                                : metricValue(m.id, point.values[m.id])}
                             </span>
-                          </td>
+                          </TableCell>
                         );
                       })}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </td>
-        </tr>
+                </TableBody>
+              </Table>
+            </TableScroll>
+          </TableCell>
+        </TableRow>
       )}
     </>
   );

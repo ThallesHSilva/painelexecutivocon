@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-09-20",
+  "source": "local isolated Vite instance with temporary authentication database and sanitized browser API interception",
+  "gitTrackedImages": false,
+  "evidenceDirectory": ".tmp-validation/etapa-0",
+  "profile": "director-fictitious",
+  "theme": "light",
+  "captures": [
+    { "route": "/resultados", "viewport": "1440x900", "file": "resultados--1440x900--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/resultados", "viewport": "1024x768", "file": "resultados--1024x768--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/resultados", "viewport": "390x844", "file": "resultados--390x844--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/relatorio-executivo", "viewport": "1440x900", "file": "relatorio-executivo--1440x900--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/relatorio-executivo", "viewport": "390x844", "file": "relatorio-executivo--390x844--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/qsc", "viewport": "1440x900", "file": "qsc--1440x900--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/qsc", "viewport": "390x844", "file": "qsc--390x844--light--sanitized.png", "nan": false, "undefined": false, "documentOverflow": false },
+    { "route": "/ftth", "viewport": "1440x900", "file": "ftth--1440x900--light--sanitized.png" },
+    { "route": "/ftth", "viewport": "390x844", "file": "ftth--390x844--light--sanitized.png" },
+    { "route": "/certificacao", "viewport": "1440x900", "file": "certificacao--1440x900--light--sanitized.png" },
+    { "route": "/certificacao", "viewport": "390x844", "file": "certificacao--390x844--light--sanitized.png" },
+    { "route": "/quartil", "viewport": "1440x900", "file": "quartil--1440x900--light--sanitized.png" },
+    { "route": "/quartil", "viewport": "390x844", "file": "quartil--390x844--light--sanitized.png" }
+  ],
+  "findings": [
+    "Document-level scrollWidth does not reveal internal table readability failures.",
+    "The 1024px header visually crowds/collides near the right-side actions.",
+    "Long partner names overlap numeric tower columns at narrow desktop widths.",
+    "The 390px tower table shows overlapping row identity and numeric content.",
+    "Conforming sanitized contracts produced no visible NaN or undefined; legacy omitted fields remain the negative compatibility case.",
+    "Screenshot capture alone does not validate A4 print pagination or PDF row completeness."
+  ]
+}

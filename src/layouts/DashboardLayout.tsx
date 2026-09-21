@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ChartNoAxesCombined,
@@ -78,16 +78,15 @@ function NavItems({
         key={item.to}
         to={item.to}
         onClick={onNavigate}
+        aria-current={active ? "page" : undefined}
         className={
-          `group relative flex items-center rounded-xl text-sm transition ${nested ? "gap-3 px-3 py-2.5" : mobile ? "gap-3 px-3 py-3" : "gap-1.5 px-2 py-2 xl:gap-2 xl:px-3"} ` +
+          `relative flex items-center rounded-sm text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${nested ? "gap-3 px-3 py-2.5" : mobile ? "gap-3 px-3 py-3" : "gap-1.5 px-2 py-2 xl:gap-2 xl:px-2.5"} ` +
           (active
-            ? "bg-gradient-brand font-medium text-primary-foreground shadow-elegant"
-            : nested
-              ? "text-foreground/75 hover:bg-primary/[0.07] hover:text-foreground"
-              : "text-foreground/75 hover:bg-primary/[0.06] hover:text-foreground")
+            ? "bg-selection font-semibold text-primary"
+            : "text-foreground/80 hover:bg-muted hover:text-foreground")
         }
       >
-        <Icon className="size-[17px] shrink-0" />
+        <Icon className="size-4 shrink-0" />
         <span className="whitespace-nowrap">{item.label}</span>
       </Link>
     );
@@ -103,7 +102,7 @@ function NavItems({
     return (
       <nav className="grid gap-1.5 p-3" aria-label="Navegação principal">
         {PRIMARY_NAV.slice(0, 1).map((item) => navLink(item))}
-        <div className="my-1 rounded-2xl border border-primary/10 bg-primary/[0.025] p-2">
+        <div className="my-1 rounded-md border border-border p-2">
           <div className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-primary">
             <BriefcaseBusiness className="size-4" />
             Oportunidades carteira
@@ -119,35 +118,9 @@ function NavItems({
   }
 
   return (
-    <nav className="flex min-w-max items-center gap-1" aria-label="Navegação principal">
+    <nav className="flex items-center gap-0.5" aria-label="Navegação principal">
       {PRIMARY_NAV.slice(0, 1).map((item) => navLink(item))}
-      <div className="group/opportunities relative">
-        <button
-          type="button"
-          aria-haspopup="menu"
-          className={
-            "flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm transition xl:gap-2 xl:px-3 " +
-            (opportunitiesActive
-              ? "bg-gradient-brand font-medium text-primary-foreground shadow-elegant"
-              : "text-foreground/75 hover:bg-primary/[0.06] hover:text-foreground")
-          }
-        >
-          <BriefcaseBusiness className="size-[17px]" />
-          <span>Oportunidades carteira</span>
-          <ChevronDown className="size-3.5 transition-transform duration-200 group-hover/opportunities:rotate-180 group-focus-within/opportunities:rotate-180" />
-        </button>
-        <div className="invisible absolute left-0 top-full z-50 w-[310px] translate-y-1 pt-2 opacity-0 transition duration-200 group-hover/opportunities:visible group-hover/opportunities:translate-y-0 group-hover/opportunities:opacity-100 group-focus-within/opportunities:visible group-focus-within/opportunities:translate-y-0 group-focus-within/opportunities:opacity-100">
-          <div
-            role="menu"
-            className="grid gap-1 rounded-2xl border border-primary/15 bg-card/95 p-2 shadow-elevated backdrop-blur-xl"
-          >
-            <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Selecione uma oportunidade
-            </div>
-            {OPPORTUNITY_NAV.map((item) => navLink(item, true))}
-          </div>
-        </div>
-      </div>
+      <OpportunitiesMenu active={opportunitiesActive} renderLink={navLink} />
       {PRIMARY_NAV.slice(1).map((item) => navLink(item))}
       {SECONDARY_NAV.map((item) => navLink(item))}
       {navLink(DATA_NAV)}
@@ -155,12 +128,107 @@ function NavItems({
   );
 }
 
+/**
+ * Submenu "Oportunidades carteira".
+ *
+ * Abre por hover, por clique e por teclado, conforme o DESIGN. O hover sozinho não
+ * atende toque nem navegação por teclado, que era o comportamento anterior.
+ * Fecha com Escape, ao clicar fora e ao navegar.
+ */
+function OpportunitiesMenu({
+  active,
+  renderLink,
+}: {
+  active: boolean;
+  renderLink: (item: (typeof OPPORTUNITY_NAV)[number], nested?: boolean) => ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  // "Fixado" separa abrir por hover de abrir por clique/toque: sem isso, passar o
+  // mouse abria o menu e o clique seguinte o fechava imediatamente.
+  const pinnedRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const close = () => {
+    pinnedRef.current = false;
+    setOpen(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => {
+        if (!pinnedRef.current) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          if (open && pinnedRef.current) {
+            close();
+            return;
+          }
+          pinnedRef.current = true;
+          setOpen(true);
+        }}
+        className={
+          "flex items-center gap-1.5 rounded-sm px-2 py-2 text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background xl:gap-2 xl:px-2.5 " +
+          (active
+            ? "bg-selection font-semibold text-primary"
+            : "text-foreground/80 hover:bg-muted hover:text-foreground")
+        }
+      >
+        <BriefcaseBusiness className="size-4" />
+        <span className="whitespace-nowrap">Oportunidades carteira</span>
+        <ChevronDown
+          className={"size-3.5 transition-transform duration-150 " + (open ? "rotate-180" : "")}
+        />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-50 w-[310px] pt-2">
+          <div
+            role="menu"
+            className="grid gap-0.5 rounded-md border border-border bg-popover p-2 shadow-md"
+            onClick={close}
+          >
+            <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              Selecione uma oportunidade
+            </div>
+            {OPPORTUNITY_NAV.map((item) => renderLink(item, true))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Header({
   onMenu,
   role,
+  title,
 }: {
   onMenu: () => void;
   role: "admin" | "director" | "gn" | null;
+  title: string;
 }) {
   const { theme, toggle } = useTheme();
   const [signingOut, setSigningOut] = useState(false);
@@ -175,37 +243,37 @@ function Header({
     }
   };
   return (
-    <header className="sticky top-0 z-30 border-b border-primary/10 bg-background/85 shadow-[0_10px_35px_-28px_hsl(var(--primary)/0.55)] backdrop-blur-xl">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/25 to-transparent" />
+    <header className="sticky top-0 z-30 border-b border-border bg-background">
       <div className="relative mx-auto max-w-[1600px] px-4 md:px-6 xl:px-8">
-        <div className="flex h-[68px] items-center gap-3">
+        <div className="flex h-16 items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
-            className="shrink-0 lg:hidden"
+            className="shrink-0 xl:hidden"
             onClick={onMenu}
             aria-label="Abrir menu"
           >
             <Menu className="size-5" />
           </Button>
-          <div className="hidden min-w-0 flex-1 lg:block">
+          <div className="hidden min-w-0 flex-1 xl:block">
             <NavItems role={role} />
           </div>
-          <div className="flex-1 lg:hidden" />
-          {role !== "admin" && (
+          <p className="flex-1 truncate text-sm font-semibold text-foreground xl:hidden">{title}</p>
+          {role !== null && role !== "admin" && (
             <div className="hidden 2xl:block">
               <PartnerFilter />
             </div>
           )}
-          {role !== "admin" && (
+          {role !== null && role !== "admin" && (
             <Button
               variant="outline"
-              size="sm"
+              size="icon"
               onClick={() => window.print()}
-              className="h-10 shrink-0 gap-2 rounded-2xl border-primary/15 bg-card/70 px-3 text-xs font-semibold shadow-sm transition hover:border-primary/30 hover:bg-primary/[0.06]"
+              className="shrink-0 2xl:w-auto 2xl:gap-2 2xl:px-3 2xl:text-xs 2xl:font-semibold"
               aria-label="Baixar material em PDF"
+              title="Baixar material em PDF"
             >
-              <Download className="size-3.5" />
+              <Download className="size-4" />
               <span className="hidden 2xl:inline">Baixar material</span>
             </Button>
           )}
@@ -213,18 +281,14 @@ function Header({
             variant="outline"
             size="icon"
             aria-label={theme === "dark" ? "Modo claro" : "Modo escuro"}
+            title={theme === "dark" ? "Modo claro" : "Modo escuro"}
             onClick={toggle}
-            className="size-10 shrink-0 rounded-2xl border-border/80 bg-card/70 shadow-sm transition hover:border-primary/20 hover:bg-primary/[0.06]"
+            className="shrink-0"
           >
             {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
           {(role === "admin" || role === "director") && (
-            <Button
-              asChild
-              variant="outline"
-              size="icon"
-              className="size-10 shrink-0 rounded-2xl border-primary/15 bg-card/70 text-primary shadow-sm"
-            >
+            <Button asChild variant="outline" size="icon" className="shrink-0 text-primary">
               <Link to="/usuarios" aria-label="Gerenciar acessos" title="Gerenciar acessos">
                 <UserCog className="size-4" />
               </Link>
@@ -232,11 +296,12 @@ function Header({
           )}
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={signOut}
             disabled={signingOut}
-            className="h-10 shrink-0 gap-2 rounded-2xl px-3 text-xs font-semibold text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
+            className="shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive 2xl:w-auto 2xl:gap-2 2xl:px-3 2xl:text-xs 2xl:font-semibold"
             aria-label="Sair do painel"
+            title="Sair do painel"
           >
             {signingOut ? (
               <LoaderCircle className="size-4 animate-spin" />
@@ -246,7 +311,7 @@ function Header({
             <span className="hidden 2xl:inline">Sair</span>
           </Button>
         </div>
-        {role !== "admin" && (
+        {role !== null && role !== "admin" && (
           <div className="pb-2 2xl:hidden">
             <PartnerFilter />
           </div>
@@ -256,7 +321,7 @@ function Header({
   );
 }
 
-export function DashboardLayout({ children }: { title: string; children: ReactNode }) {
+export function DashboardLayout({ title, children }: { title: string; children: ReactNode }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [role, setRole] = useState<"admin" | "director" | "gn" | null>(null);
 
@@ -277,7 +342,7 @@ export function DashboardLayout({ children }: { title: string; children: ReactNo
         </SheetTrigger>
         <SheetContent
           side="top"
-          className="max-h-[90vh] overflow-y-auto border-b border-primary/15 p-0"
+          className="max-h-[90vh] overflow-y-auto border-b border-border p-0"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Navegação principal</SheetTitle>
@@ -286,7 +351,7 @@ export function DashboardLayout({ children }: { title: string; children: ReactNo
         </SheetContent>
       </Sheet>
 
-      <Header role={role} onMenu={() => setDrawerOpen(true)} />
+      <Header role={role} title={title} onMenu={() => setDrawerOpen(true)} />
       <main className="mx-auto max-w-[1600px] px-4 py-5 md:px-6 md:py-7 xl:px-8 xl:py-8">
         {children}
       </main>

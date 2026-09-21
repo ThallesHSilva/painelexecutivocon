@@ -1,20 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Fragment, useState, type ComponentType } from "react";
+import { Fragment, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import {
-  CalendarDays,
   ChevronDown,
-  ChevronUp,
-  ClipboardCheck,
   RefreshCw,
-  ShieldCheck,
   Smartphone,
   UsersRound,
   Wifi,
   type LucideProps,
 } from "lucide-react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
-import { ErrorState } from "@/components/EmptyState";
+import { usePartnerFilter } from "@/contexts/AppContexts";
+import { usePartners, useQsc } from "@/hooks/useData";
+import { EmptyState, ErrorState } from "@/components/EmptyState";
+import { TableScroll } from "@/components/TableScroll";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -23,9 +24,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useQsc } from "@/hooks/useData";
-import { fmtInt, fmtPct } from "@/lib/format";
-import type { QscDomain, QscMetricSeries } from "@/lib/qsc";
+import { fmtInt } from "@/lib/format";
+import type { QscDomain, QscMetricPoint, QscMetricSeries } from "@/lib/qsc";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/qsc")({
@@ -37,52 +37,75 @@ const DOMAIN_META: Record<
   QscDomain,
   {
     label: string;
-    shortLabel: string;
-    eyebrow: string;
+    context: string;
     icon: ComponentType<LucideProps>;
-    accent: string;
-    surface: string;
   }
 > = {
   carteira: {
     label: "QSC Carteira",
-    shortLabel: "Carteira",
-    eyebrow: "Manutenção e fidelização",
+    context: "Manutenção e fidelização da base",
     icon: UsersRound,
-    accent: "text-violet-600 dark:text-violet-300",
-    surface: "border-violet-400/20 from-violet-500/[0.11] to-primary/[0.04]",
   },
   fixa: {
     label: "QSC Banda Larga",
-    shortLabel: "Banda Larga",
-    eyebrow: "Qualidade das vendas fixas",
+    context: "Qualidade das vendas fixas",
     icon: Wifi,
-    accent: "text-cyan-700 dark:text-cyan-300",
-    surface: "border-cyan-400/20 from-cyan-500/[0.11] to-primary/[0.04]",
   },
   movel: {
     label: "QSC Móvel",
-    shortLabel: "Móvel",
-    eyebrow: "Performance e experiência",
+    context: "Performance e experiência móvel",
     icon: Smartphone,
-    accent: "text-fuchsia-700 dark:text-fuchsia-300",
-    surface: "border-fuchsia-400/20 from-fuchsia-500/[0.11] to-primary/[0.04]",
   },
 };
 
+/**
+ * Faixa do indicador: qualifica um KPI isolado, em que 1 é o melhor resultado.
+ *
+ * Este mapa é independente do mapa da nota consolidada e os dois nunca devem ser
+ * compartilhados: o número da faixa tem sentidos opostos nas duas escalas. Além da
+ * cor, a faixa do indicador sempre aparece como pílula com a palavra "Faixa".
+ * Par texto/fundo verificado nos dois temas.
+ */
 const INDICATOR_BAND_STYLE: Record<string, string> = {
-  "1": "border-emerald-500/20 bg-emerald-500 text-white",
-  "2": "border-amber-500/25 bg-amber-100 text-amber-900 dark:bg-amber-400/20 dark:text-amber-200",
-  "3": "border-orange-500/25 bg-orange-100 text-orange-900 dark:bg-orange-400/20 dark:text-orange-200",
-  "4": "border-red-500/25 bg-red-500 text-white",
+  "1": "border-success/30 bg-success/10 text-success",
+  "2": "border-warning/30 bg-warning/10 text-warning",
+  "3": "border-critical/30 bg-critical/10 text-critical",
+  "4": "border-destructive/30 bg-destructive/10 text-destructive",
+};
+const INDICATOR_BAND_FALLBACK = "border-border bg-muted text-muted-foreground";
+
+/**
+ * Faixa da nota consolidada: qualifica a soma das notas do domínio, em que 5 é o
+ * melhor resultado. Escala de cinco degraus aprovada no design (verde, teal, âmbar,
+ * laranja e vermelho). Apresentada em bloco retangular com barra lateral, forma
+ * deliberadamente diferente da pílula usada na faixa do indicador.
+ */
+const TOTAL_BAND_STYLE: Record<string, string> = {
+  "Faixa 5": "border-success/40 bg-success/10 text-success",
+  "Faixa 4": "border-info/40 bg-info/10 text-info",
+  "Faixa 3": "border-warning/40 bg-warning/10 text-warning",
+  "Faixa 2": "border-critical/40 bg-critical/10 text-critical",
+  "Faixa 1": "border-destructive/40 bg-destructive/10 text-destructive",
+  "Sem faixa": "border-border bg-muted text-muted-foreground",
 };
 
-const PULSE_METRICS = [
-  { id: "early-churn-fixa", label: "Early Churn Fixa" },
-  { id: "early-churn-movel", label: "Early Churn Móvel" },
-  { id: "churn-bl", label: "Churn Fixa" },
-  { id: "churn-movel", label: "Churn Móvel" },
-  { id: "saldo-portabilidade", label: "Saldo de Portabilidade" },
+const TABLE_HEADER_CLASS =
+  "bg-muted [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-foreground";
+const TABLE_BODY_CLASS =
+  "[&_td]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_tr]:border-border [&_tr:hover]:bg-transparent";
+/**
+ * Identificação persistente: a primeira coluna acompanha a rolagem horizontal para
+ * que a linha continue identificável no celular, sem retirar nenhuma coluna.
+ */
+const STICKY_ID_CLASS = "sticky left-0 z-[1] !whitespace-normal";
+const STICKY_ID_WIDTH = "w-[184px] sm:w-[260px]";
+
+const PULSE_METRIC_IDS = [
+  "early-churn-fixa",
+  "early-churn-movel",
+  "churn-bl",
+  "churn-movel",
+  "saldo-portabilidade",
 ] as const;
 
 const qscPercentFormatter = new Intl.NumberFormat("pt-BR", {
@@ -92,63 +115,41 @@ const qscPercentFormatter = new Intl.NumberFormat("pt-BR", {
 });
 
 const fmtQscPct = (value: number | null | undefined) =>
-  value == null ? "—" : qscPercentFormatter.format(value);
+  value == null || !Number.isFinite(value) ? "—" : qscPercentFormatter.format(value);
 
 const maximumMetricScore = (metric: QscMetricSeries) =>
   Math.max(0, ...metric.scoreRules.map((rule) => rule.score));
 
+/**
+ * Disponibilidade do ponto, em três estados distintos.
+ *
+ * `missing` é ausência de base para a competência; `zero-park` é parque zero, em que
+ * numerador e denominador existem mas a razão não é calculável; `available` inclui o
+ * zero real, que continua sendo um resultado legítimo e nunca vira "—".
+ */
+type PointState = "available" | "missing" | "zero-park";
+
+function pointState(point: QscMetricPoint | null | undefined): PointState {
+  if (!point || !point.available) return "missing";
+  if (point.zeroPark) return "zero-park";
+  return "available";
+}
+
+const POINT_STATE_LABEL: Record<PointState, string> = {
+  available: "Disponível",
+  missing: "Sem base",
+  "zero-park": "Parque zero",
+};
+
 function qscTotalRatingFromTotal(total: number | null) {
   if (total === null) return null;
 
-  if (total >= 90) {
-    return {
-      total,
-      band: "Faixa 5",
-      points: 1000,
-      className: "border-emerald-500/20 bg-emerald-500 text-white",
-    };
-  }
-  if (total >= 80) {
-    return {
-      total,
-      band: "Faixa 4",
-      points: 800,
-      className:
-        "border-lime-500/25 bg-lime-100 text-lime-900 dark:bg-lime-400/20 dark:text-lime-200",
-    };
-  }
-  if (total >= 70) {
-    return {
-      total,
-      band: "Faixa 3",
-      points: 600,
-      className:
-        "border-amber-500/25 bg-amber-100 text-amber-900 dark:bg-amber-400/20 dark:text-amber-200",
-    };
-  }
-  if (total >= 60) {
-    return {
-      total,
-      band: "Faixa 2",
-      points: 400,
-      className:
-        "border-orange-500/25 bg-orange-100 text-orange-900 dark:bg-orange-400/20 dark:text-orange-200",
-    };
-  }
-  if (total >= 50) {
-    return {
-      total,
-      band: "Faixa 1",
-      points: 200,
-      className: "border-red-500/25 bg-red-500 text-white",
-    };
-  }
-  return {
-    total,
-    band: "Sem faixa",
-    points: 0,
-    className: "border-red-500/20 bg-red-100 text-red-900 dark:bg-red-400/20 dark:text-red-200",
-  };
+  if (total >= 90) return { total, band: "Faixa 5", points: 1000 };
+  if (total >= 80) return { total, band: "Faixa 4", points: 800 };
+  if (total >= 70) return { total, band: "Faixa 3", points: 600 };
+  if (total >= 60) return { total, band: "Faixa 2", points: 400 };
+  if (total >= 50) return { total, band: "Faixa 1", points: 200 };
+  return { total, band: "Sem faixa", points: 0 };
 }
 
 function qscTotalRating(metrics: QscMetricSeries[]) {
@@ -189,224 +190,357 @@ function formatUpdatedAt(value?: string) {
     .replace(",", " •");
 }
 
-function SummaryPanel({ domain, metrics }: { domain: QscDomain; metrics: QscMetricSeries[] }) {
-  const meta = DOMAIN_META[domain];
-  const Icon = meta.icon;
-  const totalRating = qscTotalRating(metrics);
-  const [expandedMetricId, setExpandedMetricId] = useState<string | null>(null);
+/** Faixa do indicador. Pílula com a palavra, nunca só a cor. */
+function IndicatorBand({ band }: { band: string }) {
   return (
-    <Card
+    <span
       className={cn(
-        "overflow-hidden rounded-[1.8rem] border bg-gradient-to-br shadow-elegant",
-        meta.surface,
+        "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold leading-4",
+        INDICATOR_BAND_STYLE[band] ?? INDICATOR_BAND_FALLBACK,
       )}
     >
-      <div className="flex items-center justify-between gap-4 border-b border-border/55 bg-background/45 px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              "grid size-10 place-items-center rounded-2xl bg-background/70 shadow-sm ring-1 ring-border/50",
-              meta.accent,
-            )}
-          >
-            <Icon className="size-5" />
-          </div>
-          <div>
-            <p className={cn("text-[10px] font-semibold uppercase tracking-[0.16em]", meta.accent)}>
-              {meta.eyebrow}
-            </p>
-            <h2 className="mt-0.5 text-lg font-semibold tracking-tight">
-              Resumo {meta.shortLabel}
-            </h2>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <span className="rounded-full border border-border/60 bg-background/70 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
-            Mês corrente
-          </span>
-          {totalRating ? (
-            <div
-              className={cn(
-                "flex items-center gap-2 rounded-xl border px-3 py-1.5 shadow-sm",
-                totalRating.className,
-              )}
-            >
-              <span className="text-[10px] font-semibold uppercase tracking-[0.12em] opacity-80">
-                Nota QSC
-              </span>
-              <strong className="text-sm tabular-nums">{totalRating.total}</strong>
-              <span className="border-l border-current/20 pl-2 text-[10px] font-bold uppercase tracking-wide">
-                {totalRating.band}
-              </span>
-              <span className="text-[10px] font-semibold tabular-nums">
-                {fmtInt(totalRating.points)} pts
-              </span>
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div className="overflow-x-auto px-3 py-3 sm:px-4 sm:py-4">
-        <Table className="min-w-[720px]">
-          <TableHeader className="bg-background/55 [&_th]:h-auto [&_th]:border-b [&_th]:border-border/55 [&_th]:px-4 [&_th]:py-3 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.12em] [&_th]:text-muted-foreground">
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="min-w-[260px]">Indicador</TableHead>
-              <TableHead className="text-right">KPI1</TableHead>
-              <TableHead className="text-right">KPI2</TableHead>
-              <TableHead className="text-right">%</TableHead>
-              <TableHead className="text-right">Nota</TableHead>
-              <TableHead className="text-right">Faixa</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3 [&_tr]:border-border/45 [&_tr]:transition-colors [&_tr:hover]:bg-background/55">
-            {metrics.map((metric) => {
-              const isExpanded = expandedMetricId === metric.id;
-              const history = metric.history.slice(-6);
-              const maximumScore = maximumMetricScore(metric);
+      Faixa {band}
+    </span>
+  );
+}
 
-              return (
-                <Fragment key={metric.id}>
-                  <TableRow className={cn(isExpanded && "bg-background/55")}>
-                    <TableCell className="font-medium text-foreground">
-                      <button
-                        type="button"
-                        onClick={() => setExpandedMetricId(isExpanded ? null : metric.id)}
-                        className="group flex items-center gap-2 text-left outline-none"
-                        aria-expanded={isExpanded}
-                      >
-                        <span
-                          className={cn(
-                            "grid size-6 place-items-center rounded-lg border border-border/60 bg-background/70 transition-colors group-hover:border-primary/35",
-                            isExpanded && "border-primary/35 bg-primary/10 text-primary",
-                          )}
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="size-3.5" />
-                          ) : (
-                            <ChevronDown className="size-3.5" />
-                          )}
-                        </span>
-                        <span>{metric.label}</span>
-                      </button>
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {fmtInt(metric.latest?.numerator)}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {fmtInt(metric.latest?.denominator)}
-                    </TableCell>
-                    <TableCell className={cn("text-right font-semibold tabular-nums", meta.accent)}>
-                      {fmtQscPct(metric.latest?.value)}
-                    </TableCell>
-                    <TableCell className="text-right font-bold tabular-nums">
-                      {metric.latest?.score == null ? (
-                        "—"
-                      ) : (
-                        <span>
-                          {metric.latest.score}
-                          <span className="font-medium text-muted-foreground">/{maximumScore}</span>
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {metric.latest?.scoreBand ? (
-                        <span
-                          className={cn(
-                            "inline-flex min-w-8 justify-center rounded-full border px-2 py-1 text-[10px] font-bold",
-                            INDICATOR_BAND_STYLE[metric.latest.scoreBand],
-                          )}
-                        >
-                          {metric.latest.scoreBand}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                  {isExpanded ? (
-                    <TableRow className="bg-background/40 hover:bg-background/40">
-                      <TableCell colSpan={6} className="whitespace-normal !p-0">
-                        <div className="border-y border-primary/10 bg-background/50 px-4 py-4 sm:px-5">
-                          <div className="mb-3 flex items-center justify-between gap-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                              Histórico do indicador
-                            </p>
-                            <span className="text-[10px] font-medium text-muted-foreground">
-                              Últimos {history.length} meses
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                            {history.map((point) => (
-                              <div
-                                key={point.competence}
-                                className="rounded-xl border border-border/60 bg-card/80 px-3 py-2.5 shadow-sm"
-                              >
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                                  {formatCompetence(point.competence)}
-                                </div>
-                                <div
-                                  className={cn("mt-1 text-sm font-bold tabular-nums", meta.accent)}
-                                >
-                                  {fmtQscPct(point.value)}
-                                </div>
-                                <div className="mt-2 flex items-center justify-between gap-2 text-[10px] font-semibold text-muted-foreground">
-                                  <span>
-                                    Nota {point.score ?? "—"}/{maximumScore}
-                                  </span>
-                                  {point.scoreBand ? (
-                                    <span
-                                      className={cn(
-                                        "rounded-full border px-1.5 py-0.5 font-bold",
-                                        INDICATOR_BAND_STYLE[point.scoreBand],
-                                      )}
-                                    >
-                                      F{point.scoreBand}
-                                    </span>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                </Fragment>
-              );
-            })}
-          </TableBody>
-        </Table>
+/** Faixa da nota consolidada. Bloco com barra lateral, distinto da pílula acima. */
+function ConsolidatedBand({ band }: { band: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-md border border-l-4 px-2 py-0.5 text-xs font-semibold leading-4",
+        TOTAL_BAND_STYLE[band] ?? TOTAL_BAND_STYLE["Sem faixa"],
+      )}
+    >
+      {band}
+    </span>
+  );
+}
+
+/** Estado de indisponibilidade dentro da tabela: palavra curta, sem cor de resultado. */
+function UnavailableTag({ state }: { state: Exclude<PointState, "available"> }) {
+  return (
+    <span className="inline-flex items-center rounded-md border border-dashed border-border px-2 py-0.5 text-xs font-medium leading-4 text-muted-foreground">
+      {POINT_STATE_LABEL[state]}
+    </span>
+  );
+}
+
+function Section({
+  title,
+  description,
+  actions,
+  children,
+  bodyClassName,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  bodyClassName?: string;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+            {title}
+          </h2>
+          {description && (
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{description}</p>
+          )}
+        </div>
+        {actions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">{actions}</div>
+        )}
       </div>
+      <div className={cn("p-4 md:p-5", bodyClassName)}>{children}</div>
     </Card>
   );
 }
 
-function PulseMetricCard({ metric, label }: { metric: QscMetricSeries; label: string }) {
+function SectionSkeleton({ title, lines = 6 }: { title: string; lines?: number }) {
   return (
-    <Card className="relative overflow-hidden rounded-2xl border-border/70 bg-card/90 p-4 shadow-elegant transition-transform duration-200 hover:-translate-y-0.5">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-      <p className="min-h-8 text-[10px] font-semibold uppercase leading-relaxed tracking-[0.13em] text-muted-foreground">
-        {label}
-      </p>
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <p className="text-2xl font-semibold tracking-tight tabular-nums">
-          {fmtPct(metric.latest?.value)}
-        </p>
-        {metric.latest?.scoreBand ? (
-          <span
-            className={cn(
-              "rounded-full border px-2 py-1 text-[10px] font-bold",
-              INDICATOR_BAND_STYLE[metric.latest.scoreBand],
-            )}
-          >
-            F{metric.latest.scoreBand}
-          </span>
-        ) : null}
+    <Section title={title} description="Carregando os dados do recorte selecionado.">
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-9 w-full" />
+        {Array.from({ length: lines }, (_, index) => (
+          <Skeleton key={index} className="h-10 w-full" />
+        ))}
       </div>
-      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border/55 pt-2.5 text-[10px] font-medium text-muted-foreground">
-        <span>Nota {metric.latest?.score ?? "—"}</span>
-        <span className="tabular-nums">
-          {fmtInt(metric.latest?.numerator)} / {fmtInt(metric.latest?.denominator)}
-        </span>
+      <p className="sr-only" role="status">
+        Carregando {title}.
+      </p>
+    </Section>
+  );
+}
+
+/**
+ * Célula de nota: valor atual e máximo possível do indicador, alinhados à direita,
+ * com o máximo em peso menor para não competir com a nota apurada.
+ */
+function scoreContent(score: number | null | undefined, maximumScore: number) {
+  if (score == null) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span>
+      {fmtInt(score)}
+      <span className="font-normal text-muted-foreground">/{fmtInt(maximumScore)}</span>
+    </span>
+  );
+}
+
+/**
+ * Linha de indicador e linhas de histórico usam a mesma tabela, as mesmas colunas e
+ * o mesmo alinhamento. O histórico é só um recuo na coluna de identificação, para
+ * que a leitura de KPI1, KPI2, % e nota não mude ao expandir.
+ */
+function MetricCells({
+  point,
+  maximumScore,
+}: {
+  point: QscMetricPoint | null;
+  maximumScore: number;
+}) {
+  const state = pointState(point);
+  const available = state === "available";
+
+  return (
+    <>
+      <TableCell align="numeric">{available ? fmtInt(point?.numerator) : "—"}</TableCell>
+      <TableCell align="numeric">{available ? fmtInt(point?.denominator) : "—"}</TableCell>
+      <TableCell align="numeric" className="font-semibold text-foreground">
+        {available ? fmtQscPct(point?.value) : "—"}
+      </TableCell>
+      <TableCell align="numeric" className="font-semibold text-foreground">
+        {available ? scoreContent(point?.score, maximumScore) : "—"}
+      </TableCell>
+      <TableCell align="state">
+        {available ? (
+          point?.scoreBand ? (
+            <IndicatorBand band={point.scoreBand} />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )
+        ) : (
+          <UnavailableTag state={state} />
+        )}
+      </TableCell>
+    </>
+  );
+}
+
+/**
+ * Limites da regra chegam em pontos percentuais (0 a 100), enquanto o valor apurado
+ * chega como razão. A conversão aqui é só de apresentação; a comparação continua
+ * sendo feita pela API, que é a única dona da fórmula.
+ */
+function formatRuleRange(rule: { start: number; end: number }, isLast: boolean) {
+  if (isLast) return `a partir de ${fmtQscPct(rule.start / 100)}`;
+  return `${fmtQscPct(rule.start / 100)} a ${fmtQscPct(rule.end / 100)}`;
+}
+
+/**
+ * Regra do indicador exposta junto do histórico: fórmula, leitura e a tabela de
+ * pontuação que produz a nota e a faixa. Apenas reapresenta o contrato já recebido
+ * da API; nenhum valor é recalculado aqui.
+ */
+function MetricRules({ metric }: { metric: QscMetricSeries }) {
+  return (
+    <div className="space-y-2.5 text-xs leading-5">
+      <dl className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">
+        <div className="min-w-0">
+          <dt className="font-semibold text-foreground">Fórmula</dt>
+          <dd className="break-words text-muted-foreground">{metric.formula}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="font-semibold text-foreground">Leitura</dt>
+          <dd className="break-words text-muted-foreground">
+            {metric.interpretation}
+            {" · "}
+            {metric.favorableDirection === "down" ? "menor é melhor" : "maior é melhor"}
+          </dd>
+        </div>
+      </dl>
+      {metric.scoreRules.length > 0 && (
+        <div>
+          <p className="font-semibold text-foreground">Pontuação por faixa</p>
+          <ul className="mt-1 flex flex-wrap gap-1.5">
+            {metric.scoreRules.map((rule, index) => (
+              <li
+                key={`${rule.band}-${rule.start}-${rule.end}`}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1"
+              >
+                <IndicatorBand band={rule.band} />
+                <span className="tabular-nums text-muted-foreground">
+                  {formatRuleRange(rule, index === metric.scoreRules.length - 1)}
+                </span>
+                <span className="font-semibold tabular-nums text-foreground">
+                  {fmtInt(rule.score)} pts
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DomainPanel({
+  domain,
+  metrics,
+  competence,
+}: {
+  domain: QscDomain;
+  metrics: QscMetricSeries[];
+  competence: string;
+}) {
+  const meta = DOMAIN_META[domain];
+  const Icon = meta.icon;
+  const [expandedMetricId, setExpandedMetricId] = useState<string | null>(null);
+  const rating = qscTotalRating(metrics);
+  const unavailableCount = metrics.filter(
+    (metric) => pointState(metric.latest) !== "available",
+  ).length;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+            <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            {meta.label}
+          </h2>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {meta.context} · competência {formatCompetence(competence)} · {fmtInt(metrics.length)}{" "}
+            indicadores
+            {unavailableCount > 0 && ` · ${fmtInt(unavailableCount)} sem base`}
+          </p>
+        </div>
+        {rating ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 md:justify-end">
+            <span className="text-xs text-muted-foreground">Nota consolidada</span>
+            <span className="text-lg font-semibold tabular-nums text-foreground">
+              {fmtInt(rating.total)}
+            </span>
+            <ConsolidatedBand band={rating.band} />
+            <span className="text-xs font-medium tabular-nums text-muted-foreground">
+              {fmtInt(rating.points)} pts
+            </span>
+          </div>
+        ) : (
+          <p className="shrink-0 text-xs text-muted-foreground md:text-right">
+            Nota consolidada indisponível: nenhum indicador apurado nesta competência.
+          </p>
+        )}
+      </div>
+
+      <div className="p-4 md:p-5">
+        {metrics.length === 0 ? (
+          <EmptyState
+            title="Sem indicadores no recorte"
+            description="Nenhum indicador deste grupo foi apurado para os parceiros selecionados. Ajuste ou limpe o filtro de parceiros."
+          />
+        ) : (
+          <TableScroll>
+            <Table className="min-w-[812px] table-fixed">
+              <colgroup>
+                <col className={STICKY_ID_WIDTH} />
+                <col className="w-[120px]" />
+                <col className="w-[120px]" />
+                <col className="w-[120px]" />
+                <col className="w-[110px]" />
+                <col className="w-[118px]" />
+              </colgroup>
+              <TableHeader className={TABLE_HEADER_CLASS}>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Indicador</TableHead>
+                  <TableHead align="numeric">KPI1</TableHead>
+                  <TableHead align="numeric">KPI2</TableHead>
+                  <TableHead align="numeric">%</TableHead>
+                  <TableHead align="numeric">Nota / máx.</TableHead>
+                  <TableHead align="state">Faixa do indicador</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={TABLE_BODY_CLASS}>
+                {metrics.map((metric) => {
+                  const isExpanded = expandedMetricId === metric.id;
+                  const history = metric.history.slice(-6);
+                  const maximumScore = maximumMetricScore(metric);
+
+                  return (
+                    <Fragment key={metric.id}>
+                      <TableRow>
+                        <TableCell
+                          className={cn(
+                            STICKY_ID_CLASS,
+                            "font-medium text-foreground",
+                            isExpanded ? "bg-muted" : "bg-card",
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setExpandedMetricId(isExpanded ? null : metric.id)}
+                            aria-expanded={isExpanded}
+                            aria-controls={`${metric.id}-detalhe`}
+                            className="flex w-full items-start gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            <ChevronDown
+                              aria-hidden="true"
+                              className={cn(
+                                "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                                isExpanded && "rotate-180",
+                              )}
+                            />
+                            <span className="min-w-0 break-words">{metric.label}</span>
+                          </button>
+                        </TableCell>
+                        <MetricCells point={metric.latest} maximumScore={maximumScore} />
+                      </TableRow>
+                      {isExpanded && (
+                        <>
+                          <TableRow id={`${metric.id}-detalhe`} className="bg-muted/40">
+                            <TableCell colSpan={6} className="!whitespace-normal">
+                              <MetricRules metric={metric} />
+                            </TableCell>
+                          </TableRow>
+                          {history.length === 0 ? (
+                            <TableRow className="bg-muted/40">
+                              <TableCell
+                                colSpan={6}
+                                className="!whitespace-normal text-xs text-muted-foreground"
+                              >
+                                Sem histórico disponível para {metric.label}.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            history.map((point) => (
+                              <TableRow
+                                key={`${metric.id}-${point.competence}`}
+                                className="bg-muted/40"
+                              >
+                                <TableCell
+                                  className={cn(
+                                    STICKY_ID_CLASS,
+                                    "bg-muted pl-9 text-xs font-medium text-muted-foreground",
+                                  )}
+                                >
+                                  Histórico · {formatCompetence(point.competence)}
+                                </TableCell>
+                                <MetricCells point={point} maximumScore={maximumScore} />
+                              </TableRow>
+                            ))
+                          )}
+                        </>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TableScroll>
+        )}
       </div>
     </Card>
   );
@@ -444,6 +578,7 @@ function qscHistoryRow(domain: QscDomain, metrics: QscMetricSeries[], competenci
   return {
     values,
     totalizer,
+    availableCount: availableValues.length,
     rating: qscTotalRatingFromTotal(totalizer),
   };
 }
@@ -451,9 +586,11 @@ function qscHistoryRow(domain: QscDomain, metrics: QscMetricSeries[], competenci
 function SemesterHistoryPanel({
   metrics,
   currentCompetence,
+  updateFrequency = "Mensal",
 }: {
   metrics: QscMetricSeries[];
   currentCompetence: string;
+  updateFrequency?: string;
 }) {
   const currentMonth = Number(currentCompetence.slice(5, 7)) || new Date().getMonth() + 1;
   const [selectedSemester, setSelectedSemester] = useState<1 | 2>(currentMonth <= 6 ? 1 : 2);
@@ -463,233 +600,292 @@ function SemesterHistoryPanel({
     label,
     ...qscHistoryRow(domain, metrics, competencies),
   }));
-  const semesterLabel = `${selectedSemester}º semestre de ${competencies[0]?.slice(0, 4)}`;
+  const year = competencies[0]?.slice(0, 4);
 
   return (
-    <Card className="overflow-hidden rounded-[1.8rem] border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-elegant">
-      <div className="flex flex-col gap-3 border-b border-primary/10 bg-primary/[0.035] px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-            Histórico consolidado
-          </p>
-          <h2 className="mt-1 text-lg font-semibold tracking-tight">
-            Visão histórica por semestre
-          </h2>
+    <Section
+      title="Nota consolidada por semestre"
+      description={`Soma mensal das notas de cada grupo no ${selectedSemester}º semestre de ${year}. O totalizador é a média das competências disponíveis; meses sem apuração aparecem como indisponíveis e não entram na média.`}
+      actions={
+        <div
+          className="inline-flex rounded-md border border-border p-0.5"
+          role="group"
+          aria-label="Selecionar semestre do histórico QSC"
+        >
+          {([1, 2] as const).map((semester) => (
+            <button
+              key={semester}
+              type="button"
+              onClick={() => setSelectedSemester(semester)}
+              aria-pressed={selectedSemester === semester}
+              className={cn(
+                "rounded-[4px] px-3 py-1.5 text-xs font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+                selectedSemester === semester
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {semester}º semestre
+            </button>
+          ))}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="inline-flex rounded-xl border border-primary/15 bg-background/75 p-1 shadow-sm"
-            aria-label="Selecionar semestre do histórico QSC"
-          >
-            {([1, 2] as const).map((semester) => (
-              <button
-                key={semester}
-                type="button"
-                onClick={() => setSelectedSemester(semester)}
-                aria-pressed={selectedSemester === semester}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-all",
-                  selectedSemester === semester
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-primary/[0.07] hover:text-foreground",
-                )}
-              >
-                {semester}º semestre
-              </button>
-            ))}
-          </div>
-          <span className="w-fit rounded-full border border-primary/15 bg-background/75 px-3 py-1.5 text-[11px] font-semibold text-muted-foreground">
-            {semesterLabel}
-          </span>
-        </div>
-      </div>
-      <div className="overflow-x-auto p-3 sm:p-5">
-        <Table className="min-w-[1220px] table-fixed">
+      }
+    >
+      <TableScroll>
+        <Table className="min-w-[1134px] table-fixed">
           <colgroup>
-            <col className="w-[280px]" />
+            <col className={STICKY_ID_WIDTH} />
             {competencies.map((competence) => (
-              <col key={competence} className="w-[95px]" />
+              <col key={competence} className="w-[84px]" />
             ))}
-            <col className="w-[120px]" />
-            <col className="w-[100px]" />
-            <col className="w-[120px]" />
-            <col className="w-[115px]" />
+            <col className="w-[112px]" />
+            <col className="w-[92px]" />
+            <col className="w-[140px]" />
+            <col className="w-[164px]" />
           </colgroup>
-          <TableHeader className="bg-primary/[0.045] [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-primary/15 [&_th]:px-3 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground">
+          <TableHeader className={TABLE_HEADER_CLASS}>
             <TableRow className="hover:bg-transparent">
-              <TableHead>Indicadores</TableHead>
+              <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Grupo</TableHead>
               {competencies.map((competence) => (
-                <TableHead key={competence} className="text-right">
+                <TableHead key={competence} align="numeric">
                   {formatCompetence(competence).split("/")[0]}
                 </TableHead>
               ))}
-              <TableHead className="text-right">Totalizador</TableHead>
-              <TableHead className="text-right">Pts</TableHead>
-              <TableHead className="text-right">Faixa</TableHead>
-              <TableHead>Periodicidade</TableHead>
+              <TableHead align="numeric">Totalizador</TableHead>
+              <TableHead align="numeric">Pts</TableHead>
+              <TableHead align="state">Faixa consolidada</TableHead>
+              <TableHead>Periodicidade e base</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody className="[&_td]:px-3 [&_td]:py-3.5 [&_tr]:border-primary/[0.09] [&_tr]:transition-colors [&_tr:hover]:bg-primary/[0.03]">
-            {historyRows.map((row) => {
-              const meta = DOMAIN_META[row.domain];
-              return (
-                <TableRow key={row.domain}>
-                  <TableCell className={cn("font-semibold", meta.accent)}>{row.label}</TableCell>
-                  {row.values.map((value, index) => (
-                    <TableCell
-                      key={competencies[index]}
-                      className="text-right font-semibold tabular-nums"
-                    >
-                      {fmtInt(value)}
-                    </TableCell>
-                  ))}
-                  <TableCell className="bg-primary/[0.025] text-right font-bold tabular-nums text-foreground">
-                    {fmtInt(row.totalizer)}
-                  </TableCell>
-                  <TableCell className="text-right font-bold tabular-nums">
-                    {fmtInt(row.rating?.points)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {row.rating ? (
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full border px-2 py-1 text-[10px] font-bold uppercase",
-                          row.rating.className,
-                        )}
-                      >
-                        {row.rating.band}
+          <TableBody className={TABLE_BODY_CLASS}>
+            {historyRows.map((row) => (
+              <TableRow key={row.domain}>
+                <TableCell className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}>
+                  {row.label}
+                </TableCell>
+                {row.values.map((value, index) => (
+                  <TableCell key={competencies[index]} align="numeric">
+                    {value === null ? (
+                      <span className="text-muted-foreground">
+                        —<span className="sr-only"> sem apuração</span>
                       </span>
                     ) : (
-                      <span className="text-muted-foreground">—</span>
+                      fmtInt(value)
                     )}
                   </TableCell>
-                  <TableCell className="text-xs font-medium text-muted-foreground">
-                    Mensal
-                  </TableCell>
-                </TableRow>
-              );
-            })}
+                ))}
+                <TableCell align="numeric" className="bg-muted/50 font-semibold text-foreground">
+                  {fmtInt(row.totalizer)}
+                </TableCell>
+                <TableCell align="numeric" className="font-semibold text-foreground">
+                  {fmtInt(row.rating?.points)}
+                </TableCell>
+                <TableCell align="state">
+                  {row.rating ? (
+                    <ConsolidatedBand band={row.rating.band} />
+                  ) : (
+                    <UnavailableTag state="missing" />
+                  )}
+                </TableCell>
+                <TableCell className="!whitespace-normal text-xs leading-4 text-muted-foreground">
+                  {updateFrequency} · {fmtInt(row.availableCount)} de {fmtInt(competencies.length)}{" "}
+                  apuradas
+                </TableCell>
+              </TableRow>
+            ))}
           </TableBody>
         </Table>
+      </TableScroll>
+    </Section>
+  );
+}
+
+/**
+ * Faixa de indicadores críticos: mesmos números da tabela do grupo, agrupados por
+ * relevância comercial. Sem card decorado, sem hover e com a mesma formatação
+ * percentual das tabelas, para não sugerir uma segunda fonte de verdade.
+ */
+function PulseStrip({ metrics, competence }: { metrics: QscMetricSeries[]; competence: string }) {
+  const pulseMetrics = PULSE_METRIC_IDS.flatMap((id) => {
+    const metric = metrics.find((item) => item.id === id);
+    return metric ? [metric] : [];
+  });
+
+  if (!pulseMetrics.length) return null;
+
+  return (
+    <section aria-labelledby="qsc-pulso">
+      <h2 id="qsc-pulso" className="mb-2 text-[13px] font-semibold text-muted-foreground">
+        Indicadores críticos · competência {formatCompetence(competence)}
+      </h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {pulseMetrics.map((metric) => {
+          const state = pointState(metric.latest);
+          const available = state === "available";
+          const maximumScore = maximumMetricScore(metric);
+
+          return (
+            <Card key={metric.id} className="p-3">
+              <p className="min-h-8 text-xs font-medium leading-4 text-muted-foreground">
+                {metric.label}
+              </p>
+              <div className="mt-1.5 flex items-baseline justify-between gap-2">
+                <p className="text-2xl font-semibold leading-[30px] tabular-nums text-foreground">
+                  {available ? fmtQscPct(metric.latest?.value) : "—"}
+                </p>
+                {available ? (
+                  metric.latest?.scoreBand ? (
+                    <IndicatorBand band={metric.latest.scoreBand} />
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Sem faixa</span>
+                  )
+                ) : (
+                  <UnavailableTag state={state} />
+                )}
+              </div>
+              <dl className="mt-2.5 flex items-baseline justify-between gap-2 border-t border-border pt-2 text-xs text-muted-foreground">
+                <div className="flex items-baseline gap-1">
+                  <dt>Nota</dt>
+                  <dd className="font-medium tabular-nums text-foreground">
+                    {available ? scoreContent(metric.latest?.score, maximumScore) : "—"}
+                  </dd>
+                </div>
+                <div className="flex items-baseline gap-1">
+                  <dt className="sr-only">KPI1 e KPI2</dt>
+                  <dd className="tabular-nums">
+                    {available
+                      ? `${fmtInt(metric.latest?.numerator)} / ${fmtInt(metric.latest?.denominator)}`
+                      : "—"}
+                  </dd>
+                </div>
+              </dl>
+            </Card>
+          );
+        })}
       </div>
-    </Card>
+    </section>
   );
 }
 
 function QscPage() {
-  const { data, isLoading, error, refetch } = useQsc();
+  const { selected, role, allowedPartnerIds } = usePartnerFilter();
+  const { data: partners = [] } = usePartners();
+  const { data, isLoading, isFetching, error, refetch } = useQsc();
+
   const today = new Date();
-  const fallbackCompetence = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
-  const currentCompetence = data?.competence ?? fallbackCompetence;
+  const calendarCompetence = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
+  const currentCompetence = data?.competence ?? calendarCompetence;
   const hasCurrentCompetence = data?.available ?? false;
-  const metrics = data?.metrics ?? [];
+  const metrics = useMemo(() => data?.metrics ?? [], [data]);
+
+  /**
+   * Recorte em texto, sem alterar o filtro: nenhuma seleção continua significando
+   * consolidado, e o GN sem seleção continua vendo apenas os parceiros vinculados.
+   */
+  const selectedNames = useMemo(
+    () => selected.map((id) => partners.find((partner) => partner.id === id)?.name ?? id),
+    [partners, selected],
+  );
+  const allowedCount = allowedPartnerIds?.length ?? 0;
+  const hasNoAuthorizedPartners = role === "gn" && allowedCount === 0;
+  const scopeLabel = selected.length
+    ? selected.length === 1
+      ? selectedNames[0]
+      : `${selected.length} parceiros selecionados`
+    : role === "gn"
+      ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
+      : "Todos os parceiros (consolidado)";
+
   const metricsByDomain = (domain: QscDomain) =>
     metrics.filter((metric) => metric.domain === domain);
-  const pulseMetrics = PULSE_METRICS.flatMap(({ id, label }) => {
-    const metric = metrics.find((item) => item.id === id);
-    return metric ? [{ metric, label }] : [];
-  });
+  const competenceIsBehind = hasCurrentCompetence && currentCompetence !== calendarCompetence;
 
   return (
     <DashboardLayout title="QSC">
+      <header className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
+            QSC
+          </h1>
+          <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-muted-foreground">
+            <div className="flex min-w-0 items-baseline gap-1.5">
+              <dt className="font-medium text-foreground">Recorte:</dt>
+              <dd className="min-w-0 truncate">{scopeLabel}</dd>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <dt className="font-medium text-foreground">Competência:</dt>
+              <dd>
+                {formatCompetence(currentCompetence)}
+                {competenceIsBehind && (
+                  <span className="ml-1.5 text-xs">
+                    (última apurada; mês corrente é {formatCompetence(calendarCompetence)})
+                  </span>
+                )}
+              </dd>
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <dt className="font-medium text-foreground">Atualização da base:</dt>
+              <dd className="tabular-nums">{formatUpdatedAt(data?.calculatedAt)}</dd>
+            </div>
+            {data?.updateFrequency && (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Periodicidade:</dt>
+                <dd>{data.updateFrequency}</dd>
+              </div>
+            )}
+          </dl>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={cn("size-4", isFetching && "animate-spin")} aria-hidden="true" />
+            {isFetching ? "Atualizando" : "Atualizar"}
+          </Button>
+        </div>
+      </header>
+
       {error ? (
         <ErrorState onRetry={() => refetch()} />
+      ) : isLoading ? (
+        <div className="space-y-6">
+          <SectionSkeleton title="Nota consolidada por semestre" lines={3} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5" aria-hidden="true">
+            {PULSE_METRIC_IDS.map((id) => (
+              <Skeleton key={id} className="h-[124px] w-full" />
+            ))}
+          </div>
+          {(["carteira", "fixa", "movel"] as QscDomain[]).map((domain) => (
+            <SectionSkeleton key={domain} title={DOMAIN_META[domain].label} lines={6} />
+          ))}
+        </div>
+      ) : hasNoAuthorizedPartners ? (
+        <EmptyState
+          title="Nenhum parceiro autorizado"
+          description="Seu perfil de GN ainda não possui vínculo com um parceiro. Procure o Diretor para liberar o recorte antes de consultar o QSC."
+        />
+      ) : !hasCurrentCompetence ? (
+        <EmptyState
+          title={`Sem base QSC para ${formatCompetence(currentCompetence)}`}
+          description="A visão apresenta apenas a competência apurada. Peça a alimentação da base da competência para acompanhar os indicadores; nenhum valor provisório é exibido no lugar."
+        />
       ) : (
-        <>
-          <Card className="relative mb-7 overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-primary/[0.17] via-card/95 to-cyan/[0.13] p-6 shadow-elevated backdrop-blur-sm md:p-8">
-            <div className="pointer-events-none absolute -left-16 -top-20 size-64 rounded-full bg-primary/25 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-28 right-0 size-72 rounded-full bg-cyan/25 blur-3xl" />
-            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-              <div className="max-w-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="grid size-12 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant ring-4 ring-primary/10">
-                    <ClipboardCheck className="size-5" />
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                      Qualidade, sustentabilidade e consistência
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Visão consolidada da carteira, fixa e móvel
-                    </p>
-                  </div>
-                </div>
-                <h2 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-tight md:text-4xl">
-                  Indicadores QSC em uma leitura executiva.
-                </h2>
-              </div>
+        <div className="space-y-6">
+          <SemesterHistoryPanel
+            metrics={metrics}
+            currentCompetence={currentCompetence}
+            updateFrequency={data?.updateFrequency}
+          />
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[390px]">
-                <div className="rounded-2xl border border-primary/10 bg-background/65 px-4 py-3 shadow-sm backdrop-blur">
-                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    <CalendarDays className="size-3.5 text-primary" />
-                    Competência
-                  </div>
-                  <div className="mt-1.5 text-sm font-semibold">
-                    {formatCompetence(currentCompetence)}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-primary/10 bg-background/65 px-4 py-3 shadow-sm backdrop-blur">
-                  <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    <RefreshCw className="size-3.5 text-primary" />
-                    Atualização da base
-                  </div>
-                  <div className="mt-1.5 text-sm font-semibold tabular-nums">
-                    {formatUpdatedAt(data?.calculatedAt)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </Card>
+          <PulseStrip metrics={metrics} competence={currentCompetence} />
 
-          {isLoading ? (
-            <div className="grid gap-4 md:grid-cols-3">
-              {[0, 1, 2].map((item) => (
-                <div key={item} className="h-40 animate-pulse rounded-[1.65rem] bg-muted/60" />
-              ))}
-            </div>
-          ) : !hasCurrentCompetence ? (
-            <Card className="rounded-[2rem] border-dashed p-10 text-center">
-              <ShieldCheck className="mx-auto size-9 text-muted-foreground" />
-              <h2 className="mt-4 text-lg font-semibold">
-                Sem dados QSC para {formatCompetence(currentCompetence)}
-              </h2>
-              <p className="mt-2 text-sm text-muted-foreground">
-                A visão exibe somente o mês corrente. Carregue a competência atual para visualizar
-                os indicadores.
-              </p>
-            </Card>
-          ) : (
-            <div className="space-y-7">
-              <section className="mx-auto max-w-[1360px]">
-                <SemesterHistoryPanel metrics={metrics} currentCompetence={currentCompetence} />
-              </section>
-
-              <section className="mx-auto max-w-[1360px]">
-                <div className="mb-3 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-primary">
-                      Indicadores críticos
-                    </p>
-                    <h2 className="mt-1 text-lg font-semibold tracking-tight">Pulso do mês</h2>
-                  </div>
-                  <span className="text-xs text-muted-foreground">Competência atual</span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                  {pulseMetrics.map(({ metric, label }) => (
-                    <PulseMetricCard key={metric.id} metric={metric} label={label} />
-                  ))}
-                </div>
-              </section>
-
-              <section className="mx-auto max-w-[1360px] space-y-4">
-                {(["carteira", "fixa", "movel"] as QscDomain[]).map((domain) => (
-                  <SummaryPanel key={domain} domain={domain} metrics={metricsByDomain(domain)} />
-                ))}
-              </section>
-            </div>
-          )}
-        </>
+          {(["carteira", "fixa", "movel"] as QscDomain[]).map((domain) => (
+            <DomainPanel
+              key={domain}
+              domain={domain}
+              metrics={metricsByDomain(domain)}
+              competence={currentCompetence}
+            />
+          ))}
+        </div>
       )}
     </DashboardLayout>
   );

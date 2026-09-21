@@ -5,6 +5,7 @@ import {
   Clock3,
   Database,
   LoaderCircle,
+  Search,
   Save,
   ShieldCheck,
   UserCheck,
@@ -24,6 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
+import { TableScroll } from "@/components/TableScroll";
+import { Input } from "@/components/ui/input";
 
 type Role = "admin" | "director" | "gn";
 type ManagedUser = {
@@ -75,7 +78,7 @@ function formatDate(value: string | null) {
 
 function BaseUpdateStatus({ update }: { update: BaseUpdate }) {
   if (!update.available) {
-    return <span className="text-[11px] font-medium text-muted-foreground/55">Sem base</span>;
+    return <span className="text-[11px] font-medium text-muted-foreground">Sem base</span>;
   }
   if (!update.updatedAt) {
     return (
@@ -105,6 +108,7 @@ function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
+  const [search, setSearch] = useState("");
 
   const loadData = useCallback(async (knownRole?: Role) => {
     setLoading(true);
@@ -149,6 +153,31 @@ function UsersPage() {
       approved: users.filter((user) => user.status === "approved").length,
     }),
     [users],
+  );
+
+  const normalizedSearch = search.trim().toLocaleLowerCase();
+  const visibleUsers = useMemo(
+    () =>
+      [...users]
+        .filter((user) =>
+          normalizedSearch
+            ? `${user.name} ${user.email} ${user.partnerName}`
+                .toLocaleLowerCase()
+                .includes(normalizedSearch)
+            : true,
+        )
+        .sort((left, right) => {
+          if (left.status !== right.status) return left.status === "pending" ? -1 : 1;
+          return left.name.localeCompare(right.name);
+        }),
+    [normalizedSearch, users],
+  );
+  const visiblePartners = useMemo(
+    () =>
+      partners.filter((partner) =>
+        normalizedSearch ? partner.name.toLocaleLowerCase().includes(normalizedSearch) : true,
+      ),
+    [normalizedSearch, partners],
   );
 
   const review = async (user: ManagedUser, status: "approved" | "rejected") => {
@@ -206,11 +235,11 @@ function UsersPage() {
   return (
     <DashboardLayout title="Acessos">
       <div className="space-y-6">
-        <section className="relative overflow-hidden rounded-[2rem] border border-primary/15 bg-gradient-to-br from-primary/[0.14] via-card to-cyan/[0.08] p-6 shadow-elevated sm:p-8">
-          <div className="pointer-events-none absolute -right-20 -top-24 size-72 rounded-full bg-primary/15 blur-3xl" />
+        <section className="border-b border-border pb-5">
+          <div className="hidden" />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full border border-primary/15 bg-background/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">
+              <span className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-primary">
                 <ShieldCheck className="size-4" /> {admin ? "Administração" : "Gestão de carteira"}
               </span>
               <h1 className="mt-4 text-3xl font-semibold tracking-tight">
@@ -225,12 +254,26 @@ function UsersPage() {
             <Button
               variant="outline"
               onClick={() => void loadData(role ?? undefined)}
-              className="rounded-2xl"
+              className="shrink-0"
             >
               Atualizar lista
             </Button>
           </div>
         </section>
+
+        <div className="relative max-w-xl">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={admin ? "Buscar usuário, e-mail ou empresa" : "Buscar GN ou parceiro"}
+            aria-label={admin ? "Buscar usuário, e-mail ou empresa" : "Buscar GN ou parceiro"}
+            className="h-10 pl-9"
+          />
+        </div>
 
         <div className="grid gap-4 sm:grid-cols-3">
           {[
@@ -288,12 +331,17 @@ function UsersPage() {
                 {partners.length} parceiro(s)
               </Badge>
             </div>
-            <div className="overflow-x-auto p-3 sm:p-5">
+            <TableScroll
+              className="p-3 sm:p-5"
+              hint="Role na horizontal para consultar bases e GNs vinculados."
+            >
               <div className="overflow-hidden rounded-2xl border border-primary/10 bg-background/70">
                 <Table className="min-w-[1480px]">
                   <TableHeader className="bg-primary/[0.04] [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-primary/10 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em]">
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="w-[220px]">Parceiro</TableHead>
+                      <TableHead className="sticky left-0 z-[1] w-[220px] bg-muted">
+                        Parceiro
+                      </TableHead>
                       <TableHead className="w-[170px]">Mapa Parque</TableHead>
                       <TableHead className="w-[230px]">QSC</TableHead>
                       <TableHead className="w-[170px]">Resultados YoY</TableHead>
@@ -303,13 +351,13 @@ function UsersPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody className="[&_td]:border-primary/[0.07] [&_td]:px-4 [&_td]:py-4 [&_tr]:transition-colors [&_tr:hover]:bg-primary/[0.025]">
-                    {partners.map((partner) => {
+                    {visiblePartners.map((partner) => {
                       const assignedUsers = users.filter((user) =>
                         (draftAccess[user.id] ?? []).includes(partner.id),
                       );
                       return (
                         <TableRow key={partner.id}>
-                          <TableCell>
+                          <TableCell className="sticky left-0 z-[1] bg-card">
                             <div className="flex items-center gap-3">
                               <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary/[0.08] text-xs font-bold text-primary">
                                 {partner.name.slice(0, 2).toUpperCase()}
@@ -380,7 +428,7 @@ function UsersPage() {
                   </TableBody>
                 </Table>
               </div>
-            </div>
+            </TableScroll>
           </Card>
         )}
 
@@ -396,12 +444,19 @@ function UsersPage() {
             </p>
           </div>
           {message && (
-            <p className="mx-5 mt-4 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-700">
+            <p
+              role="alert"
+              className="mx-5 mt-4 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-700"
+            >
               {message}
             </p>
           )}
           {loading ? (
-            <div className="grid min-h-56 place-items-center">
+            <div
+              className="grid min-h-56 place-items-center"
+              role="status"
+              aria-label="Carregando acessos"
+            >
               <LoaderCircle className="size-6 animate-spin text-primary" />
             </div>
           ) : users.length === 0 ? (
@@ -409,7 +464,7 @@ function UsersPage() {
               Nenhum usuário disponível.
             </div>
           ) : admin ? (
-            <div className="overflow-x-auto">
+            <TableScroll hint="Role na horizontal para ver as ações do usuário.">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -422,7 +477,7 @@ function UsersPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user) => {
+                  {visibleUsers.map((user) => {
                     const busy = updatingId === user.id;
                     return (
                       <TableRow key={user.id}>
@@ -463,7 +518,8 @@ function UsersPage() {
                               onClick={() => void review(user, "rejected")}
                               className="rounded-xl text-rose-600"
                             >
-                              <X className="size-4" /> Cancelar
+                              <X className="size-4" />{" "}
+                              {user.status === "approved" ? "Revogar" : "Recusar"}
                             </Button>
                             <Button
                               size="sm"
@@ -485,10 +541,10 @@ function UsersPage() {
                   })}
                 </TableBody>
               </Table>
-            </div>
+            </TableScroll>
           ) : (
             <div className="grid gap-4 p-5 sm:p-7">
-              {users.map((user) => (
+              {visibleUsers.map((user) => (
                 <div
                   key={user.id}
                   className="rounded-2xl border border-primary/10 bg-primary/[0.025] p-5"
@@ -503,7 +559,7 @@ function UsersPage() {
                     </Badge>
                   </div>
                   <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    {partners.map((partner) => (
+                    {visiblePartners.map((partner) => (
                       <label
                         key={partner.id}
                         className="flex cursor-pointer items-center gap-2 rounded-xl border border-primary/10 bg-background/70 px-3 py-2.5 text-sm"

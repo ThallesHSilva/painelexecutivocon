@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "seed": "a7-frontend-baseline-v1",
+  "generatedAt": "2026-09-20T12:00:00-03:00",
+  "notice": "Dados integralmente fictícios; não derivar nem combinar com output/ ou SQLite local.",
+  "partners": [
+    { "id": "pv-alpha", "name": "A7 Norte" },
+    {
+      "id": "pv-long",
+      "name": "A7 Centro Empresarial de Atendimento Integrado com Nome Excepcionalmente Longo"
+    },
+    { "id": "pv-zero", "name": "A7 Sul — Operação Zero" }
+  ],
+  "profiles": {
+    "admin": { "role": "admin", "partnerIds": [], "expectedIndicatorAccess": false },
+    "director": { "role": "director", "partnerIds": [], "expectedScope": "all" },
+    "gnOne": { "role": "gn", "partnerIds": ["pv-alpha"], "expectedScope": ["pv-alpha"] },
+    "gnMany": {
+      "role": "gn",
+      "partnerIds": ["pv-alpha", "pv-long"],
+      "expectedScope": ["pv-alpha", "pv-long"]
+    },
+    "gnNone": { "role": "gn", "partnerIds": [], "expectedScope": [] }
+  },
+  "cases": [
+    {
+      "id": "ZERO_REAL",
+      "inputs": { "opportunities": 0, "revenue": 0, "available": true },
+      "expected": { "semanticState": "zero", "display": "0" }
+    },
+    {
+      "id": "AUSENTE",
+      "inputs": { "value": null, "available": false },
+      "expected": { "semanticState": "missing", "display": "—" }
+    },
+    {
+      "id": "NAO_APLICAVEL",
+      "inputs": { "value": null, "notApplicable": true },
+      "expected": { "semanticState": "not_applicable", "display": "Não aplicável" }
+    },
+    {
+      "id": "FINANCEIRO_GRANDE",
+      "inputs": { "value": 987654321.98 },
+      "expected": { "detailed": "R$ 987.654.321,98", "mustNotClip": true }
+    },
+    {
+      "id": "TABELA_EXTENSA",
+      "inputs": { "rowCount": 32, "rowLabelPattern": "Linha {01..32}" },
+      "expected": { "accessibleRows": 32, "stickyContext": true }
+    },
+    {
+      "id": "SIMULADOR_PADRAO",
+      "inputs": {
+        "opportunities": 100,
+        "quantityPerCnpj": 2,
+        "conversionRate": 5,
+        "capacityPerDay": 20,
+        "averageActivations": 1,
+        "averageTicket": 1500
+      },
+      "expected": {
+        "quantity": 200,
+        "conversions": 10,
+        "capacity": 1,
+        "revenue": 15000,
+        "cttMonth": 5,
+        "cttWeek": 1.25,
+        "cttDay": 0.25,
+        "fdv": 10
+      }
+    }
+  ],
+  "ytd": {
+    "source": {
+      "report": "baseline-ytd.xlsx",
+      "companyColumn": "Empresa",
+      "period": "YTD 2026",
+      "monthsElapsed": 8,
+      "previousPeriod": "YTD 2025",
+      "importedAt": "2026-09-20T12:00:00-03:00"
+    },
+    "records": [
+      {
+        "company": "A7 Norte",
+        "product": "Móvel Líquido",
+        "meta": 100,
+        "real": 120,
+        "attainment": 1.2,
+        "gap": 20,
+        "average": 15,
+        "previousMeta": 100,
+        "previousReal": 80,
+        "previousAttainment": 0.8,
+        "previousGap": -20,
+        "previousAverage": 10,
+        "yoy": 0.5,
+        "yoyGap": 40
+      },
+      {
+        "company": "A7 Centro Empresarial de Atendimento Integrado com Nome Excepcionalmente Longo",
+        "product": "Móvel Líquido",
+        "meta": 300,
+        "real": 180,
+        "attainment": 0.6,
+        "gap": -120,
+        "average": 22.5,
+        "previousMeta": 200,
+        "previousReal": 120,
+        "previousAttainment": 0.6,
+        "previousGap": -80,
+        "previousAverage": 15,
+        "yoy": 0.5,
+        "yoyGap": 60
+      },
+      {
+        "company": "A7 Sul — Operação Zero",
+        "product": "Banda Larga",
+        "meta": 0,
+        "real": 0,
+        "attainment": 0,
+        "gap": 0,
+        "average": 0,
+        "previousMeta": 0,
+        "previousReal": 0,
+        "previousAttainment": 0,
+        "previousGap": 0,
+        "previousAverage": 0,
+        "yoy": 0,
+        "yoyGap": 0
+      }
+    ],
+    "aggregateExpected": {
+      "Móvel Líquido": { "meta": 400, "real": 300, "attainment": 0.75, "previousReal": 200, "yoy": 0.5 }
+    },
+    "legacyCompatibilityRecord": {
+      "company": "A7 Norte",
+      "product": "Dados Avançados",
+      "meta": 10,
+      "real": 5,
+      "previousMeta": 10,
+      "previousReal": 0,
+      "omittedFields": [
+        "attainment",
+        "gap",
+        "average",
+        "previousAttainment",
+        "previousGap",
+        "previousAverage",
+        "yoy",
+        "yoyGap"
+      ],
+      "currentReportOutcome": "NaN pode ser propagado durante reduce",
+      "targetOutcome": "estado ausente explícito ou derivados normalizados antes da soma"
+    }
+  },
+  "rankings": {
+    "quartil": [
+      { "id": "c-beta", "name": "Consultora Beta", "quartiles": [2, 2, 2], "score": 12, "revenue": 2400, "expectedRank": 1 },
+      { "id": "c-alpha", "name": "Consultor Alpha", "quartiles": [1, 2, 3], "score": 12, "revenue": 2200, "expectedRank": 2 },
+      { "id": "c-zero", "name": "Consultor Zero", "quartiles": [5, 5, null], "score": 2, "revenue": 0, "expectedRank": 3 }
+    ],
+    "tower": {
+      "columns": ["bgxpc", "meta", "estxpc"],
+      "rows": [
+        { "partner": "A7 Norte", "values": [110, 100, 105], "expectedRank": 1 },
+        { "partner": "A7 Sul — Operação Zero", "values": [0, 0, 0], "expectedRank": 2 },
+        { "partner": "A7 Centro Empresarial de Atendimento Integrado com Nome Excepcionalmente Longo", "values": [null, 999, 999], "expectedRank": 3 }
+      ]
+    }
+  },
+  "qsc": {
+    "competence": "2026-09",
+    "updateFrequency": "mensal",
+    "points": [
+      { "id": "normal", "competence": "2026-09", "value": 0.92, "numerator": 92, "denominator": 100, "available": true, "zeroPark": false, "score": 20, "scoreBand": "1" },
+      { "id": "zero-real", "competence": "2026-09", "value": 0, "numerator": 0, "denominator": 100, "available": true, "zeroPark": false, "score": 0, "scoreBand": "4" },
+      { "id": "missing", "competence": "2026-08", "value": null, "numerator": 0, "denominator": 0, "available": false, "zeroPark": false, "score": null, "scoreBand": null },
+      { "id": "zero-park", "competence": "2026-09", "value": null, "numerator": 0, "denominator": 0, "available": true, "zeroPark": true, "score": null, "scoreBand": null }
+    ],
+    "semesterCompetencies": ["2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12"]
+  },
+  "report": {
+    "towerCount": 3,
+    "expectedTotalPages": 12,
+    "portability": [
+      { "month": 4, "portIn": 0, "portOut": 0, "expectedConversion": null },
+      { "month": 5, "portIn": 100, "portOut": 80, "expectedSaldo": 20, "expectedConversion": 0.2 },
+      { "month": 7, "portIn": 50, "portOut": 75, "expectedSaldo": -25, "expectedConversion": -0.5 }
+    ]
+  },
+  "viewports": [
+    { "name": "mobile", "width": 390, "height": 844 },
+    { "name": "tablet", "width": 768, "height": 1024 },
+    { "name": "collision", "width": 1024, "height": 768 },
+    { "name": "notebook", "width": 1366, "height": 768 },
+    { "name": "desktop", "width": 1440, "height": 900 }
+  ]
+}

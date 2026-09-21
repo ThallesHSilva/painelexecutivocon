@@ -1,7 +1,10 @@
-import { useEffect, useState } from "react";
-import { Calculator, UsersRound } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { TableScroll } from "@/components/TableScroll";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -12,6 +15,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fmtBRL, fmtInt } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+/**
+ * Simulador de oportunidades (Etapa 4).
+ *
+ * Um único painel: parâmetros em faixa compacta no topo e, abaixo, as projeções de
+ * Conversão e Qualificados. As duas tabelas compartilham a mesma borda de leitura da
+ * Visão resultado — cabeçalho em superfície sutil, número à direita com `tabular-nums`,
+ * identificação persistente na rolagem horizontal e totalizador por borda e peso.
+ *
+ * Fórmulas, arredondamentos, rótulos comerciais, props, `storageKey` e a persistência
+ * em `localStorage` permanecem exatamente como estavam: a mudança é de apresentação.
+ */
 
 type OpportunityRow = {
   parceiro: string;
@@ -26,6 +42,18 @@ type SimulatorSettings = {
   averageTicket: number;
 };
 
+/**
+ * Nomes que a rota Móvel gravava no seu próprio simulador antes de passar a usar
+ * este componente. A chave de `localStorage` e o escopo continuam os mesmos; ler
+ * também os nomes antigos evita descartar parâmetros já salvos por quem usa a
+ * página. A gravação passa a usar apenas os nomes acima.
+ */
+type LegacySimulatorSettings = {
+  linesPerCnpj: number;
+  capacityPerPdu: number;
+  ticketMedio: number;
+};
+
 type OpportunitySimulatorProps = {
   rows: OpportunityRow[];
   storageKey: string;
@@ -35,6 +63,23 @@ type OpportunitySimulatorProps = {
   revenueLabel: string;
   conversionRate?: number;
   onConversionRateChange?: (value: number) => void;
+  /** Base ainda em carregamento: projeções em skeleton, nunca linha de zeros. */
+  loading?: boolean;
+};
+
+type SimulationEntry = OpportunityRow & {
+  quantity: number;
+  conversions: number;
+  capacity: number;
+  revenue: number;
+};
+
+type QualifiedEntry = {
+  parceiro: string;
+  cttMonth: number;
+  cttWeek: number;
+  cttDay: number;
+  fdv: number;
 };
 
 function savedNumber(value: unknown, minimum: number, maximum = Infinity) {
@@ -52,6 +97,7 @@ export function OpportunitySimulator({
   revenueLabel,
   conversionRate: controlledConversionRate,
   onConversionRateChange,
+  loading = false,
 }: OpportunitySimulatorProps) {
   const [quantityPerCnpj, setQuantityPerCnpj] = useState(2);
   const [storedConversionRate, setStoredConversionRate] = useState(5);
@@ -62,14 +108,14 @@ export function OpportunitySimulator({
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(
-        window.localStorage.getItem(storageKey) ?? "{}",
-      ) as Partial<SimulatorSettings>;
-      const savedQuantity = savedNumber(saved.quantityPerCnpj, 0);
+      const saved = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Partial<
+        SimulatorSettings & LegacySimulatorSettings
+      >;
+      const savedQuantity = savedNumber(saved.quantityPerCnpj ?? saved.linesPerCnpj, 0);
       const savedConversion = savedNumber(saved.conversionRate, 0, 100);
-      const savedCapacity = savedNumber(saved.capacityPerDay, 1);
+      const savedCapacity = savedNumber(saved.capacityPerDay ?? saved.capacityPerPdu, 1);
       const savedAverage = savedNumber(saved.averageActivations, 1);
-      const savedTicket = savedNumber(saved.averageTicket, 0);
+      const savedTicket = savedNumber(saved.averageTicket ?? saved.ticketMedio, 0);
 
       if (savedQuantity != null) setQuantityPerCnpj(savedQuantity);
       if (savedConversion != null) {
@@ -152,149 +198,149 @@ export function OpportunitySimulator({
     { cttMonth: 0, cttWeek: 0, cttDay: 0, fdv: 0 },
   );
 
-  return (
-    <div className="mt-8 space-y-6">
-      <Card className="relative overflow-hidden rounded-[2rem] border-primary/20 bg-gradient-to-br from-card via-card to-primary/[0.08] shadow-elevated">
-        <div className="relative flex flex-col gap-5 border-b border-primary/10 bg-primary/[0.035] p-5 lg:flex-row lg:items-end lg:justify-between lg:p-7">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="grid size-10 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant">
-                <Calculator className="size-5" />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-                  {simulatorLabel}
-                </p>
-                <h3 className="text-lg font-semibold tracking-tight">Conversão</h3>
-              </div>
-            </div>
-            <p className="mt-3 max-w-md text-xs leading-5 text-muted-foreground">
-              Simule volume, conversões, capacidade comercial e receita por parceiro.
-            </p>
-          </div>
-          <div className="grid w-full gap-2 sm:max-w-[700px] sm:grid-cols-4">
-            <SimulatorInput
-              label={`${quantityLabel} por CNPJ`}
-              value={quantityPerCnpj}
-              min={0}
-              step={1}
-              onChange={setQuantityPerCnpj}
-            />
-            <SimulatorInput
-              label="Conversão (%)"
-              value={conversionRate}
-              min={0}
-              max={100}
-              step={0.1}
-              onChange={changeConversionRate}
-            />
-            <SimulatorInput
-              label="Dias úteis"
-              value={capacityPerDay}
-              min={1}
-              step={1}
-              onChange={setCapacityPerDay}
-            />
-            <SimulatorInput
-              label="Ticket médio (R$)"
-              value={averageTicket}
-              min={0}
-              step={0.01}
-              onChange={setAverageTicket}
-              accent
-            />
-          </div>
-        </div>
-        <div className="p-3 sm:p-5">
-          <div className="overflow-x-auto rounded-2xl border border-primary/15 bg-background/80 shadow-elegant">
-            <Table className="min-w-[900px] table-fixed">
-              <TableHeader className="bg-primary/[0.06] [&_th]:h-auto [&_th]:px-5 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.14em] [&_th]:text-muted-foreground">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead className="text-right">{opportunityLabel}</TableHead>
-                  <TableHead className="text-right">{quantityLabel}</TableHead>
-                  <TableHead className="text-right">Conversão</TableHead>
-                  <TableHead className="text-right">PDU</TableHead>
-                  <TableHead className="text-right">{revenueLabel}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="[&_td]:px-5 [&_td]:py-4 [&_tr]:border-primary/[0.07] [&_tr]:transition-colors [&_tr:hover]:bg-primary/[0.035]">
-                {simulation.map((partner) => (
-                  <SimulationRow key={partner.parceiro} partner={partner} />
-                ))}
-              </TableBody>
-              <TableFooter className="border-t border-primary/15 bg-primary/[0.075] font-semibold [&_td]:px-5 [&_td]:py-4">
-                <SimulationRow partner={{ parceiro: "Total", ...total }} />
-              </TableFooter>
-            </Table>
-          </div>
-        </div>
-      </Card>
+  /**
+   * Larguras dimensionadas pelo conteúdo. A coluna de receita comporta crédito alto
+   * com separador de milhar por inteiro, sem corte e sem reduzir a fonte.
+   */
+  const conversionColumns: ResultColumn<SimulationEntry>[] = [
+    {
+      id: "oportunidades",
+      label: opportunityLabel,
+      width: "w-[152px]",
+      format: (row) => fmtInt(row.oportunidades),
+    },
+    {
+      id: "quantity",
+      label: quantityLabel,
+      width: "w-[124px]",
+      format: (row) => fmtInt(row.quantity),
+    },
+    {
+      id: "conversions",
+      label: "Conversão",
+      width: "w-[124px]",
+      format: (row) => fmtInt(row.conversions),
+    },
+    { id: "capacity", label: "PDU", width: "w-[96px]", format: (row) => fmtInt(row.capacity) },
+    {
+      id: "revenue",
+      label: revenueLabel,
+      width: "w-[176px]",
+      format: (row) => fmtBRL(row.revenue),
+      emphasis: true,
+    },
+  ];
 
-      <Card className="relative overflow-hidden rounded-[2rem] border-cyan/25 bg-gradient-to-br from-card via-card to-cyan/[0.08] shadow-elevated">
-        <div className="relative flex flex-col gap-5 border-b border-cyan/15 bg-cyan/[0.045] p-5 sm:flex-row sm:items-end sm:justify-between sm:p-7">
-          <div>
-            <div className="flex items-center gap-3">
-              <div className="grid size-10 place-items-center rounded-2xl bg-cyan/15 text-cyan shadow-sm">
-                <UsersRound className="size-5" />
-              </div>
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan">
-                  Cadência comercial
-                </p>
-                <h3 className="text-lg font-semibold tracking-tight">Qualificados</h3>
-              </div>
-            </div>
-            <p className="mt-3 max-w-md text-xs leading-5 text-muted-foreground">
-              Distribuição da conversão em contatos qualificados e FDV.
-            </p>
-          </div>
-          <SimulatorInput
-            label="Média de altas"
-            value={averageActivations}
-            min={1}
-            step={0.1}
-            onChange={setAverageActivations}
-            compact
-          />
-        </div>
-        <div className="p-3 sm:p-5">
-          <div className="overflow-x-auto rounded-2xl border border-cyan/20 bg-background/80 shadow-elegant">
-            <Table className="min-w-[700px] table-fixed">
-              <TableHeader className="bg-cyan/[0.075] [&_th]:h-auto [&_th]:px-5 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.14em] [&_th]:text-muted-foreground">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Parceiro</TableHead>
-                  <TableHead className="text-right">Ctt Mês</TableHead>
-                  <TableHead className="text-right">Ctt Sem</TableHead>
-                  <TableHead className="text-right">Ctt Dia</TableHead>
-                  <TableHead className="text-right">FDV</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody className="[&_td]:px-5 [&_td]:py-4 [&_tr]:border-cyan/[0.09] [&_tr:hover]:bg-cyan/[0.045]">
-                {qualified.map((partner) => (
-                  <QualifiedRow key={partner.parceiro} partner={partner} />
-                ))}
-              </TableBody>
-              <TableFooter className="border-t border-cyan/20 bg-cyan/[0.09] font-semibold [&_td]:px-5 [&_td]:py-4">
-                <QualifiedRow partner={{ parceiro: "Total", ...qualifiedTotal }} />
-              </TableFooter>
-            </Table>
-          </div>
-        </div>
-      </Card>
-    </div>
+  const qualifiedColumns: ResultColumn<QualifiedEntry>[] = [
+    { id: "cttMonth", label: "Ctt Mês", width: "w-[124px]", format: (row) => fmtInt(row.cttMonth) },
+    { id: "cttWeek", label: "Ctt Sem", width: "w-[124px]", format: (row) => fmtInt(row.cttWeek) },
+    { id: "cttDay", label: "Ctt Dia", width: "w-[124px]", format: (row) => fmtInt(row.cttDay) },
+    {
+      id: "fdv",
+      label: "FDV",
+      width: "w-[124px]",
+      format: (row) => fmtInt(row.fdv),
+      emphasis: true,
+    },
+  ];
+
+  return (
+    <Card className="mt-6 overflow-hidden">
+      <div className="border-b border-border px-4 py-3.5 md:px-5">
+        <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+          {simulatorLabel}
+        </h2>
+        <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+          Os parâmetros abaixo alimentam as duas projeções e ficam salvos neste navegador.
+        </p>
+      </div>
+
+      <div className="grid gap-3 border-b border-border bg-muted/40 px-4 py-3 md:px-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <ParameterField
+          label={`${quantityLabel} por CNPJ`}
+          value={quantityPerCnpj}
+          min={0}
+          step={1}
+          onChange={setQuantityPerCnpj}
+        />
+        <ParameterField
+          label="Conversão (%)"
+          value={conversionRate}
+          min={0}
+          max={100}
+          step={0.1}
+          onChange={changeConversionRate}
+        />
+        <ParameterField
+          label="Dias úteis"
+          value={capacityPerDay}
+          min={1}
+          step={1}
+          onChange={setCapacityPerDay}
+        />
+        <ParameterField
+          label="Ticket médio (R$)"
+          value={averageTicket}
+          min={0}
+          step={0.01}
+          onChange={setAverageTicket}
+        />
+        <ParameterField
+          label="Média de altas"
+          value={averageActivations}
+          min={1}
+          step={0.1}
+          onChange={setAverageActivations}
+        />
+      </div>
+
+      <ResultSection
+        title="Conversão"
+        description="Volume, conversões, capacidade comercial e receita por parceiro."
+      >
+        <ResultTable
+          columns={conversionColumns}
+          rows={simulation}
+          total={{ parceiro: "Total", ...total }}
+          minWidth="min-w-[892px]"
+          detailLabel="Detalhe da conversão por parceiro"
+          leadColumnId="revenue"
+          loading={loading}
+        />
+      </ResultSection>
+
+      <ResultSection
+        title="Qualificados"
+        description="Distribuição da conversão em contatos qualificados e FDV, dimensionado pela média de altas."
+        bordered
+      >
+        <ResultTable
+          columns={qualifiedColumns}
+          rows={qualified}
+          total={{ parceiro: "Total", ...qualifiedTotal }}
+          minWidth="min-w-[716px]"
+          detailLabel="Detalhe dos qualificados por parceiro"
+          leadColumnId="fdv"
+          loading={loading}
+        />
+      </ResultSection>
+    </Card>
   );
 }
 
-function SimulatorInput({
+/**
+ * Faixa de parâmetros: rótulo em caption, campo editável com borda e foco visíveis,
+ * valor à direita em `tabular-nums` para que os cinco campos compartilhem a mesma
+ * borda de leitura. Os controles nativos de incremento são ocultados porque cobririam
+ * o próprio valor alinhado à direita; o passo continua acessível pelas setas do teclado.
+ */
+function ParameterField({
   label,
   value,
   min,
   max,
   step,
   onChange,
-  accent,
-  compact,
 }: {
   label: string;
   value: number;
@@ -302,14 +348,10 @@ function SimulatorInput({
   max?: number;
   step: number;
   onChange: (value: number) => void;
-  accent?: boolean;
-  compact?: boolean;
 }) {
   return (
-    <label
-      className={`${compact ? "w-full sm:w-52" : ""} space-y-2 rounded-[1.25rem] border ${accent ? "border-fuchsia/20 bg-fuchsia/[0.035] focus-within:border-fuchsia/40 focus-within:ring-fuchsia/10" : "border-primary/15 bg-background/85 focus-within:border-primary/40 focus-within:ring-primary/10"} p-3.5 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground shadow-sm transition focus-within:ring-2`}
-    >
-      {label}
+    <label className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-xs font-medium leading-4 text-muted-foreground">{label}</span>
       <Input
         type="number"
         min={min}
@@ -319,50 +361,217 @@ function SimulatorInput({
         onChange={(event) =>
           onChange(Math.min(max ?? Infinity, Math.max(min, Number(event.target.value) || min)))
         }
-        className="h-10 border-0 border-t border-primary/10 bg-transparent px-0 pt-1 text-xl font-semibold tabular-nums text-foreground shadow-none focus-visible:ring-0"
+        className="h-11 text-right font-medium tabular-nums [appearance:textfield] sm:h-9 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       />
     </label>
   );
 }
 
-function SimulationRow({
-  partner,
+function ResultSection({
+  title,
+  description,
+  bordered,
+  children,
 }: {
-  partner: {
-    parceiro: string;
-    oportunidades: number;
-    quantity: number;
-    conversions: number;
-    capacity: number;
-    revenue: number;
-  };
+  title: string;
+  description: string;
+  bordered?: boolean;
+  children: ReactNode;
 }) {
   return (
-    <TableRow>
-      <TableCell className="font-medium">{partner.parceiro}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.oportunidades)}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.quantity)}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.conversions)}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.capacity)}</TableCell>
-      <TableCell className="text-right font-semibold tabular-nums text-fuchsia-700 dark:text-fuchsia-300">
-        {fmtBRL(partner.revenue)}
-      </TableCell>
-    </TableRow>
+    <section className={cn("px-4 py-4 md:px-5", bordered && "border-t border-border")}>
+      <h3 className="text-[15px] font-semibold leading-[1.45] tracking-tight text-foreground">
+        {title}
+      </h3>
+      <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{description}</p>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
-function QualifiedRow({
-  partner,
+type ResultColumn<Row> = {
+  id: string;
+  label: string;
+  width: string;
+  format: (row: Row) => string;
+  /** Resultado final da tabela: peso maior, sem cor decorativa. */
+  emphasis?: boolean;
+};
+
+const TABLE_HEADER_CLASS =
+  "bg-muted [&_th]:h-auto [&_th]:border-b [&_th]:border-border [&_th]:px-3 [&_th]:py-2.5 [&_th]:align-bottom [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-foreground";
+const TABLE_BODY_CLASS =
+  "[&_td]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_tr]:border-border [&_tr:hover]:bg-transparent";
+const TABLE_TOTAL_CLASS = "border-t-2 border-border bg-muted [&_td]:px-3 [&_td]:py-2.5";
+/**
+ * Identificação persistente: a primeira coluna acompanha a rolagem horizontal, para que
+ * a linha continue identificável no celular sem retirar nenhuma coluna da tabela.
+ */
+const STICKY_ID_CLASS = "sticky left-0 z-[1] whitespace-normal";
+const STICKY_ID_WIDTH = "w-[168px] sm:w-[220px]";
+
+function ResultTable<Row extends { parceiro: string }>({
+  columns,
+  rows,
+  total,
+  minWidth,
+  detailLabel,
+  leadColumnId,
+  loading,
 }: {
-  partner: { parceiro: string; cttMonth: number; cttWeek: number; cttDay: number; fdv: number };
+  columns: ResultColumn<Row>[];
+  rows: Row[];
+  total: Row;
+  minWidth: string;
+  detailLabel: string;
+  leadColumnId: string;
+  loading?: boolean;
+}) {
+  /**
+   * Base em carregamento não é recorte vazio nem resultado zero: enquanto a consulta
+   * não responde, as projeções ficam em skeleton nas dimensões reais da tabela.
+   */
+  if (loading) {
+    return (
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-10 w-full" />
+        {[0, 1, 2].map((line) => (
+          <Skeleton key={line} className="h-11 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  /**
+   * Sem parceiros no recorte não há totalizador a apresentar: uma linha de zeros seria
+   * lida como ausência real de oportunidade. Zero e base indisponível são estados distintos.
+   */
+  if (rows.length === 0) {
+    return (
+      <EmptyState
+        title="Sem parceiros no recorte"
+        description="Nenhum parceiro foi retornado para este recorte. Ajuste o filtro de parceiros ou verifique a disponibilidade da base."
+      />
+    );
+  }
+
+  const leadColumn = columns.find((column) => column.id === leadColumnId);
+
+  return (
+    <>
+      <TableScroll>
+        <Table className={cn("table-fixed", minWidth)}>
+          <colgroup>
+            <col className={STICKY_ID_WIDTH} />
+            {columns.map((column) => (
+              <col key={column.id} className={column.width} />
+            ))}
+          </colgroup>
+          <TableHeader className={TABLE_HEADER_CLASS}>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Parceiro</TableHead>
+              {columns.map((column) => (
+                <TableHead key={column.id} align="numeric">
+                  {column.label}
+                </TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody className={TABLE_BODY_CLASS}>
+            {rows.map((row) => (
+              <TableRow key={row.parceiro}>
+                <TableCell className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}>
+                  {row.parceiro}
+                </TableCell>
+                {columns.map((column) => (
+                  <TableCell
+                    key={column.id}
+                    align="numeric"
+                    className={column.emphasis ? "font-semibold text-foreground" : undefined}
+                  >
+                    {column.format(row)}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter className={TABLE_TOTAL_CLASS}>
+            <TableRow className="hover:bg-transparent">
+              <TableCell className={cn(STICKY_ID_CLASS, "bg-muted font-semibold text-foreground")}>
+                {total.parceiro}
+              </TableCell>
+              {columns.map((column) => (
+                <TableCell
+                  key={column.id}
+                  align="numeric"
+                  className="font-semibold text-foreground"
+                >
+                  {column.format(total)}
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </TableScroll>
+      <MobileRowDetails label={detailLabel} columns={columns} rows={rows} leadColumn={leadColumn} />
+    </>
+  );
+}
+
+/**
+ * No celular a tabela continua completa e rolável; esta lista é um acesso alternativo
+ * às mesmas colunas, com o parceiro e o resultado principal sempre visíveis.
+ */
+function MobileRowDetails<Row extends { parceiro: string }>({
+  label,
+  columns,
+  rows,
+  leadColumn,
+}: {
+  label: string;
+  columns: ResultColumn<Row>[];
+  rows: Row[];
+  leadColumn?: ResultColumn<Row>;
 }) {
   return (
-    <TableRow>
-      <TableCell className="font-medium">{partner.parceiro}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.cttMonth)}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.cttWeek)}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.cttDay)}</TableCell>
-      <TableCell className="text-right tabular-nums">{fmtInt(partner.fdv)}</TableCell>
-    </TableRow>
+    <div className="mt-4 md:hidden">
+      <p className="text-xs font-semibold text-foreground">{label}</p>
+      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+        Abra uma linha para ver todas as colunas sem rolar a tabela.
+      </p>
+      <div className="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border">
+        {rows.map((row) => (
+          <details key={row.parceiro} className="group bg-card">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+              <span className="min-w-0 flex-1 break-words font-medium text-foreground">
+                {row.parceiro}
+              </span>
+              {leadColumn && (
+                <span className="shrink-0 text-right font-semibold tabular-nums text-foreground">
+                  {leadColumn.format(row)}
+                </span>
+              )}
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-180"
+              />
+            </summary>
+            <dl className="border-t border-border bg-muted/30 px-3 py-2.5">
+              {columns.map((column) => (
+                <div
+                  key={column.id}
+                  className="flex items-baseline justify-between gap-3 py-1 text-sm"
+                >
+                  <dt className="text-xs text-muted-foreground">{column.label}</dt>
+                  <dd className="min-w-0 break-words text-right font-medium tabular-nums text-foreground">
+                    {column.format(row)}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        ))}
+      </div>
+    </div>
   );
 }

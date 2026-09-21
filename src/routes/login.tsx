@@ -83,7 +83,7 @@ function LoginPage() {
 
   return (
     <main className="relative grid min-h-screen overflow-hidden bg-background lg:grid-cols-[minmax(0,1.05fr)_minmax(440px,0.95fr)]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,hsl(var(--primary)/0.18),transparent_34%),radial-gradient(circle_at_82%_78%,hsl(var(--cyan)/0.14),transparent_30%)]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_15%,color-mix(in oklab, var(--primary) 18%, transparent),transparent_34%),radial-gradient(circle_at_82%_78%,color-mix(in oklab, var(--cyan) 14%, transparent),transparent_30%)]" />
 
       <section className="relative hidden min-h-screen overflow-hidden border-r border-primary/10 bg-gradient-to-br from-primary/[0.14] via-background to-cyan/[0.08] p-12 lg:flex lg:flex-col lg:justify-between xl:p-16">
         <div className="pointer-events-none absolute -left-24 -top-24 size-[30rem] rounded-full bg-primary/20 blur-3xl" />
@@ -209,7 +209,7 @@ function LoginPage() {
                       id="password"
                       name="password"
                       type={showPassword ? "text" : "password"}
-                      autoComplete="current-password"
+                      autoComplete={mode === "register" ? "new-password" : "current-password"}
                       required
                       value={password}
                       onChange={(event) => setPassword(event.target.value)}

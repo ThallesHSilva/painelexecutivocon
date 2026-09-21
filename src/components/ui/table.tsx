@@ -2,17 +2,28 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Alinhamento semântico por tipo de dado, igual no cabeçalho e na célula:
+ * - `text`: identificação e descrição (padrão);
+ * - `numeric`: valores, dinheiro, percentual e contagem, com `tabular-nums`;
+ * - `state`: estado curto, faixa, situação.
+ *
+ * O primitivo não centraliza mais todas as colunas que não sejam a primeira.
+ * Aquela regra global tinha especificidade maior que o `text-right` das células
+ * e anulava o alinhamento numérico declarado nas páginas.
+ */
+type CellAlign = "text" | "numeric" | "state";
+
+const alignClass: Record<CellAlign, string> = {
+  text: "text-left",
+  numeric: "text-right tabular-nums",
+  state: "text-center",
+};
+
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
   ({ className, ...props }, ref) => (
     <div className="relative w-full overflow-auto">
-      <table
-        ref={ref}
-        className={cn(
-          "w-full caption-bottom text-sm [&_thead_th:first-child]:text-left [&_thead_th:not(:first-child)]:text-center [&_tbody_td:first-child]:text-left [&_tbody_td:not(:first-child)]:text-center [&_tfoot_td:first-child]:text-left [&_tfoot_td:not(:first-child)]:text-center [&_td:not(:first-child)_input]:text-center [&_td:not(:first-child)>.inline-flex]:justify-center",
-          className,
-        )}
-        {...props}
-      />
+      <table ref={ref} className={cn("w-full caption-bottom text-sm", className)} {...props} />
     </div>
   ),
 );
@@ -62,12 +73,13 @@ TableRow.displayName = "TableRow";
 
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
-  React.ThHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
+  Omit<React.ThHTMLAttributes<HTMLTableCellElement>, "align"> & { align?: CellAlign }
+>(({ className, align = "text", ...props }, ref) => (
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      "h-10 px-2 align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      alignClass[align],
       className,
     )}
     {...props}
@@ -77,12 +89,13 @@ TableHead.displayName = "TableHead";
 
 const TableCell = React.forwardRef<
   HTMLTableCellElement,
-  React.TdHTMLAttributes<HTMLTableCellElement>
->(({ className, ...props }, ref) => (
+  Omit<React.TdHTMLAttributes<HTMLTableCellElement>, "align"> & { align?: CellAlign }
+>(({ className, align = "text", ...props }, ref) => (
   <td
     ref={ref}
     className={cn(
       "p-2 align-middle [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      alignClass[align],
       className,
     )}
     {...props}
@@ -98,4 +111,14 @@ const TableCaption = React.forwardRef<
 ));
 TableCaption.displayName = "TableCaption";
 
-export { Table, TableHeader, TableBody, TableFooter, TableHead, TableRow, TableCell, TableCaption };
+export {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableCaption,
+  type CellAlign,
+};

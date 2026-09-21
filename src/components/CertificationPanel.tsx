@@ -1,16 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import { Award, ChevronDown, LoaderCircle, UsersRound } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   CertificationQscHistory,
   type CertificationQscField,
   type CertificationQscRow,
 } from "@/components/CertificationQscHistory";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { usePartners } from "@/hooks/useData";
 import { fmtInt } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Table,
@@ -20,6 +23,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableScroll } from "@/components/TableScroll";
+import { EmptyState } from "@/components/EmptyState";
+import { SaveState, type SaveStatus } from "@/components/SaveState";
 
 type CertificationField =
   "jan" | "feb" | "mar" | "apr" | "may" | "jun" | "totalizer" | "points" | "band";
@@ -290,15 +296,19 @@ const MONTH_COLUMNS: Record<CycleId, Array<{ field: CertificationField; label: s
   ],
 };
 
-const BASE_COLUMNS: Array<{
+type CertificationColumn = {
   field: CertificationField;
   label: string;
   width: string;
-  numeric?: boolean;
-}> = [
-  { field: "totalizer", label: "Totalizador", width: "w-[130px]", numeric: true },
-  { field: "points", label: "Pts", width: "w-[100px]", numeric: true },
-  { field: "band", label: "Faixa", width: "w-[120px]" },
+  align: "numeric" | "state";
+};
+
+const BASE_COLUMNS: CertificationColumn[] = [
+  // Largura dimensionada pelo conteudo financeiro: o totalizador precisa exibir
+  // valores com centavos por inteiro e a Faixa nao pode ficar fora da area util.
+  { field: "totalizer", label: "Totalizador", width: "w-[168px]", align: "numeric" },
+  { field: "points", label: "Pts", width: "w-[112px]", align: "numeric" },
+  { field: "band", label: "Faixa", width: "w-[132px]", align: "state" },
 ];
 
 const SUM_FIELDS = ["jan", "feb", "mar", "apr", "may", "jun", "totalizer"] as const;
@@ -465,35 +475,106 @@ function certificationStone(revenueTelecom: number, totalPoints: number) {
   );
 }
 
+type CyclePayload = (typeof INITIAL_CYCLES)["current"];
+
+const CYCLE_META: Record<CycleId, { tab: string; title: string; period: string; note: string }> = {
+  previous: {
+    tab: "1º ciclo · fechado",
+    title: "1º ciclo · resultado fechado",
+    period: "Janeiro a junho",
+    note: "Apuração encerrada; valores somente leitura.",
+  },
+  current: {
+    tab: "2º ciclo · simulação",
+    title: "2º ciclo · simulação",
+    period: "Julho a dezembro",
+    note: "Ciclo em aberto; preencha os meses, o restante é calculado.",
+  },
+};
+
+/**
+ * Identificação persistente: a primeira coluna acompanha a rolagem horizontal, para
+ * que o indicador continue legível sem retirar nenhuma coluna da tabela.
+ */
+const STICKY_ID_CLASS = "sticky left-0 z-[1] whitespace-normal";
+const TABLE_HEADER_CLASS =
+  "bg-muted [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-foreground";
+const TABLE_BODY_CLASS = "[&_td]:px-3 [&_td]:py-2 [&_tr]:border-border";
+const FIELD_CLASS = "h-9 px-2 text-sm";
+const DERIVED_FIELDS = ["totalizer", "points", "band"];
+
+/** Gravação da prévia. Mesmo endpoint já usado pelo autosave; nenhuma API nova. */
+async function putPreview(partnerId: string, payload: CyclePayload) {
+  const response = await fetch("/api/certificacao/previa", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ partnerId, payload }),
+  });
+  const body = (await response.json()) as { message?: string };
+  if (!response.ok) throw new Error(body.message ?? "Não foi possível salvar a prévia.");
+}
+
+type PendingWrite = { partnerId: string; partnerName: string; payload: CyclePayload };
+
 export function CertificationPanel() {
   const [cycles, setCycles] = useState(INITIAL_CYCLES);
-  const [view, setView] = useState<"previous" | "current">("previous");
+  // Identidade do ciclo em simulação: muda a cada edição e reinicia o debounce do autosave.
+  const currentCycle = cycles.current;
+  const [view, setView] = useState<CycleId>("previous");
   const [expanded, setExpanded] = useState<Record<CycleId, boolean>>({
     previous: false,
     current: false,
   });
   const [hasPendingChanges, setHasPendingChanges] = useState(false);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveState, setSaveState] = useState<SaveStatus>("idle");
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const { effectiveSelected } = usePartnerFilter();
-  const { data: partners = [] } = usePartners();
-  const activePartnerId = effectiveSelected.length === 1 ? effectiveSelected[0] : null;
-  const activePartner = useMemo(
-    () => partners.find((partner) => partner.id === activePartnerId) ?? null,
-    [activePartnerId, partners],
-  );
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+  /**
+   * Gravação pendente do PV anterior. Enquanto existir, a troca de parceiro não é
+   * concluída: a prévia do novo PV não é carregada nem editada, de modo que nenhuma
+   * alteração vaze entre parceiros.
+   */
+  const [pendingTransfer, setPendingTransfer] = useState<PendingWrite | null>(null);
+  const [transferAttempt, setTransferAttempt] = useState(0);
+  const pendingRef = useRef<PendingWrite | null>(null);
 
+  const { effectiveSelected, role, allowedPartnerIds } = usePartnerFilter();
+  const { data: partners = [] } = usePartners();
+  const candidatePartnerId = effectiveSelected.length === 1 ? effectiveSelected[0] : null;
+  const activePartner = useMemo(
+    () => partners.find((partner) => partner.id === candidatePartnerId) ?? null,
+    [candidatePartnerId, partners],
+  );
+  const activePartnerId = activePartner?.id ?? null;
+  const hasNoAuthorizedPartners = role === "gn" && (allowedPartnerIds?.length ?? 0) === 0;
+
+  /*
+    Carga da prévia do PV. Declarada antes do autosave para que a troca de parceiro
+    seja tratada antes de qualquer gravação agendada para o parceiro anterior.
+  */
   useEffect(() => {
+    const pending = pendingRef.current;
+    if (pending && pending.partnerId !== activePartnerId) {
+      pendingRef.current = null;
+      setHasPendingChanges(false);
+      setPendingTransfer(pending);
+      return;
+    }
+    if (pendingTransfer) return;
+
     if (!activePartnerId) {
       setCycles((current) => ({ ...current, current: INITIAL_CYCLES.current }));
       setHasPendingChanges(false);
       setSaveState("idle");
+      setLoadError(null);
       return;
     }
 
     let cancelled = false;
     setHasPendingChanges(false);
     setSaveState("idle");
+    setLoadError(null);
     setLoadingPreview(true);
     void fetch(`/api/certificacao/previa?partnerId=${encodeURIComponent(activePartnerId)}`, {
       cache: "no-store",
@@ -513,13 +594,12 @@ export function CertificationPanel() {
           "qsc" in preview;
         setCycles((current) => ({
           ...current,
-          current: hasExpectedShape
-            ? (preview as (typeof INITIAL_CYCLES)["current"])
-            : INITIAL_CYCLES.current,
+          current: hasExpectedShape ? (preview as CyclePayload) : INITIAL_CYCLES.current,
         }));
       })
       .catch((error: Error) => {
-        if (!cancelled) toast.error(error.message);
+        if (cancelled) return;
+        setLoadError(error.message);
       })
       .finally(() => {
         if (!cancelled) setLoadingPreview(false);
@@ -528,23 +608,44 @@ export function CertificationPanel() {
     return () => {
       cancelled = true;
     };
-  }, [activePartnerId]);
+  }, [activePartnerId, pendingTransfer, reloadToken]);
 
+  /* Conclusão da gravação pendente antes de adotar o parceiro recém-selecionado. */
   useEffect(() => {
-    if (!activePartnerId || !hasPendingChanges || loadingPreview) return;
+    if (!pendingTransfer) return;
+    let cancelled = false;
+    setSaveState("saving");
+    void putPreview(pendingTransfer.partnerId, pendingTransfer.payload)
+      .then(() => {
+        if (cancelled) return;
+        setSaveState("saved");
+        setPendingTransfer(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setSaveState("error");
+        toast.error(error instanceof Error ? error.message : "Não foi possível salvar a prévia.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingTransfer, transferAttempt]);
 
-    const partnerId = activePartnerId;
-    const preview = cycles.current;
+  /* Autosave do ciclo em simulação. */
+  useEffect(() => {
+    if (!activePartnerId || !hasPendingChanges || loadingPreview || pendingTransfer) return;
+    const pending = pendingRef.current;
+    // A gravação só vale para o parceiro que originou a alteração.
+    if (!pending || pending.partnerId !== activePartnerId) return;
+
     const timer = window.setTimeout(() => {
       setSaveState("saving");
-      void fetch("/api/certificacao/previa", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ partnerId, payload: preview }),
-      })
-        .then(async (response) => {
-          const payload = (await response.json()) as { message?: string };
-          if (!response.ok) throw new Error(payload.message ?? "Não foi possível salvar a prévia.");
+      void putPreview(pending.partnerId, pending.payload)
+        .then(() => {
+          if (pendingRef.current === pending) {
+            pendingRef.current = null;
+            setHasPendingChanges(false);
+          }
           setSaveState("saved");
         })
         .catch((error: unknown) => {
@@ -554,342 +655,264 @@ export function CertificationPanel() {
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [activePartnerId, cycles.current, hasPendingChanges, loadingPreview]);
+  }, [activePartnerId, currentCycle, hasPendingChanges, loadingPreview, pendingTransfer]);
 
-  const updateValue = (cycle: CycleId, rowId: string, field: CertificationField, value: string) => {
-    if (cycle !== "current" || !activePartnerId) return;
-    const activeCycle = cycles[cycle];
-    if (
-      (rowId === activeCycle.summary.id && isCalculatedSummaryField(field)) ||
-      ([
-        activeCycle.oneShot.id,
-        activeCycle.ftthPhysical.id,
-        activeCycle.newProductsRevenue.id,
-        activeCycle.revenuePerFdv.id,
-      ].includes(rowId) &&
-        ["totalizer", "points", "band"].includes(field))
-    )
-      return;
+  const editable =
+    Boolean(activePartnerId) && !loadingPreview && !pendingTransfer && loadError === null;
+
+  const commit = (next: CyclePayload) => {
+    if (!activePartnerId) return;
+    pendingRef.current = {
+      partnerId: activePartnerId,
+      partnerName: activePartner?.name ?? activePartnerId,
+      payload: next,
+    };
     setHasPendingChanges(true);
     setSaveState("idle");
-    setCycles((current) => ({
-      ...current,
-      [cycle]: {
-        summary:
-          rowId === current[cycle].summary.id
-            ? { ...current[cycle].summary, [field]: value }
-            : current[cycle].summary,
-        oneShot:
-          rowId === current[cycle].oneShot.id
-            ? { ...current[cycle].oneShot, [field]: value }
-            : current[cycle].oneShot,
-        ftthPhysical:
-          rowId === current[cycle].ftthPhysical.id
-            ? { ...current[cycle].ftthPhysical, [field]: value }
-            : current[cycle].ftthPhysical,
-        newProductsRevenue:
-          rowId === current[cycle].newProductsRevenue.id
-            ? { ...current[cycle].newProductsRevenue, [field]: value }
-            : current[cycle].newProductsRevenue,
-        revenuePerFdv:
-          rowId === current[cycle].revenuePerFdv.id
-            ? { ...current[cycle].revenuePerFdv, [field]: value }
-            : current[cycle].revenuePerFdv,
-        breakdown: current[cycle].breakdown.map((row) =>
-          row.id === rowId ? { ...row, [field]: value } : row,
-        ),
-        qsc: current[cycle].qsc,
-      },
-    }));
+    setCycles((current) => ({ ...current, current: next }));
   };
 
-  const updateQscValue = (
-    cycle: CycleId,
-    rowId: string,
-    field: CertificationQscField,
-    value: string,
-  ) => {
-    if (cycle !== "current" || !activePartnerId) return;
-    setHasPendingChanges(true);
-    setSaveState("idle");
-    setCycles((current) => ({
-      ...current,
-      [cycle]: {
-        ...current[cycle],
-        qsc:
-          rowId === "qsc-total"
-            ? { ...current[cycle].qsc, totalPoints: value }
-            : {
-                ...current[cycle].qsc,
-                rows: current[cycle].qsc.rows.map((row) =>
-                  row.id === rowId ? { ...row, [field]: value } : row,
-                ),
-              },
-      },
-    }));
+  const updateValue = (rowId: string, field: CertificationField, value: string) => {
+    if (!editable) return;
+    const cycle = currentCycle;
+    const derivedRowIds = [
+      cycle.oneShot.id,
+      cycle.ftthPhysical.id,
+      cycle.newProductsRevenue.id,
+      cycle.revenuePerFdv.id,
+    ];
+    // Campos calculados nunca são gravados a partir da interface.
+    if (rowId === cycle.summary.id && isCalculatedSummaryField(field)) return;
+    if (derivedRowIds.includes(rowId) && DERIVED_FIELDS.includes(field)) return;
+
+    commit({
+      ...cycle,
+      summary: rowId === cycle.summary.id ? { ...cycle.summary, [field]: value } : cycle.summary,
+      oneShot: rowId === cycle.oneShot.id ? { ...cycle.oneShot, [field]: value } : cycle.oneShot,
+      ftthPhysical:
+        rowId === cycle.ftthPhysical.id
+          ? { ...cycle.ftthPhysical, [field]: value }
+          : cycle.ftthPhysical,
+      newProductsRevenue:
+        rowId === cycle.newProductsRevenue.id
+          ? { ...cycle.newProductsRevenue, [field]: value }
+          : cycle.newProductsRevenue,
+      revenuePerFdv:
+        rowId === cycle.revenuePerFdv.id
+          ? { ...cycle.revenuePerFdv, [field]: value }
+          : cycle.revenuePerFdv,
+      breakdown: cycle.breakdown.map((row) =>
+        row.id === rowId ? { ...row, [field]: value } : row,
+      ),
+    });
   };
 
-  const valueCell = (
-    cycle: CycleId,
-    row: CertificationRow,
-    column: { field: CertificationField; label: string; width: string; numeric?: boolean },
-    child = false,
-    derived = false,
-  ) => {
-    if (derived) {
-      return (
-        <TableCell
-          key={column.field}
-          className={`${column.numeric ? "text-right tabular-nums" : "text-left"} font-bold text-foreground`}
-        >
-          {row[column.field] || "—"}
-        </TableCell>
-      );
-    }
-
-    return (
-      <TableCell key={column.field} className={child ? "bg-violet-500/[0.018]" : undefined}>
-        <Input
-          aria-label={`${column.label} de ${row.indicator}`}
-          type="text"
-          inputMode={column.numeric ? "decimal" : "text"}
-          value={row[column.field]}
-          onChange={(event) => updateValue(cycle, row.id, column.field, event.target.value)}
-          disabled={cycle !== "current" || !activePartnerId || loadingPreview}
-          className={`h-9 rounded-xl border-violet-500/20 px-2.5 text-sm font-semibold shadow-sm focus-visible:border-violet-500/50 focus-visible:ring-violet-500/15 bg-violet-500/[0.045] disabled:cursor-not-allowed disabled:opacity-65 ${column.numeric ? "text-right tabular-nums" : "text-left"}`}
-        />
-      </TableCell>
-    );
+  const updateQscValue = (rowId: string, field: CertificationQscField, value: string) => {
+    if (!editable) return;
+    const cycle = currentCycle;
+    commit({
+      ...cycle,
+      qsc:
+        rowId === "qsc-total"
+          ? { ...cycle.qsc, totalPoints: value }
+          : {
+              ...cycle.qsc,
+              rows: cycle.qsc.rows.map((row) =>
+                row.id === rowId ? { ...row, [field]: value } : row,
+              ),
+            },
+    });
   };
+
+  /*
+    Valor somente de leitura é texto. Resultado fechado e resultado calculado não são
+    apresentados como campo desabilitado, que aparenta ser editável e perde contraste.
+  */
+  const readOnlyCell = (row: CertificationRow, column: CertificationColumn) => (
+    <TableCell key={column.field} align={column.align} className="font-medium text-foreground">
+      {row[column.field].trim() === "" ? "—" : row[column.field]}
+    </TableCell>
+  );
+
+  const editableCell = (row: CertificationRow, column: CertificationColumn) => (
+    <TableCell key={column.field} align={column.align}>
+      <Input
+        aria-label={`${column.label} de ${row.indicator}`}
+        type="text"
+        inputMode={column.align === "numeric" ? "decimal" : "text"}
+        value={row[column.field]}
+        onChange={(event) => updateValue(row.id, column.field, event.target.value)}
+        className={cn(
+          FIELD_CLASS,
+          column.align === "numeric" ? "text-right tabular-nums" : "text-center",
+        )}
+      />
+    </TableCell>
+  );
 
   const renderCycle = (cycle: CycleId) => {
     const activeCycle = cycles[cycle];
+    const meta = CYCLE_META[cycle];
     const summary = withCalculatedSummary(activeCycle.summary, activeCycle.breakdown);
     const oneShot = withCalculatedOneShot(activeCycle.oneShot);
     const ftthPhysical = withCalculatedFtthPhysical(activeCycle.ftthPhysical);
     const newProductsRevenue = withCalculatedNewProductsRevenue(activeCycle.newProductsRevenue);
     const revenuePerFdv = withCalculatedRevenuePerFdv(activeCycle.revenuePerFdv);
     const qscPoints = parseCurrency(activeCycle.qsc.totalPoints);
-    const totalPoints =
-      [summary, oneShot, ftthPhysical, newProductsRevenue, revenuePerFdv].reduce(
-        (total, row) => total + parseCurrency(row.points),
-        qscPoints,
-      ) ?? 0;
+    const totalPoints = [summary, oneShot, ftthPhysical, newProductsRevenue, revenuePerFdv].reduce(
+      (total, row) => total + parseCurrency(row.points),
+      qscPoints,
+    );
     const stone = certificationStone(parseCurrency(summary.totalizer), totalPoints);
-    const columns = [
-      ...MONTH_COLUMNS[cycle].map((column) => ({ ...column, width: "w-[105px]", numeric: true })),
-      ...BASE_COLUMNS,
-    ];
-    const cycleLabel =
-      cycle === "previous" ? "Certificação · 1º semestre" : "Certificação · 2º semestre";
-    const editable = cycle === "current" && Boolean(activePartnerId) && !loadingPreview;
+    const monthColumns = MONTH_COLUMNS[cycle].map((column): CertificationColumn => ({
+      ...column,
+      width: "w-[136px]",
+      align: "numeric",
+    }));
+    const columns = [...monthColumns, ...BASE_COLUMNS];
+    // Simulação só é editável no ciclo atual, com um PV resolvido e sem carga pendente.
+    const cycleEditable = cycle === "current" && editable;
+
+    const derivedRow = (row: CertificationRow) => (
+      <TableRow key={row.id}>
+        <TableCell className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}>
+          {row.indicator}
+        </TableCell>
+        {columns.map((column) =>
+          cycleEditable && !DERIVED_FIELDS.includes(column.field)
+            ? editableCell(row, column)
+            : readOnlyCell(row, column),
+        )}
+      </TableRow>
+    );
+
+    const table = (
+      <Table className="min-w-[1488px] table-fixed">
+        <colgroup>
+          <col className="w-[260px]" />
+          {columns.map((column) => (
+            <col key={column.field} className={column.width} />
+          ))}
+        </colgroup>
+        <TableHeader className={TABLE_HEADER_CLASS}>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Indicadores</TableHead>
+            {columns.map((column) => (
+              <TableHead key={column.field} align={column.align}>
+                {column.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody className={TABLE_BODY_CLASS}>
+          <TableRow className="bg-muted/60">
+            <TableCell className={cn(STICKY_ID_CLASS, "bg-muted font-semibold text-foreground")}>
+              <button
+                type="button"
+                aria-expanded={expanded[cycle]}
+                onClick={() => setExpanded((current) => ({ ...current, [cycle]: !current[cycle] }))}
+                className="flex w-full items-start gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn(
+                    "mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                    expanded[cycle] && "rotate-180",
+                  )}
+                />
+                <span>{activeCycle.summary.indicator}</span>
+              </button>
+            </TableCell>
+            {/* Consolidado: soma da composição, com pontuação e faixa calculadas. */}
+            {columns.map((column) => readOnlyCell(summary, column))}
+          </TableRow>
+          {expanded[cycle] &&
+            activeCycle.breakdown.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell className={cn(STICKY_ID_CLASS, "bg-card pl-8 text-foreground")}>
+                  {row.indicator}
+                </TableCell>
+                {columns.map((column) => {
+                  // A composição não usa Pts nem Faixa: a pontuação é do consolidado.
+                  if (column.field === "points" || column.field === "band") {
+                    return <TableCell key={column.field} aria-hidden="true" />;
+                  }
+                  return cycleEditable ? editableCell(row, column) : readOnlyCell(row, column);
+                })}
+              </TableRow>
+            ))}
+          {derivedRow(oneShot)}
+          {derivedRow(ftthPhysical)}
+          {derivedRow(newProductsRevenue)}
+          {derivedRow(revenuePerFdv)}
+          <CertificationQscHistory
+            rows={activeCycle.qsc.rows}
+            totalPoints={activeCycle.qsc.totalPoints}
+            monthLabels={MONTH_COLUMNS[cycle].map((column) => column.label)}
+            onChange={updateQscValue}
+            readOnly={!cycleEditable}
+          />
+        </TableBody>
+      </Table>
+    );
+
+    const loading = cycle === "current" && loadingPreview;
 
     return (
-      <Card
-        key={cycle}
-        className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.045] shadow-elevated"
-      >
-        <div className="flex flex-col gap-4 border-b border-violet-500/15 bg-violet-500/[0.04] px-5 py-5 md:flex-row md:items-center md:justify-between md:px-7">
-          <div className="flex items-center gap-3">
-            <div className="grid size-10 place-items-center rounded-2xl bg-violet-500/[0.13] text-violet-700 shadow-sm ring-4 ring-background/40 dark:text-violet-300">
-              <Award className="size-5" />
-            </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
-                {cycleLabel}
-              </p>
-              <h2 className="text-lg font-semibold tracking-tight">
-                {cycle === "previous" ? "Resultado fechado" : "Simulador de prévia"}
-              </h2>
-              {cycle === "current" && (
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {activePartner
-                    ? `PV: ${activePartner.name}`
-                    : "Selecione apenas um PV no filtro para preencher a prévia."}
-                </p>
-              )}
-            </div>
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+              {meta.title}
+            </h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              PV {activePartner?.name ?? "—"} · {meta.period} · {meta.note}
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-2xl border border-violet-500/20 bg-background/75 px-3 py-2 text-right shadow-sm">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                Pontuação total
-              </p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums text-foreground">
-                {fmtInt(totalPoints)}
-              </p>
+          {cycle === "current" && (
+            <div className="shrink-0">
+              <SaveState status={saveState} busy={loadingPreview} />
             </div>
-            <div className="rounded-2xl border border-primary/20 bg-primary/[0.08] px-3 py-2 shadow-sm">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-primary">
-                Pedra
-              </p>
-              <p className="mt-0.5 text-sm font-bold tracking-wide text-primary">{stone.stone}</p>
-            </div>
-            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.08] px-3 py-2 text-right shadow-sm">
-              <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
-                Bônus
-              </p>
-              <p className="mt-0.5 text-sm font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
-                {stone.bonus}
-              </p>
-            </div>
-            {cycle === "current" && (
-              <div className="flex h-10 items-center gap-2 rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-3 text-xs font-semibold text-violet-800 dark:text-violet-200">
-                {saveState === "saving" || loadingPreview ? (
-                  <LoaderCircle className="size-3.5 animate-spin" />
-                ) : null}
-                {saveState === "saving"
-                  ? "Salvando automaticamente"
-                  : saveState === "saved"
-                    ? "Prévia salva"
-                    : saveState === "error"
-                      ? "Falha ao salvar"
-                      : "Salvamento automático"}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        <div className="p-3 sm:p-5">
-          <div className="overflow-x-auto rounded-2xl border border-violet-500/15 bg-background/80 shadow-elegant">
-            <Table className="min-w-[1400px] table-fixed">
-              <colgroup>
-                <col className="w-[380px]" />
-                {columns.map((column) => (
-                  <col key={column.field} className={column.width} />
+        {/* Faixa de métricas relacionadas do ciclo; sem um card por métrica. */}
+        <dl className="grid grid-cols-1 divide-y divide-border border-b border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          {[
+            { label: "Pontuação total", value: fmtInt(totalPoints), numeric: true },
+            { label: "Pedra", value: stone.stone, numeric: false },
+            { label: "Bônus", value: stone.bonus, numeric: true },
+          ].map((metric) => (
+            <div key={metric.label} className="px-4 py-3 md:px-5">
+              <dt className="text-xs font-medium text-muted-foreground">{metric.label}</dt>
+              <dd
+                className={cn(
+                  "mt-1 text-lg font-semibold text-foreground",
+                  metric.numeric && "tabular-nums",
+                )}
+              >
+                {metric.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        <div className="p-4 md:p-5">
+          {loading ? (
+            <div>
+              <div className="space-y-2" aria-hidden="true">
+                <Skeleton className="h-9 w-full" />
+                {Array.from({ length: 6 }, (_, index) => (
+                  <Skeleton key={index} className="h-10 w-full" />
                 ))}
-              </colgroup>
-              <TableHeader className="bg-violet-500/[0.045] [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-violet-500/15 [&_th]:px-3 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>Indicadores</TableHead>
-                  {columns.map((column) => (
-                    <TableHead
-                      key={column.field}
-                      className={column.numeric ? "text-right" : "text-left"}
-                    >
-                      {column.label}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody className="[&_td]:px-2.5 [&_td]:py-3 [&_tr]:border-violet-500/[0.09] [&_tr]:transition-colors">
-                <TableRow className="bg-violet-500/[0.06] hover:bg-violet-500/[0.08]">
-                  <TableCell className="px-4">
-                    <button
-                      type="button"
-                      aria-expanded={expanded[cycle]}
-                      onClick={() =>
-                        setExpanded((current) => ({ ...current, [cycle]: !current[cycle] }))
-                      }
-                      className="group flex w-full items-center gap-3 text-left font-semibold text-foreground"
-                    >
-                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-violet-500/[0.13] text-violet-700 transition-colors group-hover:bg-violet-500/[0.2] dark:text-violet-300">
-                        <ChevronDown
-                          className={`size-4 transition-transform duration-200 ${expanded[cycle] ? "rotate-180" : ""}`}
-                        />
-                      </span>
-                      <span>{activeCycle.summary.indicator}</span>
-                    </button>
-                  </TableCell>
-                  {columns.map((column) =>
-                    valueCell(
-                      cycle,
-                      summary,
-                      column,
-                      false,
-                      isCalculatedSummaryField(column.field),
-                    ),
-                  )}
-                </TableRow>
-                {expanded[cycle] &&
-                  activeCycle.breakdown.map((row) => (
-                    <TableRow key={row.id} className="hover:bg-violet-500/[0.04]">
-                      <TableCell className="bg-violet-500/[0.018] px-4">
-                        <div className="flex items-center gap-3 pl-3 text-sm font-medium text-foreground/80">
-                          <span className="h-5 w-px bg-violet-500/35" />
-                          {row.indicator}
-                        </div>
-                      </TableCell>
-                      {columns.map((column) => {
-                        if (column.field === "band") return null;
-                        if (column.field === "points") {
-                          return (
-                            <TableCell
-                              key="score-empty"
-                              colSpan={2}
-                              className="bg-violet-500/[0.018]"
-                            />
-                          );
-                        }
-                        return valueCell(cycle, row, column, true);
-                      })}
-                    </TableRow>
-                  ))}
-                <TableRow className="bg-sky-500/[0.045] hover:bg-sky-500/[0.07]">
-                  <TableCell className="px-4 font-semibold text-foreground">
-                    {oneShot.indicator}
-                  </TableCell>
-                  {columns.map((column) =>
-                    valueCell(
-                      cycle,
-                      oneShot,
-                      column,
-                      false,
-                      ["totalizer", "points", "band"].includes(column.field),
-                    ),
-                  )}
-                </TableRow>
-                <TableRow className="bg-emerald-500/[0.045] hover:bg-emerald-500/[0.07]">
-                  <TableCell className="px-4 font-semibold text-foreground">
-                    {ftthPhysical.indicator}
-                  </TableCell>
-                  {columns.map((column) =>
-                    valueCell(
-                      cycle,
-                      ftthPhysical,
-                      column,
-                      false,
-                      ["totalizer", "points", "band"].includes(column.field),
-                    ),
-                  )}
-                </TableRow>
-                <TableRow className="bg-amber-500/[0.045] hover:bg-amber-500/[0.07]">
-                  <TableCell className="px-4 font-semibold text-foreground">
-                    {newProductsRevenue.indicator}
-                  </TableCell>
-                  {columns.map((column) =>
-                    valueCell(
-                      cycle,
-                      newProductsRevenue,
-                      column,
-                      false,
-                      ["totalizer", "points", "band"].includes(column.field),
-                    ),
-                  )}
-                </TableRow>
-                <TableRow className="bg-rose-500/[0.045] hover:bg-rose-500/[0.07]">
-                  <TableCell className="px-4 font-semibold text-foreground">
-                    {revenuePerFdv.indicator}
-                  </TableCell>
-                  {columns.map((column) =>
-                    valueCell(
-                      cycle,
-                      revenuePerFdv,
-                      column,
-                      false,
-                      ["totalizer", "points", "band"].includes(column.field),
-                    ),
-                  )}
-                </TableRow>
-                <CertificationQscHistory
-                  rows={activeCycle.qsc.rows}
-                  totalPoints={activeCycle.qsc.totalPoints}
-                  onChange={(rowId, field, value) => updateQscValue(cycle, rowId, field, value)}
-                  readOnly={!editable}
-                />
-              </TableBody>
-            </Table>
-          </div>
+              </div>
+              <p className="sr-only" role="status">
+                Carregando a simulação do PV selecionado.
+              </p>
+            </div>
+          ) : (
+            <TableScroll>{table}</TableScroll>
+          )}
         </div>
       </Card>
     );
@@ -897,40 +920,89 @@ export function CertificationPanel() {
 
   if (!activePartnerId) {
     return (
-      <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.06] shadow-elevated">
-        <div className="flex min-h-72 flex-col items-center justify-center px-6 py-12 text-center">
-          <div className="grid size-14 place-items-center rounded-2xl bg-violet-500/[0.12] text-violet-700 ring-8 ring-violet-500/[0.04] dark:text-violet-300">
-            <UsersRound className="size-6" />
+      <Card className="overflow-hidden">
+        <div className="p-4 md:p-5">
+          <EmptyState
+            title={hasNoAuthorizedPartners ? "Nenhum parceiro autorizado" : "Selecione um único PV"}
+            description={
+              hasNoAuthorizedPartners
+                ? "Seu perfil de GN ainda não possui vínculo com um parceiro. Procure o Diretor antes de consultar ou preencher a Certificação."
+                : "A Certificação é apurada por PV: o ciclo fechado e a simulação pertencem a um parceiro. Use o filtro de parceiros no menu superior e mantenha apenas um selecionado."
+            }
+          />
+        </div>
+      </Card>
+    );
+  }
+
+  /*
+    Troca de parceiro com gravação pendente: a simulação anterior é gravada antes de
+    o painel adotar o novo PV. Enquanto não concluir, nada do parceiro anterior é
+    exibido nem editado sob o parceiro recém-selecionado.
+  */
+  if (pendingTransfer) {
+    const failed = saveState === "error";
+    return (
+      <Card className="overflow-hidden">
+        <div className="flex flex-col items-start gap-3 px-4 py-4 md:px-5">
+          <div>
+            <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+              {failed
+                ? "Alterações do PV anterior não foram salvas"
+                : "Concluindo a gravação do PV anterior"}
+            </h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              {failed
+                ? `A simulação de ${pendingTransfer.partnerName} tem alterações pendentes. A troca de PV só é concluída após a gravação, para que nada seja perdido nem aplicado ao parceiro errado.`
+                : `Salvando a simulação de ${pendingTransfer.partnerName} antes de abrir o PV selecionado.`}
+            </p>
           </div>
-          <h2 className="mt-5 text-xl font-semibold tracking-tight">Selecione um único parceiro</h2>
-          <p className="mt-2 max-w-md text-sm leading-6 text-muted-foreground">
-            A Certificação é um simulador individual por PV. Use o filtro de parceiros no menu
-            superior e mantenha apenas um parceiro selecionado para consultar ou preencher a
-            prévia.
-          </p>
-          <p className="mt-4 rounded-xl border border-violet-500/15 bg-violet-500/[0.05] px-3 py-2 text-xs font-medium text-violet-800 dark:text-violet-200">
-            Cada prévia é salva separadamente para o parceiro selecionado.
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <SaveState status={saveState} />
+            {failed && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setTransferAttempt((attempt) => attempt + 1)}
+              >
+                Tentar novamente
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Card className="overflow-hidden">
+        <div className="flex flex-col items-start gap-3 px-4 py-4 md:px-5">
+          <div>
+            <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+              Não foi possível carregar a simulação
+            </h2>
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              {loadError} O PV selecionado foi preservado.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setReloadToken((token) => token + 1)}>
+            Tentar novamente
+          </Button>
         </div>
       </Card>
     );
   }
 
   return (
-    <Tabs
-      value={view}
-      onValueChange={(value) => setView(value as typeof view)}
-      className="space-y-5"
-    >
-      <TabsList className="h-auto flex-wrap justify-start gap-1 rounded-2xl border border-violet-500/15 bg-violet-500/[0.045] p-1.5">
-        <TabsTrigger value="previous" className="h-10 rounded-xl px-4 text-xs font-semibold">
-          1º Ciclo · Resultado fechado
-        </TabsTrigger>
-        <TabsTrigger value="current" className="h-10 rounded-xl px-4 text-xs font-semibold">
-          2º Ciclo · Simulador
-        </TabsTrigger>
+    <Tabs value={view} onValueChange={(value) => setView(value as CycleId)} className="space-y-4">
+      <TabsList className="h-auto flex-wrap justify-start gap-1">
+        {(["previous", "current"] as const).map((cycle) => (
+          <TabsTrigger key={cycle} value={cycle}>
+            {CYCLE_META[cycle].tab}
+          </TabsTrigger>
+        ))}
       </TabsList>
-
       <TabsContent value="previous">{renderCycle("previous")}</TabsContent>
       <TabsContent value="current">{renderCycle("current")}</TabsContent>
     </Tabs>

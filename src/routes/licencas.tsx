@@ -1,17 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { KpiCard } from "@/components/KpiCard";
 import { OpportunityFilterTooltip } from "@/components/OpportunityFilterTooltip";
 import { ACTIVE_REVENUE_FILTER } from "@/lib/opportunity-filters";
 import { ChartCard } from "@/components/ChartCard";
-import { BarSimple, DonutChart } from "@/components/charts";
-import { ErrorState } from "@/components/EmptyState";
-import { useLicenses } from "@/hooks/useData";
+import { BarSimple, CategoryDistribution } from "@/components/charts";
+import { EmptyState, ErrorState } from "@/components/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useLicenses, usePartners } from "@/hooks/useData";
 import { fmtInt, fmtBRLCompact } from "@/lib/format";
-import { CloudCog, ShieldCheck, Sparkles, UserCheck } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { CloudCog, ShieldCheck, UserCheck } from "lucide-react";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
+import { usePartnerFilter } from "@/contexts/AppContexts";
 
 export const Route = createFileRoute("/licencas")({
   head: () => ({ meta: [{ title: "Licenças e Serviços Digitais — Mapa Parque" }] }),
@@ -20,52 +21,93 @@ export const Route = createFileRoute("/licencas")({
 
 function Page() {
   const { data, isLoading, error, refetch } = useLicenses();
+  const { selected, role, allowedPartnerIds } = usePartnerFilter();
+  const { data: partners = [] } = usePartners();
   const [conversionRate, setConversionRate] = useState(34);
   const appliedRate = Math.min(100, Math.max(0, conversionRate));
-  const potentialAdoption = Math.round((data?.kpis.clientesElegiveis ?? 0) * (appliedRate / 100));
-  const financialScenarios = [
-    { cenario: "Conservador (R$34)", valor: potentialAdoption * 34 },
-    { cenario: "Médio (R$62)", valor: potentialAdoption * 62 },
-    { cenario: "Otimista (R$100)", valor: potentialAdoption * 100 },
-  ];
+
+  /**
+   * Recorte em texto, com a mesma semântica da Visão resultado: nenhuma seleção
+   * continua significando o consolidado dos parceiros permitidos ao perfil.
+   */
+  const selectedNames = useMemo(
+    () => selected.map((id) => partners.find((partner) => partner.id === id)?.name ?? id),
+    [partners, selected],
+  );
+  const allowedCount = allowedPartnerIds?.length ?? 0;
+  const scopeLabel = selected.length
+    ? selected.length === 1
+      ? selectedNames[0]
+      : `${selected.length} parceiros selecionados`
+    : role === "gn"
+      ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
+      : "Todos os parceiros (consolidado)";
+
+  /**
+   * Cenários financeiros: mesma adoção potencial e mesmos tickets de antes. Sem base
+   * carregada não há adoção a projetar — antes a ausência virava zero por `?? 0` e o
+   * gráfico apresentava três barras zeradas como se fossem resultado.
+   */
+  const eligible = data?.kpis.clientesElegiveis;
+  const potentialAdoption =
+    eligible == null || !Number.isFinite(eligible)
+      ? null
+      : Math.round(eligible * (appliedRate / 100));
+  const financialScenarios =
+    potentialAdoption == null
+      ? []
+      : [
+          { cenario: "Conservador (R$34)", valor: potentialAdoption * 34 },
+          { cenario: "Médio (R$62)", valor: potentialAdoption * 62 },
+          { cenario: "Otimista (R$100)", valor: potentialAdoption * 100 },
+        ];
+
+  const partnerRows = data?.porParceiro ?? [];
+  const composition = data?.composicao ?? [];
 
   return (
     <DashboardLayout title="Licenças e Serviços Digitais">
+      <header className="mb-6">
+        <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
+          Licenças e Serviços Digitais
+        </h1>
+        <p className="mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
+          Quantos clientes do recorte estão elegíveis a TI Recorrente e quanto essa adesão projeta
+          em conversão e receita.
+        </p>
+        <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-muted-foreground">
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <dt className="font-medium text-foreground">Recorte:</dt>
+            <dd className="min-w-0 truncate" title={selectedNames.join(", ") || undefined}>
+              {scopeLabel}
+            </dd>
+          </div>
+          {!isLoading && !error && (
+            <>
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Parceiros no recorte:</dt>
+                <dd className="tabular-nums">{fmtInt(partnerRows.length)}</dd>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Tipos de oferta:</dt>
+                <dd className="tabular-nums">{fmtInt(composition.length)}</dd>
+              </div>
+            </>
+          )}
+        </dl>
+      </header>
+
       {error ? (
         <ErrorState onRetry={() => refetch()} />
       ) : (
-        <>
-          <Card className="relative mb-7 overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-primary/[0.14] via-card to-cyan/[0.12] p-6 shadow-elegant md:p-7">
-            <div className="pointer-events-none absolute -left-12 -top-16 size-52 rounded-full bg-primary/20 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-20 right-8 size-56 rounded-full bg-cyan/20 blur-3xl" />
-            <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="grid size-11 shrink-0 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant">
-                  <Sparkles className="size-5" />
-                </div>
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                    Crescimento digital
-                  </p>
-                  <h2 className="mt-5 text-3xl font-semibold leading-[1.08] tracking-tight md:text-4xl">
-                    Cenários para acelerar a adesão
-                  </h2>
-                </div>
-              </div>
-            </div>
-          </Card>
-          <section>
-            <div className="mb-4 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                  Carteira digital
-                </p>
-                <h2 className="mt-1 text-xl font-semibold tracking-tight">TI Recorrente em foco</h2>
-              </div>
-              <span className="rounded-full border border-primary/10 bg-primary/[0.06] px-3 py-1.5 text-xs font-medium text-primary">
-                {data ? `${data.composicao.length} tipos de oferta` : "Carregando ofertas"}
-              </span>
-            </div>
+        <div className="space-y-6">
+          <section aria-labelledby="licencas-oportunidade">
+            <h2
+              id="licencas-oportunidade"
+              className="mb-2 text-[13px] font-semibold text-muted-foreground"
+            >
+              Oportunidade de TI Recorrente · CNPJs do Mapa Parque no recorte
+            </h2>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <KpiCard
                 icon={UserCheck}
@@ -131,7 +173,6 @@ function Page() {
                   />
                 }
                 loading={isLoading}
-                className="border-violet-400/20 bg-gradient-to-br from-card via-card to-violet-500/[0.08]"
               />
               <KpiCard
                 icon={CloudCog}
@@ -153,7 +194,6 @@ function Page() {
                   />
                 }
                 loading={isLoading}
-                className="border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.1]"
               />
               <KpiCard
                 icon={CloudCog}
@@ -175,13 +215,12 @@ function Page() {
                   />
                 }
                 loading={isLoading}
-                className="border-sky-400/20 bg-gradient-to-br from-card via-card to-sky-500/[0.1]"
               />
             </div>
           </section>
 
           <OpportunitySimulator
-            rows={(data?.porParceiro ?? []).map((partner) => ({
+            rows={partnerRows.map((partner) => ({
               parceiro: partner.parceiro,
               oportunidades: partner.elegiveis,
             }))}
@@ -192,75 +231,97 @@ function Page() {
             revenueLabel="Receita digital"
             conversionRate={appliedRate}
             onConversionRateChange={setConversionRate}
+            loading={isLoading}
           />
 
-          <div className="mt-7 grid gap-4 lg:grid-cols-2">
-            <ChartCard
-              title="Base total por parceiro"
-              action={
-                <span className="rounded-full bg-primary/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-primary">
-                  CNPJs
-                </span>
-              }
-              className="border-primary/10 bg-gradient-to-br from-card via-card to-primary/[0.06] shadow-[0_18px_42px_-34px_hsl(var(--primary)/0.6)]"
-            >
-              {data && (
-                <BarSimple
-                  data={data.porParceiro}
-                  xKey="parceiro"
-                  dataKey="baseElegivel"
-                  gradient={{
-                    id: "licenses-partners",
-                    from: "var(--chart-1)",
-                    to: "var(--primary)",
-                  }}
-                />
-              )}
-            </ChartCard>
+          <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
               title="Composição das oportunidades TI Recorrente"
-              action={
-                <span className="rounded-full bg-violet-500/[0.08] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-violet-600 dark:text-violet-300">
-                  Mix
-                </span>
+              description={
+                isLoading
+                  ? "Tipos de oferta no recorte."
+                  : `${fmtInt(composition.length)} ${composition.length === 1 ? "tipo de oferta" : "tipos de oferta"} no recorte, ordenados por quantidade de CNPJs.`
               }
-              className="border-violet-400/15 bg-gradient-to-br from-card via-card to-violet-500/[0.06] shadow-[0_18px_42px_-34px_hsl(272_72%_55%/0.45)]"
             >
-              {data && (
-                <DonutChart
-                  data={data.composicao}
-                  nameKey="tipo"
-                  dataKey="valor"
-                  centerLabel={fmtInt(data.kpis.clientesElegiveis)}
+              <DistributionBody
+                loading={isLoading}
+                empty={composition.length === 0}
+                emptyTitle="Sem composição disponível"
+                emptyDescription="A base do Mapa Parque não retornou tipos de oferta para este recorte."
+              >
+                <CategoryDistribution data={composition} categoryKey="tipo" dataKey="valor" />
+              </DistributionBody>
+            </ChartCard>
+            <ChartCard
+              title="Base total por parceiro"
+              description={
+                isLoading
+                  ? "Distribuição por parceiro do recorte."
+                  : `${fmtInt(partnerRows.length)} ${partnerRows.length === 1 ? "parceiro" : "parceiros"} no recorte, em CNPJs.`
+              }
+            >
+              <DistributionBody
+                loading={isLoading}
+                empty={partnerRows.length === 0}
+                emptyTitle="Sem parceiros no recorte"
+                emptyDescription="Nenhum parceiro foi retornado para este recorte. Ajuste o filtro de parceiros ou verifique a disponibilidade da base."
+              >
+                <CategoryDistribution
+                  data={partnerRows}
+                  categoryKey="parceiro"
+                  dataKey="baseElegivel"
                 />
-              )}
+              </DistributionBody>
             </ChartCard>
             <ChartCard
               title="Potencial financeiro por cenário"
-              action={
-                <span className="rounded-full bg-cyan/[0.1] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-cyan-700 dark:text-cyan-300">
-                  Receita
-                </span>
+              description={
+                potentialAdoption == null
+                  ? "Adoção potencial a partir das oportunidades elegíveis e da conversão do simulador."
+                  : `Adoção potencial de ${fmtInt(potentialAdoption)} ${potentialAdoption === 1 ? "cliente" : "clientes"} (${fmtInt(appliedRate)}% das oportunidades elegíveis), a R$ 34, R$ 62 e R$ 100 por cliente.`
               }
-              className="border-cyan/15 bg-gradient-to-br from-card via-card to-cyan/[0.065] shadow-[0_18px_42px_-34px_hsl(190_85%_46%/0.45)] lg:col-span-2"
+              className="lg:col-span-2"
             >
-              {data && (
+              <DistributionBody
+                loading={isLoading}
+                empty={financialScenarios.length === 0}
+                emptyTitle="Sem base para projetar cenários"
+                emptyDescription="Os cenários dependem das oportunidades elegíveis do recorte, que não foram retornadas pela base."
+              >
                 <BarSimple
                   data={financialScenarios}
                   xKey="cenario"
                   dataKey="valor"
-                  gradient={{
-                    id: "licenses-financial",
-                    from: "var(--chart-2)",
-                    to: "var(--primary)",
-                  }}
                   valueFormatter={fmtBRLCompact}
                 />
-              )}
+              </DistributionBody>
             </ChartCard>
           </div>
-        </>
+        </div>
       )}
     </DashboardLayout>
   );
+}
+
+/**
+ * Base em carregamento, base indisponível e resultado zero são estados distintos:
+ * enquanto a consulta não responde, nada é apresentado como zero; um recorte sem
+ * linhas mostra a ausência em texto, não um gráfico vazio.
+ */
+function DistributionBody({
+  loading,
+  empty,
+  emptyTitle,
+  emptyDescription,
+  children,
+}: {
+  loading: boolean;
+  empty: boolean;
+  emptyTitle: string;
+  emptyDescription: string;
+  children: ReactNode;
+}) {
+  if (loading) return <Skeleton className="h-[240px] w-full" aria-hidden="true" />;
+  if (empty) return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  return <>{children}</>;
 }

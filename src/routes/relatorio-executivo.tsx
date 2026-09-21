@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { useFtth, useMobile, usePartners, useQsc } from "@/hooks/useData";
 import { fmtBRLCompact, fmtDec, fmtInt, fmtPct } from "@/lib/format";
+import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
 import type { QscDomain, QscMetricSeries } from "@/lib/qsc";
 import type {
   BestGuessRecord,
@@ -21,18 +22,6 @@ type RuntimeResults = {
   bestGuess: { records: BestGuessRecord[]; total: BestGuessTotal };
   portabilidade: { records: AnalyticalRecord[] };
   torres: { towers: ServiceTower[] };
-};
-
-type YtdSummary = {
-  product: string;
-  meta: number;
-  real: number;
-  previousReal: number;
-  attainment: number | null;
-  gap: number;
-  average: number;
-  yoyGap: number;
-  yoy: number | null;
 };
 
 const EMPTY_BEST_GUESS: BestGuessTotal = {
@@ -150,33 +139,12 @@ function qscDomainHistory(domain: QscDomain, metrics: QscMetricSeries[], compete
   return { values, totalizer, ...qscRating(totalizer) };
 }
 
-function buildYtdSummary(tower: ServiceTower, records: SourceRecord[]): YtdSummary {
-  const product = TOWER_PRODUCT_MAP[tower.id] ?? tower.title;
-  const matching = records.filter((record) => normalize(record.product) === normalize(product));
-  const aggregated = matching.reduce(
-    (total, record) => ({
-      meta: total.meta + record.meta,
-      real: total.real + record.real,
-      attainment: total.attainment + record.attainment,
-      gap: total.gap + record.gap,
-      average: total.average + record.average,
-      previousReal: total.previousReal + record.previousReal,
-      yoy: total.yoy + record.yoy,
-      yoyGap: total.yoyGap + record.yoyGap,
-    }),
-    { meta: 0, real: 0, attainment: 0, gap: 0, average: 0, previousReal: 0, yoy: 0, yoyGap: 0 },
-  );
-  const source = matching.length === 1 ? matching[0] : null;
-  return {
-    product,
-    ...aggregated,
-    attainment: source?.attainment ?? (aggregated.meta ? aggregated.real / aggregated.meta : 0),
-    gap: source?.gap ?? aggregated.gap,
-    average: source?.average ?? aggregated.average,
-    yoyGap: source?.yoyGap ?? aggregated.yoyGap,
-    yoy:
-      source?.yoy ?? (aggregated.previousReal ? aggregated.real / aggregated.previousReal - 1 : 0),
-  };
+/**
+ * A consolidação YTD/YoY vive em `@/lib/report-ytd`, com testes de caracterização
+ * para snapshots legados incompletos (a origem dos `NaN` observados no relatório).
+ */
+function towerYtdSummary(tower: ServiceTower, records: SourceRecord[]): YtdSummary {
+  return buildYtdSummary(TOWER_PRODUCT_MAP[tower.id] ?? tower.title, records);
 }
 
 function ExecutiveReportPage() {
@@ -768,7 +736,7 @@ function TowerReportPage({
   records: SourceRecord[];
   period: string;
 }) {
-  const ytd = buildYtdSummary(tower, records);
+  const ytd = towerYtdSummary(tower, records);
   const towerRows = selectedCompanies.size
     ? tower.rows.filter((row) => selectedCompanies.has(normalize(row.partner)))
     : tower.rows;
@@ -1114,7 +1082,7 @@ function CompactTable({
             {headers.map((header, index) => (
               <th
                 key={`${header}-${index}`}
-                className={`px-3 py-2.5 text-left font-bold uppercase tracking-[0.08em] ${index ? "text-right" : ""}`}
+                className={`px-3 py-2.5 font-bold uppercase tracking-[0.08em] ${index ? "text-right" : "text-left"}`}
               >
                 {header}
               </th>
@@ -1128,7 +1096,7 @@ function CompactTable({
                 {headers.map((_, index) => (
                   <td
                     key={index}
-                    className={`px-3 py-2.5 font-medium tabular-nums text-slate-700 ${index ? "text-right" : "font-semibold text-slate-900"}`}
+                    className={`px-3 py-2.5 font-medium tabular-nums text-slate-700 ${index ? "text-right" : "text-left font-semibold text-slate-900"}`}
                   >
                     {row[index] ?? "—"}
                   </td>
@@ -1147,7 +1115,7 @@ function CompactTable({
               {headers.map((_, index) => (
                 <td
                   key={index}
-                  className={`px-3 py-2.5 font-bold tabular-nums text-slate-900 ${index ? "text-right" : ""}`}
+                  className={`px-3 py-2.5 font-bold tabular-nums text-slate-900 ${index ? "text-right" : "text-left"}`}
                 >
                   {total[index] ?? "—"}
                 </td>

@@ -46,9 +46,13 @@ export function PartnerFilter() {
   );
 
   const hasSelection = selected.length > 0;
+  const hasNoPartnerAccess =
+    role === "gn" && allowedPartnerIds !== null && allowedPartnerIds.length === 0;
   const label = !hasSelection
     ? role === "gn"
-      ? "Parceiros vinculados"
+      ? hasNoPartnerAccess
+        ? "Nenhum parceiro autorizado"
+        : "Parceiros vinculados"
       : "Todos os parceiros"
     : selected.length === 1
       ? (availablePartners.find((p) => p.id === selected[0])?.name ?? "1 parceiro")
@@ -95,7 +99,8 @@ export function PartnerFilter() {
         <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
           <button
             onClick={() => setSelected(availablePartners.map((p) => p.id))}
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={hasNoPartnerAccess}
           >
             Selecionar todos
           </button>
@@ -132,7 +137,9 @@ export function PartnerFilter() {
             })}
             {filtered.length === 0 && (
               <li className="px-3 py-6 text-center text-xs text-muted-foreground">
-                Nenhum parceiro encontrado
+                {hasNoPartnerAccess
+                  ? "Nenhum parceiro autorizado. Procure o Diretor para solicitar um vínculo."
+                  : "Nenhum parceiro encontrado"}
               </li>
             )}
           </ul>
@@ -140,9 +147,11 @@ export function PartnerFilter() {
         <div className="border-t p-2 text-[11px] text-muted-foreground">
           {hasSelection
             ? `${selected.length} selecionado(s)`
-            : role === "gn"
-              ? "Nenhum parceiro selecionado · visão dos parceiros atribuídos"
-              : "Nenhum parceiro selecionado · visão consolidada"}
+            : hasNoPartnerAccess
+              ? "Nenhum parceiro autorizado · procure o Diretor"
+              : role === "gn"
+                ? "Nenhum parceiro selecionado · visão dos parceiros atribuídos"
+                : "Nenhum parceiro selecionado · visão consolidada"}
         </div>
       </PopoverContent>
     </Popover>

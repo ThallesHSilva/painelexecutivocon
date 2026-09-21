@@ -1,9 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
 import {
   ArrowRight,
   Award,
   BarChart3,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileDown,
@@ -17,6 +26,8 @@ import { usePartners, useQsc } from "@/hooks/useData";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { EmptyState, ErrorState } from "@/components/EmptyState";
 import {
   Table,
   TableBody,
@@ -25,8 +36,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableScroll } from "@/components/TableScroll";
+import { cn } from "@/lib/utils";
 import { fmtDec, fmtPct } from "@/lib/format";
 import { readXlsxRows } from "@/lib/xlsx-reader";
+import { resultadosYoyCells } from "@/lib/resultados-yoy-columns";
 import type {
   BestGuessRecord,
   BestGuessTotal,
@@ -241,19 +255,40 @@ function recordsFromSpreadsheet(rows: unknown[][]): SourceRecord[] {
   let product = "";
   const records: SourceRecord[] = [];
   for (const row of rows.slice(headerIndex + 1)) {
-    const rawProduct = String(row[0] ?? "").trim();
+    const cells = resultadosYoyCells(row);
+    const rawProduct = String(cells.product ?? "").trim();
     if (rawProduct) product = rawProduct;
-    const company = String(row[2] ?? "").trim();
-    const meta = numberFromCell(row[6]);
-    const real = numberFromCell(row[7]);
+    const company = String(cells.company ?? "").trim();
+    const meta = numberFromCell(cells.meta);
+    const real = numberFromCell(cells.real);
     if (!product || !company || !Number.isFinite(meta) || !Number.isFinite(real)) continue;
     records.push({
       company,
       product: productLabels[normalizeCompany(product)] ?? product,
       meta,
       real,
-      previousMeta: Number.isFinite(numberFromCell(row[13])) ? numberFromCell(row[13]) : 0,
-      previousReal: Number.isFinite(numberFromCell(row[14])) ? numberFromCell(row[14]) : 0,
+      attainment: Number.isFinite(numberFromCell(cells.attainment))
+        ? numberFromCell(cells.attainment)
+        : 0,
+      gap: Number.isFinite(numberFromCell(cells.gap)) ? numberFromCell(cells.gap) : 0,
+      average: Number.isFinite(numberFromCell(cells.average)) ? numberFromCell(cells.average) : 0,
+      previousMeta: Number.isFinite(numberFromCell(cells.previousMeta))
+        ? numberFromCell(cells.previousMeta)
+        : 0,
+      previousReal: Number.isFinite(numberFromCell(cells.previousReal))
+        ? numberFromCell(cells.previousReal)
+        : 0,
+      previousAttainment: Number.isFinite(numberFromCell(cells.previousAttainment))
+        ? numberFromCell(cells.previousAttainment)
+        : 0,
+      previousGap: Number.isFinite(numberFromCell(cells.previousGap))
+        ? numberFromCell(cells.previousGap)
+        : 0,
+      previousAverage: Number.isFinite(numberFromCell(cells.previousAverage))
+        ? numberFromCell(cells.previousAverage)
+        : 0,
+      yoy: Number.isFinite(numberFromCell(cells.yoy)) ? numberFromCell(cells.yoy) : 0,
+      yoyGap: Number.isFinite(numberFromCell(cells.yoyGap)) ? numberFromCell(cells.yoyGap) : 0,
     });
   }
   if (!records.length)
@@ -466,6 +501,134 @@ function buildPortabilitySummary(records: AnalyticalRecord[]): {
     },
   };
 }
+/**
+ * Linguagem única das seções desta página-piloto (Etapa 3).
+ *
+ * Todas as tabelas — Torres, YTD, Best Guess e portabilidade analítica — passam a
+ * compartilhar a mesma borda de leitura: cabeçalho em superfície sutil, altura de
+ * linha constante, número à direita com `tabular-nums` e totalizador por borda e
+ * peso, sem card extra. Nenhuma coluna, ordem, fórmula ou arredondamento muda aqui.
+ */
+const TABLE_HEADER_CLASS =
+  "bg-muted [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-xs [&_th]:font-semibold [&_th]:leading-4 [&_th]:text-foreground";
+const TABLE_BODY_CLASS =
+  "[&_td]:whitespace-nowrap [&_td]:px-3 [&_td]:py-2.5 [&_tr]:border-border [&_tr:hover]:bg-transparent";
+const TOTAL_ROW_CLASS = "border-t-2 border-border bg-muted";
+/** Agrupamento de colunas por superfície sutil; cor não carrega significado aqui. */
+const GROUP_CELL_CLASS = "bg-muted/40";
+const GROUP_START_CELL_CLASS = "border-l border-border bg-muted/40";
+/**
+ * Identificação persistente: a primeira coluna acompanha a rolagem horizontal, para
+ * que a linha continue identificável no celular sem retirar nenhuma coluna da tabela.
+ */
+const STICKY_ID_CLASS = "sticky left-0 z-[1] whitespace-normal";
+const STICKY_ID_WIDTH = "w-[168px] sm:w-[240px]";
+
+function Section({
+  title,
+  description,
+  actions,
+  children,
+  bodyClassName,
+}: {
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  bodyClassName?: string;
+}) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
+            {title}
+          </h2>
+          {description && (
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{description}</p>
+          )}
+        </div>
+        {actions && (
+          <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">{actions}</div>
+        )}
+      </div>
+      <div className={cn("p-4 md:p-5", bodyClassName)}>{children}</div>
+    </Card>
+  );
+}
+
+type RowDetailEntry = {
+  id: string;
+  title: ReactNode;
+  lead?: ReactNode;
+  items: Array<{ label: string; value: ReactNode }>;
+};
+
+/**
+ * Acesso ao detalhe no celular.
+ *
+ * A tabela continua completa e rolável, com a identificação fixa à esquerda. Esta
+ * lista é a alternativa acessível para quem não quer rolar na horizontal: mostra
+ * identificação e resultado principal e abre todas as colunas da mesma linha, com
+ * exatamente os mesmos valores já exibidos na tabela.
+ */
+function MobileRowDetails({ label, entries }: { label: string; entries: RowDetailEntry[] }) {
+  if (!entries.length) return null;
+  return (
+    <div className="mt-4 md:hidden">
+      <p className="text-xs font-semibold text-foreground">{label}</p>
+      <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+        Abra uma linha para ver todas as colunas sem rolar a tabela.
+      </p>
+      <div className="mt-2 divide-y divide-border overflow-hidden rounded-md border border-border">
+        {entries.map((entry) => (
+          <details key={entry.id} className="group bg-card">
+            <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+              <span className="min-w-0 flex-1 break-words font-medium text-foreground">
+                {entry.title}
+              </span>
+              {entry.lead && <span className="shrink-0 text-right">{entry.lead}</span>}
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 group-open:rotate-180"
+              />
+            </summary>
+            <dl className="border-t border-border bg-muted/30 px-3 py-2.5">
+              {entry.items.map((item) => (
+                <div
+                  key={item.label}
+                  className="flex items-baseline justify-between gap-3 py-1 text-sm"
+                >
+                  <dt className="text-xs text-muted-foreground">{item.label}</dt>
+                  <dd className="min-w-0 break-words text-right font-medium tabular-nums text-foreground">
+                    {item.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </details>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SectionSkeleton({ title, lines = 6 }: { title: string; lines?: number }) {
+  return (
+    <Section title={title} description="Carregando os dados do recorte selecionado.">
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-9 w-full" />
+        {Array.from({ length: lines }, (_, index) => (
+          <Skeleton key={index} className="h-10 w-full" />
+        ))}
+      </div>
+      <p className="sr-only" role="status">
+        Carregando {title}.
+      </p>
+    </Section>
+  );
+}
+
 export const Route = createFileRoute("/resultados")({
   head: () => ({ meta: [{ title: "Visão resultado — Mapa Parque" }] }),
   component: ResultadosPage,
@@ -495,6 +658,12 @@ function ResultadosPage() {
     status: "idle" | "loading" | "success" | "error";
     message: string;
   }>({ status: "idle", message: "" });
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = useCallback(() => {
+    setLoadState("loading");
+    setReloadToken((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -511,9 +680,11 @@ function ResultadosPage() {
         setBestGuessTotal(payload.bestGuess.total);
         setAnalyticalRecords(payload.portabilidade.records);
         setCompleteTowers(payload.torres.towers);
+        setLoadState("ready");
       })
       .catch((error) => {
         if (!active) return;
+        setLoadState("error");
         setUploadState({
           status: "error",
           message: error instanceof Error ? error.message : "Falha ao carregar os resultados.",
@@ -522,7 +693,7 @@ function ResultadosPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reloadToken]);
 
   const selectedCompanies = useMemo(
     () =>
@@ -534,6 +705,20 @@ function ResultadosPage() {
       ),
     [partners, selected],
   );
+
+  /**
+   * Recorte em texto, sem alterar o filtro: nenhuma seleção continua significando
+   * consolidado de todos os parceiros, como no comportamento atual do filtro.
+   */
+  const selectedNames = useMemo(
+    () => selected.map((id) => partners.find((partner) => partner.id === id)?.name ?? id),
+    [partners, selected],
+  );
+  const scopeLabel = !selected.length
+    ? "Todos os parceiros (consolidado)"
+    : selected.length === 1
+      ? selectedNames[0]
+      : `${selected.length} parceiros selecionados`;
 
   const scopedRecords = useMemo(() => {
     const sourceRows = selectedCompanies.size
@@ -758,88 +943,168 @@ function ResultadosPage() {
     }
   };
 
+  const loading = loadState === "loading";
+
   return (
     <DashboardLayout title="Visão resultado">
-      <Card className="relative mb-7 overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-primary/[0.16] via-card/95 to-cyan/[0.13] p-5 shadow-elevated backdrop-blur-sm sm:p-6 md:p-8">
-        <div className="pointer-events-none absolute -left-12 -top-16 size-60 rounded-full bg-primary/25 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 right-0 size-64 rounded-full bg-cyan/25 blur-3xl" />
-        <div className="pointer-events-none absolute right-1/3 top-8 size-32 rounded-full bg-violet-500/10 blur-3xl" />
-        <div className="relative">
-          <div className="mb-5 flex justify-end">
-            <Button
-              asChild
-              variant="outline"
-              className="rounded-xl border-primary/20 bg-background/75 shadow-sm backdrop-blur"
-            >
-              <Link to="/relatorio-executivo" search={{ tower: completeTowers[towerIndex]?.id }}>
-                <FileDown className="size-4" />
-                Relatório executivo
-              </Link>
-            </Button>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="grid size-12 shrink-0 place-items-center rounded-2xl bg-gradient-brand text-primary-foreground shadow-elegant ring-4 ring-primary/10">
-              <BarChart3 className="size-5" />
+      <header className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
+            Visão resultado
+          </h1>
+          <dl className="mt-2 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-sm text-muted-foreground">
+            <div className="flex min-w-0 items-baseline gap-1.5">
+              <dt className="font-medium text-foreground">Recorte:</dt>
+              <dd className="min-w-0 truncate" title={selectedNames.join(", ") || undefined}>
+                {scopeLabel}
+              </dd>
             </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-                Resultado consolidado
-              </p>
-              <h2 className="mt-2 bg-gradient-brand bg-clip-text text-3xl font-semibold leading-[1.08] tracking-tight text-transparent md:text-4xl">
-                Comparativo de resultado 2025 × 2026.
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
-                Meta e Real são editáveis; percentual, Gap TT, média e YoY são recalculados
-                automaticamente.
-              </p>
-            </div>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            className="sr-only"
-            onChange={handleSpreadsheetUpload}
-          />
-          <div className="mt-6 grid gap-3 md:grid-cols-3">
-            {highlights.map(({ label, row }) => (
-              <HighlightCard key={label} label={label} yoy={row.yoy} gap={row.yoyGap} />
-            ))}
-          </div>
+            {reportSource?.period && (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Período:</dt>
+                <dd>{reportSource.period}</dd>
+              </div>
+            )}
+            {reportSource?.previousPeriod && (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Comparação:</dt>
+                <dd>{reportSource.previousPeriod}</dd>
+              </div>
+            )}
+            {reportSource?.monthsElapsed ? (
+              <div className="flex items-baseline gap-1.5">
+                <dt className="font-medium text-foreground">Meses decorridos:</dt>
+                <dd className="tabular-nums">{reportSource.monthsElapsed}</dd>
+              </div>
+            ) : null}
+          </dl>
         </div>
-      </Card>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Button asChild variant="outline">
+            <Link to="/relatorio-executivo" search={{ tower: completeTowers[towerIndex]?.id }}>
+              <FileDown className="size-4" />
+              Relatório executivo
+            </Link>
+          </Button>
+        </div>
+      </header>
 
-      <div className="space-y-6">
-        <ServiceTowersPanel
-          key={[...selectedCompanies].sort().join("|")}
-          selectedCompanies={selectedCompanies}
-          towers={completeTowers}
-          activeIndex={towerIndex}
-          onSelect={setTowerIndex}
-          onPrevious={() =>
-            setTowerIndex(
-              (current) => (current - 1 + completeTowers.length) % completeTowers.length,
+      {/*
+        Importação da planilha: o campo continua acessível por teclado e leitor de
+        tela, como antes, agora com nome acessível e com a resposta do processamento
+        visível em texto — antes a mensagem era calculada e nunca apresentada.
+      */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        aria-label="Importar planilha de resultados (.xlsx)"
+        accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        className="sr-only"
+        onChange={handleSpreadsheetUpload}
+      />
+      {uploadState.status !== "idle" && uploadState.message && (
+        <p
+          role="status"
+          className={cn(
+            "mb-4 rounded-md border px-3 py-2 text-sm",
+            uploadState.status === "error"
+              ? "border-destructive/40 bg-destructive/5 text-destructive"
+              : "border-border bg-muted text-foreground",
+          )}
+        >
+          {uploadState.message}
+        </p>
+      )}
+
+      {loadState === "error" ? (
+        <ErrorState onRetry={reload} />
+      ) : (
+        <div className="space-y-6">
+          {/*
+            Faixa de métricas relacionadas: mesmo YoY importado por produto que já era
+            exibido no topo da página, agora com a origem do número explicitada.
+          */}
+          {loading ? (
+            <div className="grid gap-3 sm:grid-cols-3" aria-hidden="true">
+              {[0, 1, 2].map((index) => (
+                <Skeleton key={index} className="h-[88px] w-full" />
+              ))}
+            </div>
+          ) : (
+            highlights.length > 0 && (
+              <section aria-labelledby="destaques-yoy">
+                <h2
+                  id="destaques-yoy"
+                  className="mb-2 text-[13px] font-semibold text-muted-foreground"
+                >
+                  Crescimento YoY por produto · valores importados da planilha
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  {highlights.map(({ label, row }) => (
+                    <HighlightCard key={label} label={label} yoy={row.yoy} gap={row.yoyGap} />
+                  ))}
+                </div>
+              </section>
             )
-          }
-          onNext={() => setTowerIndex((current) => (current + 1) % completeTowers.length)}
-        />
-        <PeriodPanel
-          rows={rows}
-          title={reportSource?.period ?? "YTD por produto"}
-          subtitle="Resultado atual"
-          tone="current"
-          period="current"
-          onUpdate={updateValue}
-        />
-        <PortabilityPanel
-          records={scopedBestGuessRecords}
-          total={selectedCompanies.size ? undefined : bestGuessTotal}
-        />
-        <AnalyticalPortabilityPanel
-          summary={portabilitySummary}
-          qscMetric={qscData?.metrics.find((metric) => metric.id === "saldo-portabilidade")}
-        />
-      </div>
+          )}
+          {loading ? (
+            <SectionSkeleton title="Torres de serviço" />
+          ) : completeTowers.length ? (
+            <ServiceTowersPanel
+              key={[...selectedCompanies].sort().join("|")}
+              selectedCompanies={selectedCompanies}
+              scopeLabel={scopeLabel}
+              towers={completeTowers}
+              activeIndex={towerIndex}
+              onSelect={setTowerIndex}
+              onPrevious={() =>
+                setTowerIndex(
+                  (current) => (current - 1 + completeTowers.length) % completeTowers.length,
+                )
+              }
+              onNext={() => setTowerIndex((current) => (current + 1) % completeTowers.length)}
+            />
+          ) : (
+            <Section title="Torres de serviço">
+              <EmptyState
+                title="Sem base de torres"
+                description="Nenhuma torre de serviço foi importada. Peça a alimentação da base para ver o acompanhamento por parceiro."
+              />
+            </Section>
+          )}
+          {loading ? (
+            <SectionSkeleton title="Resultado por produto" />
+          ) : (
+            <PeriodPanel
+              rows={rows}
+              period="current"
+              periodLabel={reportSource?.period}
+              previousPeriodLabel={reportSource?.previousPeriod}
+              scopeLabel={scopeLabel}
+              onUpdate={updateValue}
+            />
+          )}
+          {loading ? (
+            <SectionSkeleton title="Portabilidade móvel por parceiro" lines={5} />
+          ) : (
+            <PortabilityPanel
+              records={scopedBestGuessRecords}
+              total={selectedCompanies.size ? undefined : bestGuessTotal}
+              scoped={selectedCompanies.size > 0}
+              scopeLabel={scopeLabel}
+            />
+          )}
+          {loading ? (
+            <SectionSkeleton title="Evolução de portabilidade" lines={6} />
+          ) : (
+            <AnalyticalPortabilityPanel
+              summary={portabilitySummary}
+              scopeLabel={scopeLabel}
+              qscMetric={qscData?.metrics.find((metric) => metric.id === "saldo-portabilidade")}
+            />
+          )}
+        </div>
+      )}
     </DashboardLayout>
   );
 }
@@ -857,15 +1122,17 @@ function CertificationPanel({
     width: string;
     numeric?: boolean;
   }> = [
-    { field: "jan", label: "Jan", width: "w-[90px]", numeric: true },
-    { field: "feb", label: "Fev", width: "w-[90px]", numeric: true },
-    { field: "mar", label: "Mar", width: "w-[90px]", numeric: true },
-    { field: "apr", label: "Abr", width: "w-[90px]", numeric: true },
-    { field: "may", label: "Mai", width: "w-[90px]", numeric: true },
-    { field: "jun", label: "Jun", width: "w-[90px]", numeric: true },
-    { field: "totalizer", label: "Totalizador", width: "w-[130px]", numeric: true },
-    { field: "points", label: "Pts", width: "w-[105px]", numeric: true },
-    { field: "band", label: "Faixa", width: "w-[130px]" },
+    // Largura dimensionada pelo conteúdo: valores monetários com centavos precisam
+    // caber por inteiro, sem reduzir a fonte nem depender de rolagem dentro do campo.
+    { field: "jan", label: "Jan", width: "w-[136px]", numeric: true },
+    { field: "feb", label: "Fev", width: "w-[136px]", numeric: true },
+    { field: "mar", label: "Mar", width: "w-[136px]", numeric: true },
+    { field: "apr", label: "Abr", width: "w-[136px]", numeric: true },
+    { field: "may", label: "Mai", width: "w-[136px]", numeric: true },
+    { field: "jun", label: "Jun", width: "w-[136px]", numeric: true },
+    { field: "totalizer", label: "Totalizador", width: "w-[160px]", numeric: true },
+    { field: "points", label: "Pts", width: "w-[110px]", numeric: true },
+    { field: "band", label: "Faixa", width: "w-[140px]" },
   ];
 
   return (
@@ -883,10 +1150,10 @@ function CertificationPanel({
       </div>
 
       <div className="p-3 sm:p-5">
-        <div className="overflow-x-auto rounded-2xl border border-violet-500/15 bg-background/80 shadow-elegant">
-          <Table className="min-w-[1600px] table-fixed">
+        <TableScroll className="rounded-2xl border border-violet-500/15 bg-background/80 shadow-elegant">
+          <Table className="min-w-[1680px] table-fixed">
             <colgroup>
-              <col className="w-[360px]" />
+              <col className="w-[340px]" />
               {columns.map((column) => (
                 <col key={column.field} className={column.width} />
               ))}
@@ -911,7 +1178,7 @@ function CertificationPanel({
                     {row.indicator}
                   </TableCell>
                   {columns.map((column) => (
-                    <TableCell key={column.field}>
+                    <TableCell key={column.field} align={column.numeric ? "numeric" : "text"}>
                       <Input
                         aria-label={`${column.label} de ${row.indicator}`}
                         type="text"
@@ -926,7 +1193,7 @@ function CertificationPanel({
               ))}
             </TableBody>
           </Table>
-        </div>
+        </TableScroll>
       </div>
     </Card>
   );
@@ -934,28 +1201,22 @@ function CertificationPanel({
 
 function PeriodPanel({
   rows,
-  title,
-  subtitle,
-  tone,
   period,
+  periodLabel: sourcePeriod,
+  previousPeriodLabel,
+  scopeLabel,
   onUpdate,
 }: {
   rows: ResultRow[];
-  title: string;
-  subtitle: string;
-  tone: "previous" | "current";
   period: PeriodKey;
+  periodLabel?: string;
+  previousPeriodLabel?: string;
+  scopeLabel: string;
   onUpdate: (product: string, period: PeriodKey, field: keyof PeriodInput, value: string) => void;
 }) {
-  const isCurrent = tone === "current";
-  const periodLabel = title.replace("YTD ", "");
-  const calculationKey = isCurrent ? "current" : "previous";
-  const inputKey = isCurrent ? "currentInput" : "previousInput";
-  const headerTint = isCurrent ? "bg-primary/[0.03]" : "bg-violet-500/[0.035]";
-  const iconTint = isCurrent
-    ? "bg-primary/[0.12] text-primary"
-    : "bg-violet-500/[0.12] text-violet-700 dark:text-violet-300";
-  const badgeClass = isCurrent ? "border-primary/15" : "border-violet-500/20";
+  const periodLabel = (sourcePeriod ?? "YTD").replace("YTD ", "");
+  const calculationKey = period;
+  const inputKey = period === "current" ? "currentInput" : "previousInput";
   const totalInput = rows.reduce<PeriodInput>(
     (total, row) => ({
       meta: total.meta + row[inputKey].meta,
@@ -979,157 +1240,203 @@ function PeriodPanel({
   const totalYoy = totalPrevious > 0 ? totalInput.real / totalPrevious - 1 : null;
   const totalYoyGap = totalInput.real - totalPrevious;
 
+  const description = [
+    `Recorte: ${scopeLabel}.`,
+    sourcePeriod
+      ? `Período importado: ${sourcePeriod}${previousPeriodLabel ? ` · comparação com ${previousPeriodLabel}` : ""}.`
+      : null,
+    "Meta e Real são editáveis nesta tela e recalculam o Total, o % do Total e o YoY do Total. Por produto, %, Gap TT, Média/mês e YoY são campos importados da planilha e não são recalculados aqui.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const detailEntries: RowDetailEntry[] = rows.map((row) => {
+    const calculation = row[calculationKey];
+    const input = row[inputKey];
+    return {
+      id: `${period}-${row.id}`,
+      title: row.product,
+      lead: (
+        <MetricValue
+          value={fmtPct(calculation.attainment)}
+          positive={calculation.attainment >= 1}
+        />
+      ),
+      items: [
+        { label: "Meta (editável)", value: fmtDec(input.meta) },
+        { label: "Real (editável)", value: fmtDec(input.real) },
+        { label: "%", value: fmtPct(calculation.attainment) },
+        { label: "Gap TT", value: fmtDec(calculation.gap) },
+        { label: "Média/mês", value: fmtDec(calculation.average) },
+        { label: "YoY R$", value: fmtDec(row.yoyGap) },
+        { label: "YoY %", value: row.yoy == null ? "—" : fmtPct(row.yoy) },
+      ],
+    };
+  });
+  detailEntries.push({
+    id: `${period}-total`,
+    title: "Total",
+    lead: (
+      <MetricValue
+        value={fmtPct(totalCalculation.attainment)}
+        positive={totalCalculation.attainment >= 1}
+      />
+    ),
+    items: [
+      { label: "Meta", value: fmtDec(totalInput.meta) },
+      { label: "Real", value: fmtDec(totalInput.real) },
+      { label: "%", value: fmtPct(totalCalculation.attainment) },
+      { label: "Gap TT", value: fmtDec(totalCalculation.gap) },
+      { label: "Média/mês", value: fmtDec(totalCalculation.average) },
+      { label: "YoY R$", value: fmtDec(totalYoyGap) },
+      { label: "YoY %", value: totalYoy == null ? "—" : fmtPct(totalYoy) },
+    ],
+  });
+
   return (
-    <Card className="overflow-hidden rounded-[2rem] border-primary/15 bg-gradient-to-br from-card via-card to-primary/[0.035] shadow-elevated">
-      <div
-        className={`flex flex-col gap-4 border-b border-primary/10 px-5 py-5 md:flex-row md:items-center md:justify-between md:px-7 ${headerTint}`}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={`grid size-10 place-items-center rounded-2xl shadow-sm ring-4 ring-background/40 ${iconTint}`}
-          >
-            <PencilLine className="size-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              {subtitle}
-            </p>
-            <h3 className="text-lg font-semibold tracking-tight">{title} por produto</h3>
-          </div>
+    <Section title="Resultado por produto" description={description} bodyClassName="p-0">
+      {rows.length === 0 ? (
+        <div className="p-4 md:p-5">
+          <EmptyState
+            title="Sem resultados no recorte"
+            description="Nenhum produto foi encontrado para os parceiros selecionados. Ajuste ou limpe o filtro de parceiros."
+          />
         </div>
-        <span
-          className={`w-fit self-start rounded-full border bg-background/75 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm md:self-auto ${badgeClass}`}
-        >
-          Meta e Real editáveis
-        </span>
-      </div>
-      <div className="p-3 sm:p-5">
-        <div className="overflow-x-auto rounded-2xl border border-primary/12 bg-background/80 shadow-elegant">
-          <Table className="min-w-[1240px] table-fixed">
-            <colgroup>
-              <col className="w-[260px]" />
-              <col className="w-[145px]" />
-              <col className="w-[145px]" />
-              <col className="w-[105px]" />
-              <col className="w-[135px]" />
-              <col className="w-[135px]" />
-              <col className="w-[150px]" />
-              <col className="w-[115px]" />
-            </colgroup>
-            <TableHeader
-              className={`[&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-primary/10 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.13em] [&_th]:text-muted-foreground ${headerTint}`}
-            >
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Produto</TableHead>
-                <TableHead className="text-right">Meta</TableHead>
-                <TableHead className="text-right">Real 2026</TableHead>
-                <TableHead className="text-right">%</TableHead>
-                <TableHead className="text-right">Gap TT</TableHead>
-                <TableHead className="text-right">Média/mês</TableHead>
-                <TableHead className="border-l border-cyan/15 bg-cyan/[0.04] text-right text-cyan">
-                  YoY R$
-                </TableHead>
-                <TableHead className="bg-cyan/[0.04] text-right text-cyan">YoY %</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3.5 [&_tr]:border-primary/[0.07] [&_tr]:transition-colors [&_tr:hover]:bg-primary/[0.035]">
-              {rows.map((row) => {
-                const calculation = row[calculationKey];
-                const input = row[inputKey];
-                return (
-                  <TableRow key={`${period}-${row.id}`}>
-                    <TableCell>
-                      <p className="font-semibold text-foreground">{row.product}</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        Indicadores por YTD
-                      </p>
-                    </TableCell>
-                    <EditableNumberCell
-                      ariaLabel={`Meta ${periodLabel} de ${row.product}`}
-                      value={input.meta}
-                      tone={tone}
-                      onChange={(value) => onUpdate(row.id, period, "meta", value)}
+      ) : (
+        <div className="p-4 md:p-5">
+          <TableScroll>
+            <Table className="min-w-[1106px] table-fixed">
+              <colgroup>
+                <col className={STICKY_ID_WIDTH} />
+                <col className="w-[140px]" />
+                <col className="w-[140px]" />
+                <col className="w-[96px]" />
+                <col className="w-[130px]" />
+                <col className="w-[130px]" />
+                <col className="w-[140px]" />
+                <col className="w-[110px]" />
+              </colgroup>
+              <TableHeader className={TABLE_HEADER_CLASS}>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Produto</TableHead>
+                  <TableHead align="numeric">Meta</TableHead>
+                  <TableHead align="numeric">Real</TableHead>
+                  <TableHead align="numeric">%</TableHead>
+                  <TableHead align="numeric">Gap TT</TableHead>
+                  <TableHead align="numeric">Média/mês</TableHead>
+                  <TableHead align="numeric" className={GROUP_START_CELL_CLASS}>
+                    YoY R$
+                  </TableHead>
+                  <TableHead align="numeric" className={GROUP_CELL_CLASS}>
+                    YoY %
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className={TABLE_BODY_CLASS}>
+                {rows.map((row) => {
+                  const calculation = row[calculationKey];
+                  const input = row[inputKey];
+                  return (
+                    <TableRow key={`${period}-${row.id}`}>
+                      <TableCell
+                        className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}
+                      >
+                        {row.product}
+                      </TableCell>
+                      <EditableNumberCell
+                        ariaLabel={`Meta ${periodLabel} de ${row.product}`}
+                        value={input.meta}
+                        onChange={(value) => onUpdate(row.id, period, "meta", value)}
+                      />
+                      <EditableNumberCell
+                        ariaLabel={`Real ${periodLabel} de ${row.product}`}
+                        value={input.real}
+                        onChange={(value) => onUpdate(row.id, period, "real", value)}
+                      />
+                      <TableCell align="numeric">
+                        <MetricValue
+                          value={fmtPct(calculation.attainment)}
+                          positive={calculation.attainment >= 1}
+                        />
+                      </TableCell>
+                      <TableCell align="numeric">
+                        <MetricValue
+                          value={fmtDec(calculation.gap)}
+                          positive={calculation.gap >= 0}
+                        />
+                      </TableCell>
+                      <TableCell align="numeric" className="font-medium text-foreground">
+                        {fmtDec(calculation.average)}
+                      </TableCell>
+                      <TableCell align="numeric" className={GROUP_START_CELL_CLASS}>
+                        <MetricValue value={fmtDec(row.yoyGap)} positive={row.yoyGap >= 0} />
+                      </TableCell>
+                      <TableCell align="numeric" className={GROUP_CELL_CLASS}>
+                        <MetricValue
+                          value={row.yoy == null ? "—" : fmtPct(row.yoy)}
+                          positive={row.yoy != null && row.yoy >= 0}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                <TableRow className={TOTAL_ROW_CLASS}>
+                  <TableCell
+                    className={cn(STICKY_ID_CLASS, "bg-muted font-semibold text-foreground")}
+                  >
+                    Total
+                  </TableCell>
+                  <TableCell align="numeric" className="font-semibold text-foreground">
+                    {fmtDec(totalInput.meta)}
+                  </TableCell>
+                  <TableCell align="numeric" className="font-semibold text-foreground">
+                    {fmtDec(totalInput.real)}
+                  </TableCell>
+                  <TableCell align="numeric">
+                    <MetricValue
+                      value={fmtPct(totalCalculation.attainment)}
+                      positive={totalCalculation.attainment >= 1}
                     />
-                    <EditableNumberCell
-                      ariaLabel={`Real ${periodLabel} de ${row.product}`}
-                      value={input.real}
-                      tone={tone}
-                      onChange={(value) => onUpdate(row.id, period, "real", value)}
+                  </TableCell>
+                  <TableCell align="numeric">
+                    <MetricValue
+                      value={fmtDec(totalCalculation.gap)}
+                      positive={totalCalculation.gap >= 0}
                     />
-                    <TableCell className="text-right">
-                      <MetricValue
-                        value={fmtPct(calculation.attainment)}
-                        positive={calculation.attainment >= 1}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <MetricValue
-                        value={fmtDec(calculation.gap)}
-                        positive={calculation.gap >= 0}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                      {fmtDec(calculation.average)}
-                    </TableCell>
-                    <TableCell className="border-l border-cyan/15 bg-cyan/[0.025] text-right">
-                      <MetricValue value={fmtDec(row.yoyGap)} positive={row.yoyGap >= 0} />
-                    </TableCell>
-                    <TableCell className="bg-cyan/[0.025] text-right">
-                      <MetricValue
-                        value={row.yoy == null ? "—" : fmtPct(row.yoy)}
-                        positive={row.yoy != null && row.yoy >= 0}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-              <TableRow className={`border-t-2 border-primary/15 ${headerTint}`}>
-                <TableCell className="font-semibold text-foreground">Total</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {fmtDec(totalInput.meta)}
-                </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {fmtDec(totalInput.real)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <MetricValue
-                    value={fmtPct(totalCalculation.attainment)}
-                    positive={totalCalculation.attainment >= 1}
-                  />
-                </TableCell>
-                <TableCell className="text-right">
-                  <MetricValue
-                    value={fmtDec(totalCalculation.gap)}
-                    positive={totalCalculation.gap >= 0}
-                  />
-                </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {fmtDec(totalCalculation.average)}
-                </TableCell>
-                <TableCell className="border-l border-cyan/15 bg-cyan/[0.025] text-right">
-                  <MetricValue value={fmtDec(totalYoyGap)} positive={totalYoyGap >= 0} />
-                </TableCell>
-                <TableCell className="bg-cyan/[0.025] text-right">
-                  <MetricValue
-                    value={totalYoy == null ? "—" : fmtPct(totalYoy)}
-                    positive={totalYoy != null && totalYoy >= 0}
-                  />
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                  </TableCell>
+                  <TableCell align="numeric" className="font-semibold text-foreground">
+                    {fmtDec(totalCalculation.average)}
+                  </TableCell>
+                  <TableCell align="numeric" className={GROUP_START_CELL_CLASS}>
+                    <MetricValue value={fmtDec(totalYoyGap)} positive={totalYoyGap >= 0} />
+                  </TableCell>
+                  <TableCell align="numeric" className={GROUP_CELL_CLASS}>
+                    <MetricValue
+                      value={totalYoy == null ? "—" : fmtPct(totalYoy)}
+                      positive={totalYoy != null && totalYoy >= 0}
+                    />
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </TableScroll>
+          <MobileRowDetails label="Detalhe por produto" entries={detailEntries} />
         </div>
-      </div>
-    </Card>
+      )}
+    </Section>
   );
 }
 
 function PortabilityPanel({
   records,
   total: sourceTotal,
+  scoped,
+  scopeLabel,
 }: {
   records: BestGuessRecord[];
   total?: BestGuessTotal;
+  scoped: boolean;
+  scopeLabel: string;
 }) {
   const total =
     sourceTotal ??
@@ -1152,93 +1459,132 @@ function PortabilityPanel({
         bgFmSaldo: 0,
       },
     );
-  const valueCell = (value: number) => (
+  const valueCell = (value: number, className?: string) => (
     <TableCell
-      className={`text-right font-semibold tabular-nums ${value < 0 ? "text-rose-600 dark:text-rose-400" : "text-foreground"}`}
+      align="numeric"
+      className={cn("font-medium", value < 0 ? "text-destructive" : "text-foreground", className)}
     >
       {fmtDec(value)}
     </TableCell>
   );
+  /**
+   * Escopo explícito do totalizador: com parceiros selecionados, o total é a soma do
+   * recorte; sem seleção, é o total da própria base Best Guess importada.
+   */
+  const totalLabel = scoped ? "Total do recorte" : "Total geral";
+  const detailItems = (values: BestGuessTotal) => [
+    { label: "M0 MTD Port-In", value: fmtDec(values.m0MtdPortIn) },
+    { label: "M0 MTD Port-Out", value: fmtDec(values.m0MtdPortOut) },
+    { label: "M0 MTD Saldo", value: fmtDec(values.m0MtdSaldo) },
+    { label: "BG FM Port-In", value: fmtDec(values.bgFmPortIn) },
+    { label: "BG FM Port-Out", value: fmtDec(values.bgFmPortOut) },
+    { label: "BG FM Saldo", value: fmtDec(values.bgFmSaldo) },
+  ];
+  const detailEntries: RowDetailEntry[] = [
+    ...records.map((record) => ({
+      id: record.company,
+      title: record.company,
+      lead: <MetricValue value={fmtDec(record.bgFmSaldo)} positive={record.bgFmSaldo >= 0} />,
+      items: detailItems(record),
+    })),
+    {
+      id: "__total__",
+      title: totalLabel,
+      lead: <MetricValue value={fmtDec(total.bgFmSaldo)} positive={total.bgFmSaldo >= 0} />,
+      items: detailItems(total),
+    },
+  ];
 
   return (
-    <Card className="overflow-hidden rounded-[2rem] border-cyan/20 bg-gradient-to-br from-card via-card to-cyan/[0.045] shadow-elevated">
-      <div className="flex flex-col gap-3 border-b border-cyan/15 bg-cyan/[0.035] px-5 py-5 md:flex-row md:items-center md:justify-between md:px-7">
-        <div className="flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-2xl bg-cyan/[0.13] text-cyan shadow-sm ring-4 ring-background/40">
-            <BarChart3 className="size-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan">
-              Portabilidade móvel
-            </p>
-            <h3 className="text-lg font-semibold tracking-tight">M0 MTD × BG FM por parceiro</h3>
-          </div>
-        </div>
-        <span className="w-fit self-start rounded-full border border-cyan/15 bg-background/75 px-3 py-1.5 text-[11px] font-medium text-muted-foreground shadow-sm md:self-auto">
-          Base Best Guess
-        </span>
+    <Section
+      title="Portabilidade móvel por parceiro"
+      description={`Recorte: ${scopeLabel}. Valores importados da base Best Guess: M0 MTD é o acumulado do mês e BG FM é a projeção de fechamento. ${scoped ? "Com parceiros selecionados, o total é a soma do recorte." : "Sem seleção, o total é o da base importada."}`}
+      bodyClassName="p-0"
+    >
+      <div className="p-4 md:p-5">
+        {records.length === 0 ? (
+          <EmptyState
+            title="Sem parceiros no recorte"
+            description="A base Best Guess não tem linhas para os parceiros selecionados. Ajuste ou limpe o filtro de parceiros."
+          />
+        ) : (
+          <>
+            <TableScroll>
+              <Table className="min-w-[1008px] table-fixed">
+                <colgroup>
+                  <col className={STICKY_ID_WIDTH} />
+                  <col className="w-[128px]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[128px]" />
+                </colgroup>
+                <TableHeader className={TABLE_HEADER_CLASS}>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Parceiro</TableHead>
+                    <TableHead align="numeric">M0 MTD Port-In</TableHead>
+                    <TableHead align="numeric">M0 MTD Port-Out</TableHead>
+                    <TableHead align="numeric">M0 MTD Saldo</TableHead>
+                    <TableHead align="numeric" className={GROUP_START_CELL_CLASS}>
+                      BG FM Port-In
+                    </TableHead>
+                    <TableHead align="numeric" className={GROUP_CELL_CLASS}>
+                      BG FM Port-Out
+                    </TableHead>
+                    <TableHead align="numeric" className={GROUP_CELL_CLASS}>
+                      BG FM Saldo
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={TABLE_BODY_CLASS}>
+                  {records.map((record) => (
+                    <TableRow key={record.company}>
+                      <TableCell
+                        className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}
+                        title={record.company}
+                      >
+                        {record.company}
+                      </TableCell>
+                      {valueCell(record.m0MtdPortIn)}
+                      {valueCell(record.m0MtdPortOut)}
+                      {valueCell(record.m0MtdSaldo)}
+                      {valueCell(record.bgFmPortIn, GROUP_START_CELL_CLASS)}
+                      {valueCell(record.bgFmPortOut, GROUP_CELL_CLASS)}
+                      {valueCell(record.bgFmSaldo, GROUP_CELL_CLASS)}
+                    </TableRow>
+                  ))}
+                  <TableRow className={TOTAL_ROW_CLASS}>
+                    <TableCell
+                      className={cn(STICKY_ID_CLASS, "bg-muted font-semibold text-foreground")}
+                    >
+                      {totalLabel}
+                    </TableCell>
+                    {valueCell(total.m0MtdPortIn, "font-semibold")}
+                    {valueCell(total.m0MtdPortOut, "font-semibold")}
+                    {valueCell(total.m0MtdSaldo, "font-semibold")}
+                    {valueCell(total.bgFmPortIn, cn(GROUP_START_CELL_CLASS, "font-semibold"))}
+                    {valueCell(total.bgFmPortOut, cn(GROUP_CELL_CLASS, "font-semibold"))}
+                    {valueCell(total.bgFmSaldo, cn(GROUP_CELL_CLASS, "font-semibold"))}
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableScroll>
+            <MobileRowDetails label="Detalhe por parceiro" entries={detailEntries} />
+          </>
+        )}
       </div>
-      <div className="p-3 sm:p-5">
-        <div className="overflow-x-auto rounded-2xl border border-cyan/15 bg-background/80 shadow-elegant">
-          <Table className="min-w-[1040px] table-fixed">
-            <colgroup>
-              <col className="w-[230px]" />
-              <col className="w-[145px]" />
-              <col className="w-[145px]" />
-              <col className="w-[145px]" />
-              <col className="w-[145px]" />
-              <col className="w-[145px]" />
-              <col className="w-[145px]" />
-            </colgroup>
-            <TableHeader className="bg-cyan/[0.045] [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-cyan/15 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground">
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Parceiro</TableHead>
-                <TableHead className="text-right">M0 MTD Port-In</TableHead>
-                <TableHead className="text-right">M0 MTD Port-Out</TableHead>
-                <TableHead className="text-right">M0 MTD Saldo</TableHead>
-                <TableHead className="border-l border-cyan/15 bg-cyan/[0.025] text-right text-cyan">
-                  BG FM Port-In
-                </TableHead>
-                <TableHead className="bg-cyan/[0.025] text-right text-cyan">
-                  BG FM Port-Out
-                </TableHead>
-                <TableHead className="bg-cyan/[0.025] text-right text-cyan">BG FM Saldo</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3.5 [&_tr]:border-cyan/[0.1] [&_tr]:transition-colors [&_tr:hover]:bg-cyan/[0.035]">
-              {records.map((record) => (
-                <TableRow key={record.company}>
-                  <TableCell className="font-semibold text-foreground">{record.company}</TableCell>
-                  {valueCell(record.m0MtdPortIn)}
-                  {valueCell(record.m0MtdPortOut)}
-                  {valueCell(record.m0MtdSaldo)}
-                  {valueCell(record.bgFmPortIn)}
-                  {valueCell(record.bgFmPortOut)}
-                  {valueCell(record.bgFmSaldo)}
-                </TableRow>
-              ))}
-              <TableRow className="border-t-2 border-cyan/20 bg-cyan/[0.04]">
-                <TableCell className="font-semibold text-foreground">Total</TableCell>
-                {valueCell(total.m0MtdPortIn)}
-                {valueCell(total.m0MtdPortOut)}
-                {valueCell(total.m0MtdSaldo)}
-                {valueCell(total.bgFmPortIn)}
-                {valueCell(total.bgFmPortOut)}
-                {valueCell(total.bgFmSaldo)}
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-    </Card>
+    </Section>
   );
 }
 
 function AnalyticalPortabilityPanel({
   summary,
+  scopeLabel,
   qscMetric,
 }: {
   summary: { rows: PortabilitySummaryRow[]; total: PortabilitySummaryTotal };
+  scopeLabel: string;
   qscMetric?: import("@/lib/qsc").QscMetricSeries;
 }) {
   const { rows, total } = summary;
@@ -1263,198 +1609,256 @@ function AnalyticalPortabilityPanel({
   const periodLabel = rows.length
     ? `${rows[0].label} a ${rows[rows.length - 1].label}`
     : "Sem período disponível";
+  /**
+   * Cor só onde há significado comercial: volumes de PortIn e PortOut ficam neutros,
+   * porque "maior" não é favorável por si só. Saldo e conversão mantêm a leitura
+   * favorável/desfavorável que a operação já usava.
+   */
   const indicator = (
     label: string,
     value: number | null,
-    tone: "neutral" | "positive" | "negative",
     format: "integer" | "percent" = "integer",
+    tone: "neutral" | "semantic" = "neutral",
   ) => {
-    const toneClass =
-      tone === "positive"
-        ? "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-700 dark:text-emerald-300"
-        : tone === "negative"
-          ? "border-rose-500/20 bg-rose-500/[0.055] text-rose-700 dark:text-rose-300"
-          : "border-cyan/15 bg-background/55 text-foreground";
     const displayValue =
       value == null ? "—" : format === "percent" ? fmtPct(value) : formatInteger(value);
+    const valueClass =
+      value == null
+        ? "text-muted-foreground"
+        : tone === "semantic"
+          ? value >= 0
+            ? "text-success"
+            : "text-destructive"
+          : "text-foreground";
     return (
-      <div className={`rounded-2xl border p-4 ${toneClass}`}>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-          {label}
+      <div className="rounded-md border border-border p-3">
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className={cn("mt-1 text-2xl font-semibold tracking-tight tabular-nums", valueClass)}>
+          {displayValue}
         </p>
-        <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{displayValue}</p>
       </div>
     );
   };
   const leaderCell = (operator: string) => (
-    <TableCell className="text-right font-semibold text-foreground">{operator}</TableCell>
+    <TableCell className="whitespace-normal break-words font-medium text-foreground">
+      {operator}
+    </TableCell>
   );
   const saldoCell = (value: number) => (
-    <TableCell className="text-right">
+    <TableCell align="numeric">
       <MetricValue value={formatInteger(value)} positive={value >= 0} />
     </TableCell>
   );
   const conversionCell = (value: number | null) => (
-    <TableCell className="bg-emerald-500/[0.025] text-right">
+    <TableCell align="numeric">
       <MetricValue
         value={value == null ? "—" : fmtPct(value)}
         positive={value != null && value >= 0}
       />
     </TableCell>
   );
-  const qscNumberCell = (value?: number) => (
-    <TableCell className="bg-violet-500/[0.025] text-right font-semibold tabular-nums text-foreground">
+  const qscNumberCell = (value?: number, className?: string) => (
+    <TableCell align="numeric" className={cn("font-medium text-foreground", className)}>
       {value == null ? "—" : formatInteger(value)}
     </TableCell>
   );
-  const qscPercentCell = (numerator?: number, denominator?: number) => (
-    <TableCell className="bg-violet-500/[0.04] text-right font-semibold tabular-nums text-violet-700 dark:text-violet-300">
+  const qscPercentCell = (numerator?: number, denominator?: number, className?: string) => (
+    <TableCell align="numeric" className={cn("font-medium text-foreground", className)}>
       {numerator == null || denominator == null || denominator <= 0
         ? "—"
         : fmtPct(numerator / denominator)}
     </TableCell>
   );
+  const qscValue = (value?: number) => (value == null ? "—" : formatInteger(value));
+  const qscPercentValue = (numerator?: number, denominator?: number) =>
+    numerator == null || denominator == null || denominator <= 0
+      ? "—"
+      : fmtPct(numerator / denominator);
+  const detailEntries: RowDetailEntry[] = [
+    ...rows.map((row) => {
+      const qscPoint = qscPointForMonth(row.month);
+      const numerator = qscPoint?.available ? qscPoint.numerator : undefined;
+      const denominator = qscPoint?.available ? qscPoint.denominator : undefined;
+      return {
+        id: String(row.month),
+        title: row.label,
+        lead: <MetricValue value={formatInteger(row.saldo)} positive={row.saldo >= 0} />,
+        items: [
+          { label: "PortIn total", value: formatInteger(row.portIn) },
+          { label: "PortOut total", value: formatInteger(row.portOut) },
+          { label: "Saldo líquido", value: formatInteger(row.saldo) },
+          { label: "%", value: row.conversion == null ? "—" : fmtPct(row.conversion) },
+          { label: "Saldo QSC", value: qscValue(numerator) },
+          { label: "Altas", value: qscValue(denominator) },
+          { label: "% QSC", value: qscPercentValue(numerator, denominator) },
+          { label: "Operadora líder em PortIn", value: row.leaderPortIn },
+          { label: "Volume de PortIn", value: formatInteger(row.leaderPortInVolume) },
+          { label: "Operadora líder em PortOut", value: row.leaderPortOut },
+          { label: "Volume de PortOut", value: formatInteger(row.leaderPortOutVolume) },
+        ],
+      };
+    }),
+    {
+      id: "__total__",
+      title: "Total acumulado",
+      lead: <MetricValue value={formatInteger(total.saldo)} positive={total.saldo >= 0} />,
+      items: [
+        { label: "PortIn total", value: formatInteger(total.portIn) },
+        { label: "PortOut total", value: formatInteger(total.portOut) },
+        { label: "Saldo líquido", value: formatInteger(total.saldo) },
+        { label: "%", value: total.conversion == null ? "—" : fmtPct(total.conversion) },
+        { label: "Saldo QSC", value: qscValue(qscTotal?.numerator) },
+        { label: "Altas", value: qscValue(qscTotal?.denominator) },
+        { label: "% QSC", value: qscPercentValue(qscTotal?.numerator, qscTotal?.denominator) },
+        { label: "Operadora líder em PortIn", value: total.leaderPortIn },
+        { label: "Volume de PortIn", value: formatInteger(total.leaderPortInVolume) },
+        { label: "Operadora líder em PortOut", value: total.leaderPortOut },
+        { label: "Volume de PortOut", value: formatInteger(total.leaderPortOutVolume) },
+      ],
+    },
+  ];
 
   return (
-    <Card className="overflow-hidden rounded-[2rem] border-emerald-500/15 bg-gradient-to-br from-card via-card to-emerald-500/[0.035] shadow-elevated">
-      <div className="flex flex-col gap-3 border-b border-emerald-500/15 bg-emerald-500/[0.035] px-5 py-5 md:flex-row md:items-center md:justify-between md:px-7">
-        <div className="flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-2xl bg-emerald-500/[0.13] text-emerald-600 shadow-sm ring-4 ring-background/40 dark:text-emerald-300">
-            <TrendingUp className="size-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-emerald-700 dark:text-emerald-300">
-              Resumo analítico
-            </p>
-            <h3 className="text-lg font-semibold tracking-tight">Evolução de portabilidade</h3>
-          </div>
-        </div>
-        <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <span className="rounded-full border border-emerald-500/15 bg-background/75 px-3 py-1.5 text-[11px] font-medium text-muted-foreground">
-            Últimos {rows.length} meses · {periodLabel}
-          </span>
-        </div>
-      </div>
-      <div className="space-y-5 p-3 sm:p-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {indicator("PortIn acumulado", total.portIn, "positive")}
-          {indicator("PortOut acumulado", total.portOut, "neutral")}
-          {indicator(
-            "Saldo líquido acumulado",
-            total.saldo,
-            total.saldo >= 0 ? "positive" : "negative",
-          )}
-          {indicator(
-            "Conversão de portabilidade",
-            total.conversion,
-            total.conversion != null && total.conversion >= 0 ? "positive" : "negative",
-            "percent",
-          )}
-        </div>
-        <div className="overflow-x-auto rounded-2xl border border-emerald-500/15 bg-background/80 shadow-elegant">
-          <Table className="min-w-[1840px] table-fixed">
-            <colgroup>
-              <col className="w-[170px]" />
-              <col className="w-[135px]" />
-              <col className="w-[135px]" />
-              <col className="w-[135px]" />
-              <col className="w-[145px]" />
-              <col className="w-[135px]" />
-              <col className="w-[135px]" />
-              <col className="w-[135px]" />
-              <col className="w-[210px]" />
-              <col className="w-[170px]" />
-              <col className="w-[210px]" />
-              <col className="w-[170px]" />
-            </colgroup>
-            <TableHeader className="bg-emerald-500/[0.045] [&_th]:sticky [&_th]:top-0 [&_th]:z-10 [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-emerald-500/15 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.09em] [&_th]:text-muted-foreground">
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Mês</TableHead>
-                <TableHead className="text-right">PortIn total</TableHead>
-                <TableHead className="text-right">PortOut total</TableHead>
-                <TableHead className="text-right">Saldo líquido</TableHead>
-                <TableHead className="bg-emerald-500/[0.025] text-right text-emerald-700 dark:text-emerald-300">
-                  %
-                </TableHead>
-                <TableHead className="bg-violet-500/[0.025] text-right text-violet-700 dark:text-violet-300">
-                  Saldo QSC
-                </TableHead>
-                <TableHead className="bg-violet-500/[0.025] text-right text-violet-700 dark:text-violet-300">
-                  Altas
-                </TableHead>
-                <TableHead className="bg-violet-500/[0.04] text-right text-violet-700 dark:text-violet-300">
-                  % QSC
-                </TableHead>
-                <TableHead className="text-right">Operadora líder em PortIn</TableHead>
-                <TableHead className="text-right">Volume de PortIn</TableHead>
-                <TableHead className="text-right">Operadora líder em PortOut</TableHead>
-                <TableHead className="text-right">Volume de PortOut</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3.5 [&_tr]:border-emerald-500/[0.1] [&_tr]:transition-colors [&_tr:hover]:bg-emerald-500/[0.035]">
-              {rows.map((row) => {
-                const qscPoint = qscPointForMonth(row.month);
-                return (
-                  <TableRow key={row.month}>
-                    <TableCell className="font-semibold text-foreground">{row.label}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                      {formatInteger(row.portIn)}
+    <Section
+      title="Evolução de portabilidade"
+      description={`Recorte: ${scopeLabel}. Série mensal calculada a partir da base analítica importada (últimos ${rows.length} meses: ${periodLabel}). Saldo QSC, Altas e % QSC vêm do indicador Saldo de portabilidade do QSC; meses sem apuração aparecem como “—”, e não como zero.`}
+      bodyClassName="p-0"
+    >
+      <div className="p-4 md:p-5">
+        {rows.length === 0 ? (
+          <EmptyState
+            title="Sem meses disponíveis"
+            description="A base analítica não tem linhas para os parceiros selecionados. Ajuste ou limpe o filtro de parceiros."
+          />
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {indicator("PortIn acumulado", total.portIn)}
+              {indicator("PortOut acumulado", total.portOut)}
+              {indicator("Saldo líquido acumulado", total.saldo, "integer", "semantic")}
+              {indicator("Conversão de portabilidade", total.conversion, "percent", "semantic")}
+            </div>
+            <TableScroll>
+              <Table className="min-w-[1732px] table-fixed">
+                <colgroup>
+                  <col className={STICKY_ID_WIDTH} />
+                  <col className="w-[124px]" />
+                  <col className="w-[128px]" />
+                  <col className="w-[124px]" />
+                  <col className="w-[96px]" />
+                  <col className="w-[116px]" />
+                  <col className="w-[104px]" />
+                  <col className="w-[104px]" />
+                  <col className="w-[200px]" />
+                  <col className="w-[140px]" />
+                  <col className="w-[208px]" />
+                  <col className="w-[148px]" />
+                </colgroup>
+                <TableHeader className={TABLE_HEADER_CLASS}>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Mês</TableHead>
+                    <TableHead align="numeric">PortIn total</TableHead>
+                    <TableHead align="numeric">PortOut total</TableHead>
+                    <TableHead align="numeric">Saldo líquido</TableHead>
+                    <TableHead align="numeric">%</TableHead>
+                    <TableHead align="numeric" className={GROUP_START_CELL_CLASS}>
+                      Saldo QSC
+                    </TableHead>
+                    <TableHead align="numeric" className={GROUP_CELL_CLASS}>
+                      Altas
+                    </TableHead>
+                    <TableHead align="numeric" className={GROUP_CELL_CLASS}>
+                      % QSC
+                    </TableHead>
+                    <TableHead>Operadora líder em PortIn</TableHead>
+                    <TableHead align="numeric">Volume de PortIn</TableHead>
+                    <TableHead>Operadora líder em PortOut</TableHead>
+                    <TableHead align="numeric">Volume de PortOut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={TABLE_BODY_CLASS}>
+                  {rows.map((row) => {
+                    const qscPoint = qscPointForMonth(row.month);
+                    return (
+                      <TableRow key={row.month}>
+                        <TableCell
+                          className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}
+                        >
+                          {row.label}
+                        </TableCell>
+                        <TableCell align="numeric" className="font-medium text-foreground">
+                          {formatInteger(row.portIn)}
+                        </TableCell>
+                        <TableCell align="numeric" className="font-medium text-foreground">
+                          {formatInteger(row.portOut)}
+                        </TableCell>
+                        {saldoCell(row.saldo)}
+                        {conversionCell(row.conversion)}
+                        {qscNumberCell(
+                          qscPoint?.available ? qscPoint.numerator : undefined,
+                          GROUP_START_CELL_CLASS,
+                        )}
+                        {qscNumberCell(
+                          qscPoint?.available ? qscPoint.denominator : undefined,
+                          GROUP_CELL_CLASS,
+                        )}
+                        {qscPercentCell(
+                          qscPoint?.available ? qscPoint.numerator : undefined,
+                          qscPoint?.available ? qscPoint.denominator : undefined,
+                          GROUP_CELL_CLASS,
+                        )}
+                        {leaderCell(row.leaderPortIn)}
+                        <TableCell align="numeric" className="font-medium text-foreground">
+                          {formatInteger(row.leaderPortInVolume)}
+                        </TableCell>
+                        {leaderCell(row.leaderPortOut)}
+                        <TableCell align="numeric" className="font-medium text-foreground">
+                          {formatInteger(row.leaderPortOutVolume)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  <TableRow className={TOTAL_ROW_CLASS}>
+                    <TableCell
+                      className={cn(STICKY_ID_CLASS, "bg-muted font-semibold text-foreground")}
+                    >
+                      Total acumulado
                     </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                      {formatInteger(row.portOut)}
+                    <TableCell align="numeric" className="font-semibold text-foreground">
+                      {formatInteger(total.portIn)}
                     </TableCell>
-                    {saldoCell(row.saldo)}
-                    {conversionCell(row.conversion)}
-                    {qscNumberCell(qscPoint?.available ? qscPoint.numerator : undefined)}
-                    {qscNumberCell(qscPoint?.available ? qscPoint.denominator : undefined)}
-                    {qscPercentCell(
-                      qscPoint?.available ? qscPoint.numerator : undefined,
-                      qscPoint?.available ? qscPoint.denominator : undefined,
-                    )}
-                    {leaderCell(row.leaderPortIn)}
-                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                      {formatInteger(row.leaderPortInVolume)}
+                    <TableCell align="numeric" className="font-semibold text-foreground">
+                      {formatInteger(total.portOut)}
                     </TableCell>
-                    {leaderCell(row.leaderPortOut)}
-                    <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                      {formatInteger(row.leaderPortOutVolume)}
+                    {saldoCell(total.saldo)}
+                    {conversionCell(total.conversion)}
+                    {qscNumberCell(qscTotal?.numerator, GROUP_START_CELL_CLASS)}
+                    {qscNumberCell(qscTotal?.denominator, GROUP_CELL_CLASS)}
+                    {qscPercentCell(qscTotal?.numerator, qscTotal?.denominator, GROUP_CELL_CLASS)}
+                    {leaderCell(total.leaderPortIn)}
+                    <TableCell align="numeric" className="font-semibold text-foreground">
+                      {formatInteger(total.leaderPortInVolume)}
+                    </TableCell>
+                    {leaderCell(total.leaderPortOut)}
+                    <TableCell align="numeric" className="font-semibold text-foreground">
+                      {formatInteger(total.leaderPortOutVolume)}
                     </TableCell>
                   </TableRow>
-                );
-              })}
-              <TableRow className="border-t-2 border-emerald-500/20 bg-emerald-500/[0.04]">
-                <TableCell className="font-semibold text-foreground">Total acumulado</TableCell>
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {formatInteger(total.portIn)}
-                </TableCell>
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {formatInteger(total.portOut)}
-                </TableCell>
-                {saldoCell(total.saldo)}
-                {conversionCell(total.conversion)}
-                {qscNumberCell(qscTotal?.numerator)}
-                {qscNumberCell(qscTotal?.denominator)}
-                {qscPercentCell(qscTotal?.numerator, qscTotal?.denominator)}
-                {leaderCell(total.leaderPortIn)}
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {formatInteger(total.leaderPortInVolume)}
-                </TableCell>
-                {leaderCell(total.leaderPortOut)}
-                <TableCell className="text-right font-semibold tabular-nums text-foreground">
-                  {formatInteger(total.leaderPortOutVolume)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
+                </TableBody>
+              </Table>
+            </TableScroll>
+            <MobileRowDetails label="Detalhe por mês" entries={detailEntries} />
+          </div>
+        )}
       </div>
-    </Card>
+    </Section>
   );
 }
 
 function ServiceTowersPanel({
   towers,
   selectedCompanies,
+  scopeLabel,
   activeIndex,
   onSelect,
   onPrevious,
@@ -1462,6 +1866,7 @@ function ServiceTowersPanel({
 }: {
   towers: ServiceTower[];
   selectedCompanies: Set<string>;
+  scopeLabel: string;
   activeIndex: number;
   onSelect: (index: number) => void;
   onPrevious: () => void;
@@ -1508,9 +1913,9 @@ function ServiceTowersPanel({
   };
   const performanceClass = (value: string | number | null, format: string) => {
     if (format !== "percent" || typeof value !== "number") return "text-foreground";
-    if (value <= 0.5) return "font-semibold text-rose-600 dark:text-rose-400";
-    if (value < 0.8) return "font-semibold text-amber-600 dark:text-amber-400";
-    if (value > 0.9) return "font-semibold text-emerald-600 dark:text-emerald-400";
+    if (value <= 0.5) return "font-semibold text-destructive";
+    if (value < 0.8) return "font-semibold text-warning";
+    if (value > 0.9) return "font-semibold text-success";
     return "text-foreground";
   };
   const showPerformance = (
@@ -1523,11 +1928,7 @@ function ServiceTowersPanel({
         normalizeCompany(column.label),
       )
     ) {
-      return (
-        <span className="inline-flex h-10 w-full items-center justify-end rounded-xl border border-primary/25 bg-primary/[0.055] px-2.5 text-right text-sm font-semibold tabular-nums text-foreground shadow-sm">
-          {formatted}
-        </span>
-      );
+      return <span className="font-semibold tabular-nums text-foreground">{formatted}</span>;
     }
     if (
       !["bgxpc", "meta", "estxpc"].includes(normalizeCompany(column.label)) ||
@@ -1540,10 +1941,10 @@ function ServiceTowersPanel({
     const color = neutral
       ? "text-foreground"
       : value > 0.9
-        ? "text-emerald-600 dark:text-emerald-400"
+        ? "text-success"
         : value <= 0.5
-          ? "text-rose-600 dark:text-rose-400"
-          : "text-orange-600 dark:text-orange-400";
+          ? "text-destructive"
+          : "text-critical";
     return (
       <span
         className={`inline-flex items-center justify-end gap-1.5 font-semibold tabular-nums ${color}`}
@@ -1554,71 +1955,85 @@ function ServiceTowersPanel({
     );
   };
 
+  const rankingLabels: Record<string, string> = {};
+  for (const column of rankingColumns) rankingLabels[column.key] = column.label;
+  const leadColumn = rankingColumns[0] ?? visibleColumns[0];
+  const detailEntries: RowDetailEntry[] = [
+    ...displayedRows.map((row) => ({
+      id: `${tower.id}-${row.partner}`,
+      title: rankingColumns.length > 0 ? `${positions.get(row)}º · ${row.partner}` : row.partner,
+      lead: leadColumn ? showPerformance(row.values[leadColumn.key], leadColumn) : undefined,
+      items: visibleColumns.map((column) => ({
+        label: column.label,
+        value: showPerformance(row.values[column.key], column),
+      })),
+    })),
+    {
+      id: `${tower.id}-total`,
+      title: focused ? "TT · Todos os parceiros" : "TT",
+      lead: leadColumn ? showPerformance(tower.total[leadColumn.key], leadColumn) : undefined,
+      items: visibleColumns.map((column) => ({
+        label: column.label,
+        value: showPerformance(tower.total[column.key], column),
+      })),
+    },
+  ];
+  const rankingDescription = rankingColumns.length
+    ? `Ranking decrescente por ${rankingColumns.map((column) => column.label).join(", ")}, com desempate por nome.`
+    : "Esta torre não possui colunas de ranking; a ordem é a da base importada.";
+
   return (
-    <Card className="overflow-hidden rounded-[2rem] border-violet-500/20 bg-gradient-to-br from-card via-card to-violet-500/[0.05] shadow-elevated">
-      <div className="flex flex-col gap-4 border-b border-violet-500/15 bg-violet-500/[0.04] px-5 py-5 sm:px-6 md:flex-row md:items-center md:justify-between md:px-7">
-        <div className="flex items-center gap-3">
-          <div className="grid size-10 place-items-center rounded-2xl bg-violet-500/[0.13] text-violet-700 shadow-sm ring-4 ring-background/40 dark:text-violet-300">
-            <BarChart3 className="size-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700 dark:text-violet-300">
-              Acompanhamento comercial
-            </p>
-            <h3 className="text-lg font-semibold tracking-tight">Torres de serviço</h3>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 self-end md:self-auto">
-          <span className="mr-1 text-xs font-medium tabular-nums text-muted-foreground">
+    <Section
+      title="Torres de serviço"
+      description={`Recorte: ${scopeLabel}. ${rankingDescription} Valores importados da base de torres; a seta indica a faixa de atingimento e a linha TT permanece com o total de todos os parceiros disponíveis no escopo autorizado.`}
+      actions={
+        <>
+          <span className="text-xs font-medium tabular-nums text-muted-foreground">
             {activeIndex + 1} / {towers.length}
           </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onPrevious}
-            className="size-9 rounded-xl border-violet-500/20 bg-background/70"
-          >
+          <Button type="button" variant="outline" size="icon" onClick={onPrevious}>
             <ChevronLeft className="size-4" />
             <span className="sr-only">Torre anterior</span>
           </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onNext}
-            className="size-9 rounded-xl border-violet-500/20 bg-background/70"
-          >
+          <Button type="button" variant="outline" size="icon" onClick={onNext}>
             <ChevronRight className="size-4" />
             <span className="sr-only">Próxima torre</span>
           </Button>
-        </div>
-      </div>
-      <div className="p-3 sm:p-5">
-        <div className="mb-4 flex flex-wrap gap-2" aria-label="Seleção de torre de serviço">
+        </>
+      }
+      bodyClassName="p-0"
+    >
+      <div className="p-4 md:p-5">
+        <div className="flex flex-wrap gap-1.5" aria-label="Seleção de torre de serviço">
           {towers.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => onSelect(index)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${index === activeIndex ? "border-violet-500/35 bg-violet-500/15 text-violet-800 dark:text-violet-200" : "border-border bg-background/65 text-muted-foreground hover:border-violet-500/25 hover:text-foreground"}`}
+              aria-current={index === activeIndex ? "true" : undefined}
+              className={cn(
+                "rounded-sm border px-3 py-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                index === activeIndex
+                  ? "border-primary bg-selection font-semibold text-primary"
+                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
             >
               {item.title}
             </button>
           ))}
         </div>
         {focused && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-violet-500/15 bg-violet-500/[0.05] px-4 py-3">
-            <span className="text-sm font-medium text-violet-700 dark:text-violet-300">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted px-3 py-2">
+            <span className="text-sm text-foreground">
               Modo foco · {focusedRows.length} parceiro(s) selecionado(s)
             </span>
             {otherRows.length > 0 && (
               <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
+                size="sm"
                 aria-expanded={showOthers}
                 onClick={() => setExpandedFocus(showOthers ? null : focusKey)}
-                className="h-8 text-violet-700 dark:text-violet-300"
               >
                 {showOthers
                   ? "Recolher demais parceiros"
@@ -1627,93 +2042,129 @@ function ServiceTowersPanel({
             )}
           </div>
         )}
-        <div className="overflow-x-auto rounded-2xl border border-violet-500/15 bg-background/80 shadow-elegant">
-          <Table className="min-w-max table-fixed">
-            <TableHeader className="bg-violet-500/[0.05] [&_th]:h-auto [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-violet-500/15 [&_th]:px-4 [&_th]:py-3.5 [&_th]:text-[10px] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="sticky left-0 z-10 min-w-[190px] bg-violet-500/[0.05]">
-                  NM_REDE
-                </TableHead>
-                {visibleColumns.map((column) => (
-                  <TableHead key={column.key} className="min-w-[116px] text-right">
-                    {column.label}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
-            <TableBody className="[&_td]:whitespace-nowrap [&_td]:px-4 [&_td]:py-3.5 [&_tr]:border-violet-500/[0.09] [&_tr]:transition-colors [&_tr:hover]:bg-violet-500/[0.035]">
-              {focused && focusedRows.length === 0 && (
-                <TableRow>
-                  <TableCell
-                    colSpan={visibleColumns.length + 1}
-                    className="text-center text-muted-foreground"
-                  >
-                    Nenhum dado para os parceiros selecionados nesta torre.
-                  </TableCell>
-                </TableRow>
-              )}
-              {displayedRows.map((row) => (
-                <TableRow
-                  key={`${tower.id}-${row.partner}`}
-                  className={
-                    focused && selectedCompanies.has(normalizeCompany(row.partner))
-                      ? "bg-violet-500/[0.07]"
-                      : undefined
-                  }
-                >
-                  <TableCell className="sticky left-0 z-[1] bg-background font-semibold text-foreground group-hover:bg-violet-500/[0.035]">
-                    {rankingColumns.length > 0 && (
-                      <span className="mr-2 inline-flex min-w-7 justify-center rounded-lg bg-violet-500/10 px-1.5 py-1 text-xs font-bold tabular-nums text-violet-700 dark:text-violet-300">
-                        {positions.get(row)}º
-                      </span>
+        <div className="mt-4">
+          <TableScroll>
+            <Table className="min-w-max table-fixed">
+              <TableHeader className={TABLE_HEADER_CLASS}>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead
+                    className={cn(
+                      STICKY_ID_CLASS,
+                      STICKY_ID_WIDTH,
+                      "min-w-[168px] max-w-[168px] bg-muted sm:min-w-[240px] sm:max-w-[240px]",
                     )}
-                    {row.partner}
+                  >
+                    NM_REDE
+                  </TableHead>
+                  {visibleColumns.map((column) => (
+                    <TableHead key={column.key} align="numeric" className="min-w-[116px]">
+                      {column.label}
+                    </TableHead>
+                  ))}
+                </TableRow>
+              </TableHeader>
+              <TableBody className={cn(TABLE_BODY_CLASS, "[&_td:first-child]:whitespace-normal")}>
+                {focused && focusedRows.length === 0 && (
+                  <TableRow>
+                    <TableCell
+                      colSpan={visibleColumns.length + 1}
+                      className="text-center text-muted-foreground"
+                    >
+                      Nenhum dado para os parceiros selecionados nesta torre.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {displayedRows.map((row) => {
+                  const highlighted =
+                    focused && selectedCompanies.has(normalizeCompany(row.partner));
+                  return (
+                    <TableRow
+                      key={`${tower.id}-${row.partner}`}
+                      className={highlighted ? "bg-selection" : undefined}
+                    >
+                      {/* Identificação com largura própria: o nome longo quebra dentro da
+                          coluna em vez de invadir os números da linha, e acompanha a
+                          rolagem horizontal para não se perder no celular. */}
+                      <TableCell
+                        className={cn(
+                          STICKY_ID_CLASS,
+                          STICKY_ID_WIDTH,
+                          "min-w-[168px] max-w-[168px] align-middle font-medium text-foreground sm:min-w-[240px] sm:max-w-[240px]",
+                          highlighted ? "bg-selection" : "bg-card",
+                        )}
+                      >
+                        <span className="flex items-start gap-2">
+                          {rankingColumns.length > 0 && (
+                            <span className="mt-px inline-flex min-w-6 shrink-0 justify-center rounded-sm bg-muted px-1 py-0.5 text-xs font-semibold tabular-nums text-muted-foreground">
+                              {positions.get(row)}º
+                            </span>
+                          )}
+                          <span className="min-w-0 break-words leading-snug" title={row.partner}>
+                            {row.partner}
+                          </span>
+                        </span>
+                      </TableCell>
+                      {visibleColumns.map((column) => (
+                        <TableCell
+                          key={column.key}
+                          align="numeric"
+                          className={performanceClass(row.values[column.key], column.format)}
+                        >
+                          {showPerformance(row.values[column.key], column)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  );
+                })}
+                {focused && otherRows.length > 0 && (
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={visibleColumns.length + 1} className="p-0">
+                      <div className="sticky left-0 w-fit px-3 py-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setExpandedFocus(showOthers ? null : focusKey)}
+                          aria-expanded={showOthers}
+                        >
+                          {showOthers
+                            ? "Recolher demais parceiros"
+                            : `Expandir demais parceiros (${otherRows.length})`}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )}
+                <TableRow className={TOTAL_ROW_CLASS}>
+                  <TableCell
+                    className={cn(
+                      STICKY_ID_CLASS,
+                      STICKY_ID_WIDTH,
+                      "min-w-[168px] max-w-[168px] bg-muted font-semibold text-foreground sm:min-w-[240px] sm:max-w-[240px]",
+                    )}
+                  >
+                    {focused ? "TT · Todos os parceiros" : "TT"}
                   </TableCell>
                   {visibleColumns.map((column) => (
                     <TableCell
                       key={column.key}
-                      className={`text-right font-medium tabular-nums ${performanceClass(row.values[column.key], column.format)}`}
+                      align="numeric"
+                      className={cn(
+                        "font-semibold",
+                        performanceClass(tower.total[column.key], column.format),
+                      )}
                     >
-                      {showPerformance(row.values[column.key], column)}
+                      {showPerformance(tower.total[column.key], column)}
                     </TableCell>
                   ))}
                 </TableRow>
-              ))}
-              {focused && otherRows.length > 0 && (
-                <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 1}>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      onClick={() => setExpandedFocus(showOthers ? null : focusKey)}
-                      aria-expanded={showOthers}
-                      className="w-full rounded-xl text-violet-700 dark:text-violet-300"
-                    >
-                      {showOthers
-                        ? "Recolher demais parceiros"
-                        : `Expandir demais parceiros (${otherRows.length})`}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              )}
-              <TableRow className="border-t-2 border-violet-500/20 bg-violet-500/[0.05]">
-                <TableCell className="sticky left-0 z-[1] bg-violet-500/[0.05] font-semibold text-foreground">
-                  {focused ? "TT · Todos os parceiros" : "TT"}
-                </TableCell>
-                {visibleColumns.map((column) => (
-                  <TableCell
-                    key={column.key}
-                    className={`text-right font-semibold tabular-nums ${performanceClass(tower.total[column.key], column.format)}`}
-                  >
-                    {showPerformance(tower.total[column.key], column)}
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
+          </TableScroll>
+          <MobileRowDetails label="Detalhe por parceiro" entries={detailEntries} />
         </div>
       </div>
-    </Card>
+    </Section>
   );
 }
 
@@ -1801,30 +2252,31 @@ function YoyPanel({ rows }: { rows: ResultRow[] }) {
   );
 }
 
+/**
+ * Célula editável.
+ *
+ * Campo discreto com borda e foco do próprio primitivo: sem cápsula colorida, para
+ * que "editável" se distinga de "valor calculado" pela forma, não pela cor de fundo.
+ * A leitura, o parsing e o arredondamento continuam idênticos.
+ */
 function EditableNumberCell({
   ariaLabel,
   value,
-  tone,
   onChange,
 }: {
   ariaLabel: string;
   value: number;
-  tone: "previous" | "current";
   onChange: (value: string) => void;
 }) {
   const [draft, setDraft] = useState(() => formatInputNumber(value));
   const [focused, setFocused] = useState(false);
-  const toneClass =
-    tone === "previous"
-      ? "border-violet-500/20 bg-violet-500/[0.055] focus-visible:border-violet-500/50 focus-visible:ring-violet-500/15"
-      : "border-primary/25 bg-primary/[0.055] focus-visible:border-primary/50 focus-visible:ring-primary/15";
 
   useEffect(() => {
     if (!focused) setDraft(formatInputNumber(value));
   }, [focused, value]);
 
   return (
-    <TableCell>
+    <TableCell align="numeric">
       <Input
         aria-label={ariaLabel}
         type="text"
@@ -1844,7 +2296,7 @@ function EditableNumberCell({
           setDraft(formatInputNumber(parsed));
           onChange(String(parsed));
         }}
-        className={`h-10 w-full rounded-xl px-2.5 text-right text-sm font-semibold tabular-nums shadow-sm ${toneClass}`}
+        className="h-9 w-full px-2 text-right text-sm font-medium tabular-nums md:text-sm"
       />
     </TableCell>
   );
@@ -1852,48 +2304,39 @@ function EditableNumberCell({
 
 function HighlightCard({ label, yoy, gap }: { label: string; yoy: number | null; gap: number }) {
   const positive = yoy != null && yoy >= 0;
-  const toneClass = positive
-    ? "border-emerald-500/20 bg-emerald-500/[0.06]"
-    : "border-rose-500/20 bg-rose-500/[0.055]";
-  const iconClass = positive
-    ? "bg-emerald-500/[0.13] text-emerald-600 dark:text-emerald-400"
-    : "bg-rose-500/[0.13] text-rose-600 dark:text-rose-400";
-  const Icon = positive ? TrendingUp : TrendingDown;
   return (
-    <div
-      className={`flex items-center justify-between gap-4 rounded-2xl border p-4 shadow-sm backdrop-blur-sm transition-transform duration-200 hover:-translate-y-0.5 hover:shadow-elegant ${toneClass}`}
-    >
-      <div className="flex items-center gap-3">
-        <div
-          className={`grid size-9 shrink-0 place-items-center rounded-xl shadow-sm ${iconClass}`}
-        >
-          <Icon className="size-4" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground">{label}</p>
-          <p className="mt-0.5 text-[11px] font-medium text-muted-foreground">Crescimento YoY</p>
-        </div>
+    <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-card p-4">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">{label}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">YoY e Gap importados</p>
       </div>
-      <div className="text-right">
-        <MetricValue value={yoy == null ? "—" : fmtPct(yoy)} positive={positive} />
-        <p className="mt-1 text-[11px] font-medium tabular-nums text-muted-foreground">
-          Gap {fmtDec(gap)}
+      <div className="shrink-0 text-right">
+        <p className="text-2xl font-semibold leading-8 tracking-tight">
+          <MetricValue value={yoy == null ? "—" : fmtPct(yoy)} positive={positive} />
         </p>
+        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">Gap {fmtDec(gap)}</p>
       </div>
     </div>
   );
 }
 
+/**
+ * Valor com direção: a seta indica o sentido e a cor indica o significado comercial,
+ * como já era. Indisponível ("—") não recebe seta nem cor de resultado.
+ */
 function MetricValue({ value, positive }: { value: string; positive: boolean }) {
   const Icon = positive ? TrendingUp : TrendingDown;
-  const color = positive
-    ? "text-emerald-600 dark:text-emerald-400"
-    : "text-rose-600 dark:text-rose-400";
+  const unavailable = value === "—";
+  const color = unavailable
+    ? "text-muted-foreground"
+    : positive
+      ? "text-success"
+      : "text-destructive";
   return (
     <span
       className={`inline-flex items-center justify-end gap-1.5 font-semibold tabular-nums ${color}`}
     >
-      {value !== "—" && <Icon className="size-3.5" />}
+      {!unavailable && <Icon className="size-3.5" aria-hidden="true" />}
       {value}
     </span>
   );

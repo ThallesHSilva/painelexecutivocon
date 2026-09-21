@@ -15,34 +15,79 @@ export type CertificationQscRow = Record<CertificationQscField, string> & {
 
 const MONTH_FIELDS: CertificationQscField[] = ["jan", "feb", "mar", "apr", "may", "jun"];
 
+/**
+ * Identificação persistente na rolagem horizontal, igual à usada na tabela principal
+ * da Certificação: o indicador continua visível enquanto os meses rolam.
+ */
+const STICKY_ID_CLASS = "sticky left-0 z-[1] whitespace-normal bg-card";
+const STICKY_ID_GROUP_CLASS = "sticky left-0 z-[1] whitespace-normal bg-muted";
+const FIELD_CLASS = "h-9 px-2 text-sm";
+
 export function CertificationQscHistory({
   rows,
   totalPoints,
+  monthLabels,
   onChange,
   readOnly = false,
 }: {
   rows: CertificationQscRow[];
   totalPoints: string;
+  /** Rótulos do ciclo ativo, usados apenas nos nomes acessíveis dos campos. */
+  monthLabels: string[];
   onChange: (rowId: string, field: CertificationQscField, value: string) => void;
   readOnly?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
+  /**
+   * Resultado fechado é texto; apenas o ciclo em simulação apresenta campo. Isso evita
+   * que um valor somente de leitura pareça editável por estar dentro de um input.
+   */
+  const cell = (
+    key: string,
+    label: string,
+    value: string,
+    field: CertificationQscField,
+    rowId: string,
+    align: "numeric" | "state",
+    className?: string,
+  ) => (
+    <TableCell key={key} align={align} className={className}>
+      {readOnly ? (
+        <span className="font-medium text-foreground">{value.trim() === "" ? "—" : value}</span>
+      ) : (
+        <Input
+          aria-label={label}
+          type="text"
+          inputMode={align === "numeric" ? "decimal" : "text"}
+          value={value}
+          onChange={(event) => onChange(rowId, field, event.target.value)}
+          className={cn(
+            FIELD_CLASS,
+            align === "numeric" ? "text-right tabular-nums" : "text-center",
+          )}
+        />
+      )}
+    </TableCell>
+  );
+
   return (
     <Fragment>
-      <TableRow className="bg-primary/[0.045] hover:bg-primary/[0.07]">
-        <TableCell className="px-4">
+      <TableRow className="bg-muted/60">
+        <TableCell className={cn(STICKY_ID_GROUP_CLASS, "font-semibold text-foreground")}>
           <button
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded((current) => !current)}
-            className="group flex w-full items-center gap-3 text-left font-semibold text-foreground"
+            className="flex w-full items-center gap-2 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-primary/[0.13] text-primary transition-colors group-hover:bg-primary/[0.2]">
-              <ChevronDown
-                className={cn("size-4 transition-transform", expanded && "rotate-180")}
-              />
-            </span>
+            <ChevronDown
+              aria-hidden="true"
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform duration-150",
+                expanded && "rotate-180",
+              )}
+            />
             <span>QSC</span>
           </button>
         </TableCell>
@@ -50,70 +95,44 @@ export function CertificationQscHistory({
           <TableCell key={field} aria-hidden="true" />
         ))}
         <TableCell aria-hidden="true" />
-        <TableCell>
-          <Input
-            aria-label="Pontuação total do QSC"
-            type="text"
-            inputMode="decimal"
-            value={totalPoints}
-            onChange={(event) => onChange("qsc-total", "points", event.target.value)}
-            disabled={readOnly}
-            className="h-9 rounded-xl border-primary/25 bg-primary/[0.07] px-2.5 text-right text-sm font-bold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
-          />
-        </TableCell>
+        {cell(
+          "qsc-total-points",
+          "Pontuação total do QSC",
+          totalPoints,
+          "points",
+          "qsc-total",
+          "numeric",
+          "font-semibold",
+        )}
         <TableCell aria-hidden="true" />
       </TableRow>
       {expanded &&
         rows.map((row) => (
-          <TableRow key={row.id} className="hover:bg-primary/[0.03]">
-            <TableCell className={cn("bg-primary/[0.018] px-4 pl-12 font-medium", row.accent)}>
+          <TableRow key={row.id}>
+            {/* O indicador é identificado pelo nome; a cor não carregava significado aqui. */}
+            <TableCell className={cn(STICKY_ID_CLASS, "pl-8 font-medium text-foreground")}>
               {row.indicator}
             </TableCell>
-            {MONTH_FIELDS.map((field) => (
-              <TableCell key={field} className="bg-primary/[0.018]">
-                <Input
-                  aria-label={`${field} de ${row.indicator}`}
-                  type="text"
-                  inputMode="decimal"
-                  value={row[field]}
-                  onChange={(event) => onChange(row.id, field, event.target.value)}
-                  disabled={readOnly}
-                  className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-right text-sm font-semibold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
-                />
-              </TableCell>
-            ))}
-            <TableCell className="bg-primary/[0.025]">
-              <Input
-                aria-label={`Totalizador de ${row.indicator}`}
-                type="text"
-                inputMode="decimal"
-                value={row.totalizer}
-                onChange={(event) => onChange(row.id, "totalizer", event.target.value)}
-                disabled={readOnly}
-                className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-right text-sm font-bold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
-              />
-            </TableCell>
-            <TableCell>
-              <Input
-                aria-label={`Pontos de ${row.indicator}`}
-                type="text"
-                inputMode="decimal"
-                value={row.points}
-                onChange={(event) => onChange(row.id, "points", event.target.value)}
-                disabled={readOnly}
-                className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-right text-sm font-bold tabular-nums shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
-              />
-            </TableCell>
-            <TableCell>
-              <Input
-                aria-label={`Faixa de ${row.indicator}`}
-                type="text"
-                value={row.band}
-                onChange={(event) => onChange(row.id, "band", event.target.value)}
-                disabled={readOnly}
-                className="h-9 rounded-xl border-primary/20 bg-primary/[0.045] px-2.5 text-left text-sm font-semibold shadow-sm focus-visible:border-primary/50 focus-visible:ring-primary/15"
-              />
-            </TableCell>
+            {MONTH_FIELDS.map((field, index) =>
+              cell(
+                field,
+                `${monthLabels[index] ?? field} de ${row.indicator}`,
+                row[field],
+                field,
+                row.id,
+                "numeric",
+              ),
+            )}
+            {cell(
+              "totalizer",
+              `Totalizador de ${row.indicator}`,
+              row.totalizer,
+              "totalizer",
+              row.id,
+              "numeric",
+            )}
+            {cell("points", `Pts de ${row.indicator}`, row.points, "points", row.id, "numeric")}
+            {cell("band", `Faixa de ${row.indicator}`, row.band, "band", row.id, "state")}
           </TableRow>
         ))}
     </Fragment>
