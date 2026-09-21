@@ -110,7 +110,7 @@ export function KpiCard({
   return (
     <Card
       className={cn(
-        "relative flex flex-col p-4 md:p-5",
+        "premium-kpi relative flex min-h-[132px] flex-col p-4 md:p-5",
         emphasis && "border-primary bg-primary text-primary-foreground",
         className,
       )}

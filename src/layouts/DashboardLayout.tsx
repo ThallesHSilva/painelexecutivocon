@@ -80,7 +80,7 @@ function NavItems({
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={
-          `relative flex items-center rounded-sm text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${nested ? "gap-3 px-3 py-2.5" : mobile ? "gap-3 px-3 py-3" : "gap-1.5 px-2 py-2 xl:gap-2 xl:px-2.5"} ` +
+          `premium-nav-link relative flex items-center rounded-md text-sm transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background ${nested ? "gap-3 px-3 py-2.5" : mobile ? "gap-3 px-3 py-3" : "gap-1.5 px-2 py-2 xl:gap-2 xl:px-2.5"} ` +
           (active
             ? "bg-selection font-semibold text-primary"
             : "text-foreground/80 hover:bg-muted hover:text-foreground")
@@ -243,7 +243,7 @@ function Header({
     }
   };
   return (
-    <header className="sticky top-0 z-30 border-b border-border bg-background">
+    <header className="dashboard-header sticky top-0 z-30 border-b border-border bg-background">
       <div className="relative mx-auto max-w-[1600px] px-4 md:px-6 xl:px-8">
         <div className="flex h-16 items-center gap-2">
           <Button
@@ -335,7 +335,7 @@ export function DashboardLayout({ title, children }: { title: string; children: 
   }, []);
 
   return (
-    <div className="min-h-screen w-full bg-background">
+    <div className="dashboard-shell min-h-screen w-full bg-background">
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetTrigger asChild>
           <span className="sr-only">Abrir navegação</span>
@@ -352,7 +352,7 @@ export function DashboardLayout({ title, children }: { title: string; children: 
       </Sheet>
 
       <Header role={role} title={title} onMenu={() => setDrawerOpen(true)} />
-      <main className="mx-auto max-w-[1600px] px-4 py-5 md:px-6 md:py-7 xl:px-8 xl:py-8">
+      <main className="dashboard-main mx-auto max-w-[1600px] px-4 py-5 md:px-6 md:py-7 xl:px-8 xl:py-8">
         {children}
       </main>
     </div>

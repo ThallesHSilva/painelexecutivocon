@@ -23,7 +23,7 @@ export function ChartCard({
   className?: string;
 }) {
   return (
-    <Card className={cn("overflow-hidden p-0", className)}>
+    <Card className={cn("premium-chart overflow-hidden rounded-xl p-0", className)}>
       <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
         <div className="min-w-0">
           <h3 className="text-[15px] font-semibold tracking-tight text-foreground">{title}</h3>

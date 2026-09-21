@@ -75,7 +75,7 @@ export function TableScroll({
         onScroll={measure}
         role="group"
         aria-label="Tabela com rolagem horizontal"
-        className={cn("overflow-x-auto", className)}
+        className={cn("premium-table overflow-x-auto rounded-xl border", className)}
       >
         {children}
       </div>
