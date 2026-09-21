@@ -33,8 +33,10 @@ test("Resultados YoY detecta o bloco atual no layout com colunas G/H", () => {
 
   assert.equal(columns.meta, 6);
   assert.equal(columns.real, 7);
+  assert.equal(columns.average, 11);
   assert.equal(cells.meta, 6);
   assert.equal(cells.real, 7);
+  assert.equal(cells.average, 11);
   assert.equal(cells.attainment, 8);
   assert.equal(cells.gap, 9);
 });

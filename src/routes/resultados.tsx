@@ -51,7 +51,7 @@ import type {
 
 type PeriodInput = { meta: number; real: number };
 type EditableMetric = { previous: PeriodInput; current: PeriodInput };
-type PeriodCalculation = { attainment: number; gap: number; average: number };
+type PeriodCalculation = { attainment: number | null; gap: number; average: number };
 type ResultRow = {
   id: string;
   product: string;
@@ -67,7 +67,10 @@ type CertificationField =
   "jan" | "feb" | "mar" | "apr" | "may" | "jun" | "totalizer" | "points" | "band";
 type CertificationRow = Record<CertificationField, string> & { id: string; indicator: string };
 type ReportSource = ResultadosYoySnapshot["source"];
-type SourceRecord = ResultadosYoySnapshot["records"][number];
+type SourceRecord = Pick<
+  ResultadosYoySnapshot["records"][number],
+  "company" | "product" | "meta" | "real" | "average" | "previousMeta" | "previousReal"
+>;
 type AnalyticalRecord = PortabilidadeSnapshot["records"][number];
 type RuntimeResults = {
   resultados: { source: ReportSource; records: SourceRecord[] };
@@ -88,6 +91,12 @@ type PortabilitySummaryRow = {
   leaderPortOutVolume: number;
 };
 type PortabilitySummaryTotal = Omit<PortabilitySummaryRow, "month" | "label">;
+
+const calculatePeriod = (input: PeriodInput, average: number): PeriodCalculation => ({
+  attainment: input.meta > 0 ? input.real / input.meta : null,
+  gap: input.real - input.meta,
+  average,
+});
 
 const INITIAL_CERTIFICATION_ROWS: CertificationRow[] = [
   {
@@ -268,10 +277,6 @@ function recordsFromSpreadsheet(rows: unknown[][]): SourceRecord[] {
       product: productLabels[normalizeCompany(product)] ?? product,
       meta,
       real,
-      attainment: Number.isFinite(numberFromCell(cells.attainment))
-        ? numberFromCell(cells.attainment)
-        : 0,
-      gap: Number.isFinite(numberFromCell(cells.gap)) ? numberFromCell(cells.gap) : 0,
       average: Number.isFinite(numberFromCell(cells.average)) ? numberFromCell(cells.average) : 0,
       previousMeta: Number.isFinite(numberFromCell(cells.previousMeta))
         ? numberFromCell(cells.previousMeta)
@@ -279,17 +284,6 @@ function recordsFromSpreadsheet(rows: unknown[][]): SourceRecord[] {
       previousReal: Number.isFinite(numberFromCell(cells.previousReal))
         ? numberFromCell(cells.previousReal)
         : 0,
-      previousAttainment: Number.isFinite(numberFromCell(cells.previousAttainment))
-        ? numberFromCell(cells.previousAttainment)
-        : 0,
-      previousGap: Number.isFinite(numberFromCell(cells.previousGap))
-        ? numberFromCell(cells.previousGap)
-        : 0,
-      previousAverage: Number.isFinite(numberFromCell(cells.previousAverage))
-        ? numberFromCell(cells.previousAverage)
-        : 0,
-      yoy: Number.isFinite(numberFromCell(cells.yoy)) ? numberFromCell(cells.yoy) : 0,
-      yoyGap: Number.isFinite(numberFromCell(cells.yoyGap)) ? numberFromCell(cells.yoyGap) : 0,
     });
   }
   if (!records.length)
@@ -731,17 +725,9 @@ function ResultadosPage() {
         product: string;
         meta: number;
         real: number;
-        attainment: number;
-        gap: number;
         average: number;
         previousMeta: number;
         previousReal: number;
-        previousAttainment: number;
-        previousGap: number;
-        previousAverage: number;
-        yoy: number;
-        yoyGap: number;
-        recordCount: number;
       }
     >();
 
@@ -750,45 +736,19 @@ function ResultadosPage() {
         product: record.product,
         meta: 0,
         real: 0,
-        attainment: 0,
-        gap: 0,
         average: 0,
         previousMeta: 0,
         previousReal: 0,
-        previousAttainment: 0,
-        previousGap: 0,
-        previousAverage: 0,
-        yoy: 0,
-        yoyGap: 0,
-        recordCount: 0,
       };
       current.meta += record.meta;
       current.real += record.real;
-      current.attainment += record.attainment ?? 0;
-      current.gap += record.gap ?? 0;
       current.average += record.average ?? 0;
       current.previousMeta += record.previousMeta;
       current.previousReal += record.previousReal;
-      current.previousAttainment += record.previousAttainment ?? 0;
-      current.previousGap += record.previousGap ?? 0;
-      current.previousAverage += record.previousAverage ?? 0;
-      current.yoy += record.yoy ?? 0;
-      current.yoyGap += record.yoyGap ?? 0;
-      current.recordCount += 1;
       byProduct.set(record.product, current);
     }
 
-    return [...byProduct.values()].map((record) =>
-      record.recordCount === 1
-        ? record
-        : {
-            ...record,
-            attainment: record.meta > 0 ? record.real / record.meta : 0,
-            previousAttainment:
-              record.previousMeta > 0 ? record.previousReal / record.previousMeta : 0,
-            yoy: record.previousReal > 0 ? record.real / record.previousReal - 1 : 0,
-          },
-    );
+    return [...byProduct.values()];
   }, [selectedCompanies, sourceRecords]);
 
   const scopedBestGuessRecords = useMemo(
@@ -831,21 +791,17 @@ function ResultadosPage() {
           product: record.product,
           previousInput: editable.previous,
           currentInput: editable.current,
-          previous: {
-            attainment: record.previousAttainment,
-            gap: record.previousGap,
-            average: record.previousAverage,
-          },
-          current: {
-            attainment: record.attainment,
-            gap: record.gap,
-            average: record.average,
-          },
-          yoy: record.yoy,
-          yoyGap: record.yoyGap,
+          previous: calculatePeriod(
+            editable.previous,
+            editable.previous.real / (reportSource?.monthsElapsed ?? 1),
+          ),
+          current: calculatePeriod(editable.current, record.average),
+          yoy:
+            editable.previous.real > 0 ? editable.current.real / editable.previous.real - 1 : null,
+          yoyGap: editable.current.real - editable.previous.real,
         };
       }),
-    [inputs, scopeKey, scopedRecords],
+    [inputs, reportSource?.monthsElapsed, scopeKey, scopedRecords],
   );
 
   const highlights = [
@@ -1246,7 +1202,7 @@ function PeriodPanel({
     sourcePeriod
       ? `Período importado: ${sourcePeriod}${previousPeriodLabel ? ` · comparação com ${previousPeriodLabel}` : ""}.`
       : null,
-    "Meta e Real são editáveis nesta tela e recalculam o Total, o % do Total e o YoY do Total. Por produto, %, Gap TT, Média/mês e YoY são campos importados da planilha e não são recalculados aqui.",
+    "Meta e Real são editáveis nesta tela. Por produto, %, Gap TT e YoY são recalculados; Média/mês é importada da coluna Média_26 da planilha.",
   ]
     .filter(Boolean)
     .join(" ");
