@@ -50,7 +50,6 @@ import type {
 } from "@/lib/snapshot-types";
 
 type PeriodInput = { meta: number; real: number };
-type EditableMetric = { previous: PeriodInput; current: PeriodInput };
 type PeriodCalculation = { attainment: number | null; gap: number; average: number };
 type ResultRow = {
   id: string;
@@ -62,7 +61,6 @@ type ResultRow = {
   yoy: number | null;
   yoyGap: number;
 };
-type PeriodKey = keyof EditableMetric;
 type CertificationField =
   "jan" | "feb" | "mar" | "apr" | "may" | "jun" | "totalizer" | "points" | "band";
 type CertificationRow = Record<CertificationField, string> & { id: string; indicator: string };
@@ -205,32 +203,6 @@ const INITIAL_CERTIFICATION_ROWS: CertificationRow[] = [
   },
 ];
 
-const asNumber = (value: string) => (Number.isFinite(Number(value)) ? Number(value) : 0);
-const inputNumberFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-const formatInputNumber = (value: number) =>
-  inputNumberFormatter.format(Number.isFinite(value) ? value : 0);
-const parseInputNumber = (value: string) => {
-  const compact = value.replace(/\s/g, "");
-  if (!compact) return 0;
-
-  const commaIndex = compact.lastIndexOf(",");
-  const dotIndexes = [...compact].flatMap((character, index) => (character === "." ? [index] : []));
-  let normalized = compact;
-  if (commaIndex >= 0) {
-    normalized = compact.replace(/\./g, "").replace(",", ".");
-  } else if (
-    dotIndexes.length > 1 ||
-    (dotIndexes.length === 1 && compact.length - dotIndexes[0] - 1 === 3)
-  ) {
-    normalized = compact.replace(/\./g, "");
-  }
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
 const normalizeCompany = (value: string) =>
   value
     .normalize("NFD")
@@ -648,7 +620,6 @@ function ResultadosPage() {
   const [analyticalRecords, setAnalyticalRecords] = useState<AnalyticalRecord[]>([]);
   const [completeTowers, setCompleteTowers] = useState<ServiceTower[]>([]);
   const [towerIndex, setTowerIndex] = useState(0);
-  const [inputs, setInputs] = useState<Record<string, EditableMetric>>({});
   const [uploadState, setUploadState] = useState<{
     status: "idle" | "loading" | "success" | "error";
     message: string;
@@ -782,26 +753,23 @@ function ResultadosPage() {
     () =>
       scopedRecords.map((record) => {
         const id = `${scopeKey}:${record.product}`;
-        const editable = inputs[id] ?? {
-          previous: { meta: record.previousMeta, real: record.previousReal },
-          current: { meta: record.meta, real: record.real },
-        };
+        const previousInput = { meta: record.previousMeta, real: record.previousReal };
+        const currentInput = { meta: record.meta, real: record.real };
         return {
           id,
           product: record.product,
-          previousInput: editable.previous,
-          currentInput: editable.current,
+          previousInput,
+          currentInput,
           previous: calculatePeriod(
-            editable.previous,
-            editable.previous.real / (reportSource?.monthsElapsed ?? 1),
+            previousInput,
+            previousInput.real / (reportSource?.monthsElapsed ?? 1),
           ),
-          current: calculatePeriod(editable.current, record.average),
-          yoy:
-            editable.previous.real > 0 ? editable.current.real / editable.previous.real - 1 : null,
-          yoyGap: editable.current.real - editable.previous.real,
+          current: calculatePeriod(currentInput, record.average),
+          yoy: previousInput.real > 0 ? currentInput.real / previousInput.real - 1 : null,
+          yoyGap: currentInput.real - previousInput.real,
         };
       }),
-    [inputs, reportSource?.monthsElapsed, scopeKey, scopedRecords],
+    [reportSource?.monthsElapsed, scopeKey, scopedRecords],
   );
 
   const highlights = [
@@ -812,24 +780,6 @@ function ResultadosPage() {
     const row = rows.find((item) => item.product === highlight.product);
     return row ? [{ ...highlight, row }] : [];
   });
-
-  const updateValue = (
-    product: string,
-    period: PeriodKey,
-    field: keyof PeriodInput,
-    value: string,
-  ) => {
-    setInputs((current) => ({
-      ...current,
-      [product]: {
-        ...(current[product] ?? { previous: { meta: 0, real: 0 }, current: { meta: 0, real: 0 } }),
-        [period]: {
-          ...(current[product]?.[period] ?? { meta: 0, real: 0 }),
-          [field]: Math.max(0, asNumber(value)),
-        },
-      },
-    }));
-  };
 
   const handleSpreadsheetUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -884,7 +834,6 @@ function ResultadosPage() {
       } else {
         const importedRecords = recordsFromSpreadsheet(rows);
         setSourceRecords(importedRecords);
-        setInputs({});
         setUploadState({
           status: "success",
           message: `${file.name}: ${importedRecords.length} linhas atualizadas.`,
@@ -1038,7 +987,6 @@ function ResultadosPage() {
               periodLabel={reportSource?.period}
               previousPeriodLabel={reportSource?.previousPeriod}
               scopeLabel={scopeLabel}
-              onUpdate={updateValue}
             />
           )}
           {loading ? (
@@ -1162,16 +1110,13 @@ function PeriodPanel({
   periodLabel: sourcePeriod,
   previousPeriodLabel,
   scopeLabel,
-  onUpdate,
 }: {
   rows: ResultRow[];
-  period: PeriodKey;
+  period: "previous" | "current";
   periodLabel?: string;
   previousPeriodLabel?: string;
   scopeLabel: string;
-  onUpdate: (product: string, period: PeriodKey, field: keyof PeriodInput, value: string) => void;
 }) {
-  const periodLabel = (sourcePeriod ?? "YTD").replace("YTD ", "");
   const calculationKey = period;
   const inputKey = period === "current" ? "currentInput" : "previousInput";
   const totalInput = rows.reduce<PeriodInput>(
@@ -1202,7 +1147,7 @@ function PeriodPanel({
     sourcePeriod
       ? `Período importado: ${sourcePeriod}${previousPeriodLabel ? ` · comparação com ${previousPeriodLabel}` : ""}.`
       : null,
-    "Meta e Real são editáveis nesta tela. Por produto, %, Gap TT e YoY são recalculados; Média/mês é importada da coluna Média_26 da planilha.",
+    "Meta e Real são valores fixos importados da planilha. Por produto, %, Gap TT e YoY são recalculados; Média/mês é importada da coluna Média_26 da planilha.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -1220,8 +1165,8 @@ function PeriodPanel({
         />
       ),
       items: [
-        { label: "Meta (editável)", value: fmtDec(input.meta) },
-        { label: "Real (editável)", value: fmtDec(input.real) },
+        { label: "Meta", value: fmtDec(input.meta) },
+        { label: "Real", value: fmtDec(input.real) },
         { label: "%", value: fmtPct(calculation.attainment) },
         { label: "Gap TT", value: fmtDec(calculation.gap) },
         { label: "Média/mês", value: fmtDec(calculation.average) },
@@ -1300,16 +1245,18 @@ function PeriodPanel({
                       >
                         {row.product}
                       </TableCell>
-                      <EditableNumberCell
-                        ariaLabel={`Meta ${periodLabel} de ${row.product}`}
-                        value={input.meta}
-                        onChange={(value) => onUpdate(row.id, period, "meta", value)}
-                      />
-                      <EditableNumberCell
-                        ariaLabel={`Real ${periodLabel} de ${row.product}`}
-                        value={input.real}
-                        onChange={(value) => onUpdate(row.id, period, "real", value)}
-                      />
+                      <TableCell
+                        align="numeric"
+                        className="font-medium tabular-nums text-foreground"
+                      >
+                        {fmtDec(input.meta)}
+                      </TableCell>
+                      <TableCell
+                        align="numeric"
+                        className="font-medium tabular-nums text-foreground"
+                      >
+                        {fmtDec(input.real)}
+                      </TableCell>
                       <TableCell align="numeric">
                         <MetricValue
                           value={fmtPct(calculation.attainment)}
@@ -2206,56 +2153,6 @@ function YoyPanel({ rows }: { rows: ResultRow[] }) {
         </div>
       </div>
     </Card>
-  );
-}
-
-/**
- * Célula editável.
- *
- * Campo discreto com borda e foco do próprio primitivo: sem cápsula colorida, para
- * que "editável" se distinga de "valor calculado" pela forma, não pela cor de fundo.
- * A leitura, o parsing e o arredondamento continuam idênticos.
- */
-function EditableNumberCell({
-  ariaLabel,
-  value,
-  onChange,
-}: {
-  ariaLabel: string;
-  value: number;
-  onChange: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(() => formatInputNumber(value));
-  const [focused, setFocused] = useState(false);
-
-  useEffect(() => {
-    if (!focused) setDraft(formatInputNumber(value));
-  }, [focused, value]);
-
-  return (
-    <TableCell align="numeric">
-      <Input
-        aria-label={ariaLabel}
-        type="text"
-        inputMode="decimal"
-        value={draft}
-        onFocus={(event) => {
-          setFocused(true);
-          event.currentTarget.select();
-        }}
-        onChange={(event) => {
-          setDraft(event.target.value);
-          onChange(String(Math.max(0, parseInputNumber(event.target.value))));
-        }}
-        onBlur={() => {
-          setFocused(false);
-          const parsed = Math.max(0, parseInputNumber(draft));
-          setDraft(formatInputNumber(parsed));
-          onChange(String(parsed));
-        }}
-        className="h-9 w-full px-2 text-right text-sm font-medium tabular-nums md:text-sm"
-      />
-    </TableCell>
   );
 }
 
