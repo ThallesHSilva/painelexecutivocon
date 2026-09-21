@@ -1,41 +1,79 @@
-/**
- * Column contract for the Resultados YoY workbook.
- *
- * Meta/Real 2026 must stay on columns E/F (indexes 4/5). Columns G/H
- * (indexes 6/7) are attainment and gap and must never be used as inputs.
- */
-export const RESULTADOS_YOY_COLUMNS = {
-  product: 0,
-  company: 2,
-  meta: 4,
-  real: 5,
-  attainment: 6,
-  gap: 7,
-  average: 9,
-  previousMeta: 11,
-  previousReal: 12,
-  previousAttainment: 13,
-  previousGap: 14,
-  previousAverage: 16,
-  yoy: 18,
-  yoyGap: 19,
-} as const;
+/** Column contract for Resultados YoY workbooks with variable spacer columns. */
+export type ResultadosYoyColumns = {
+  product: number;
+  company: number;
+  meta: number;
+  real: number;
+  attainment: number;
+  gap: number;
+  average: number;
+  previousMeta: number;
+  previousReal: number;
+  previousAttainment: number;
+  previousGap: number;
+  previousAverage: number;
+  yoy: number;
+  yoyGap: number;
+};
 
-export function resultadosYoyCells(row: unknown[]) {
+const normalizeHeader = (value: unknown) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "")
+    .toLocaleLowerCase("pt-BR");
+
+const isMetaHeader = (value: unknown) => {
+  const normalized = normalizeHeader(value);
+  return normalized === "meta" || /^meta20\d{2}$/.test(normalized);
+};
+
+const isRealHeader = (value: unknown) => {
+  const normalized = normalizeHeader(value);
+  return normalized === "real" || /^real20\d{2}$/.test(normalized);
+};
+
+export function resultadosYoyColumns(header: unknown[]): ResultadosYoyColumns {
+  const company = header.findIndex((value) => normalizeHeader(value) === "nomerede");
+  const metas = header
+    .map((value, index) => (isMetaHeader(value) && isRealHeader(header[index + 1]) ? index : -1))
+    .filter((index) => index > company);
+  const meta = metas[0] ?? 4;
+  const previousMeta = metas[1] ?? meta + 7;
+
   return {
-    product: row[RESULTADOS_YOY_COLUMNS.product],
-    company: row[RESULTADOS_YOY_COLUMNS.company],
-    meta: row[RESULTADOS_YOY_COLUMNS.meta],
-    real: row[RESULTADOS_YOY_COLUMNS.real],
-    attainment: row[RESULTADOS_YOY_COLUMNS.attainment],
-    gap: row[RESULTADOS_YOY_COLUMNS.gap],
-    average: row[RESULTADOS_YOY_COLUMNS.average],
-    previousMeta: row[RESULTADOS_YOY_COLUMNS.previousMeta],
-    previousReal: row[RESULTADOS_YOY_COLUMNS.previousReal],
-    previousAttainment: row[RESULTADOS_YOY_COLUMNS.previousAttainment],
-    previousGap: row[RESULTADOS_YOY_COLUMNS.previousGap],
-    previousAverage: row[RESULTADOS_YOY_COLUMNS.previousAverage],
-    yoy: row[RESULTADOS_YOY_COLUMNS.yoy],
-    yoyGap: row[RESULTADOS_YOY_COLUMNS.yoyGap],
+    product: 0,
+    company: company >= 0 ? company : 2,
+    meta,
+    real: meta + 1,
+    attainment: meta + 2,
+    gap: meta + 3,
+    average: meta + 5,
+    previousMeta,
+    previousReal: previousMeta + 1,
+    previousAttainment: previousMeta + 2,
+    previousGap: previousMeta + 3,
+    previousAverage: previousMeta + 5,
+    yoy: previousMeta + 7,
+    yoyGap: previousMeta + 8,
+  };
+}
+
+export function resultadosYoyCells(row: unknown[], columns: ResultadosYoyColumns) {
+  return {
+    product: row[columns.product],
+    company: row[columns.company],
+    meta: row[columns.meta],
+    real: row[columns.real],
+    attainment: row[columns.attainment],
+    gap: row[columns.gap],
+    average: row[columns.average],
+    previousMeta: row[columns.previousMeta],
+    previousReal: row[columns.previousReal],
+    previousAttainment: row[columns.previousAttainment],
+    previousGap: row[columns.previousGap],
+    previousAverage: row[columns.previousAverage],
+    yoy: row[columns.yoy],
+    yoyGap: row[columns.yoyGap],
   };
 }

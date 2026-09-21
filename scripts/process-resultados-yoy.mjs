@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parseNumber, readSpreadsheetRows } from "./spreadsheet-reader.mjs";
+import { normalizeHeader, parseNumber, readSpreadsheetRows } from "./spreadsheet-reader.mjs";
 
 const inputPath = process.argv[2];
 const outputPath = path.resolve(process.argv[3] ?? ".data/snapshots/resultados-yoy.snapshot.json");
@@ -10,6 +10,35 @@ const rows = await readSpreadsheetRows(inputPath);
 const headerIndex = rows.findIndex((row) => String(row[2] ?? "").trim() === "NOME_REDE");
 if (headerIndex < 0)
   throw new Error("Cabeçalho NOME_REDE não encontrado na planilha Resultados YoY.");
+
+const header = rows[headerIndex] ?? [];
+const isMetaHeader = (value) => {
+  const normalized = normalizeHeader(value).toLowerCase();
+  return normalized === "meta" || /^meta20\d{2}$/.test(normalized);
+};
+const isRealHeader = (value) => {
+  const normalized = normalizeHeader(value).toLowerCase();
+  return normalized === "real" || /^real20\d{2}$/.test(normalized);
+};
+const metaColumns = header
+  .map((value, index) => (isMetaHeader(value) && isRealHeader(header[index + 1]) ? index : -1))
+  .filter((index) => index > 2);
+const meta = metaColumns[0] ?? 4;
+const previousMeta = metaColumns[1] ?? meta + 7;
+const columns = {
+  meta,
+  real: meta + 1,
+  attainment: meta + 2,
+  gap: meta + 3,
+  average: meta + 5,
+  previousMeta,
+  previousReal: previousMeta + 1,
+  previousAttainment: previousMeta + 2,
+  previousGap: previousMeta + 3,
+  previousAverage: previousMeta + 5,
+  yoy: previousMeta + 7,
+  yoyGap: previousMeta + 8,
+};
 
 let currentProduct = "";
 const records = rows.slice(headerIndex + 1).flatMap((row) => {
@@ -21,18 +50,18 @@ const records = rows.slice(headerIndex + 1).flatMap((row) => {
     {
       company,
       product: currentProduct.replace(/_\s*PV$/i, "").trim(),
-      meta: parseNumber(row[4]),
-      real: parseNumber(row[5]),
-      attainment: parseNumber(row[6]),
-      gap: parseNumber(row[7]),
-      average: parseNumber(row[9]),
-      previousMeta: parseNumber(row[11]),
-      previousReal: parseNumber(row[12]),
-      previousAttainment: parseNumber(row[13]),
-      previousGap: parseNumber(row[14]),
-      previousAverage: parseNumber(row[16]),
-      yoy: parseNumber(row[18]),
-      yoyGap: parseNumber(row[19]),
+      meta: parseNumber(row[columns.meta]),
+      real: parseNumber(row[columns.real]),
+      attainment: parseNumber(row[columns.attainment]),
+      gap: parseNumber(row[columns.gap]),
+      average: parseNumber(row[columns.average]),
+      previousMeta: parseNumber(row[columns.previousMeta]),
+      previousReal: parseNumber(row[columns.previousReal]),
+      previousAttainment: parseNumber(row[columns.previousAttainment]),
+      previousGap: parseNumber(row[columns.previousGap]),
+      previousAverage: parseNumber(row[columns.previousAverage]),
+      yoy: parseNumber(row[columns.yoy]),
+      yoyGap: parseNumber(row[columns.yoyGap]),
     },
   ];
 });

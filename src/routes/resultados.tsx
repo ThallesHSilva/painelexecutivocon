@@ -40,7 +40,7 @@ import { TableScroll } from "@/components/TableScroll";
 import { cn } from "@/lib/utils";
 import { fmtDec, fmtPct } from "@/lib/format";
 import { readXlsxRows } from "@/lib/xlsx-reader";
-import { resultadosYoyCells } from "@/lib/resultados-yoy-columns";
+import { resultadosYoyCells, resultadosYoyColumns } from "@/lib/resultados-yoy-columns";
 import type {
   BestGuessRecord,
   BestGuessTotal,
@@ -252,10 +252,11 @@ function recordsFromSpreadsheet(rows: unknown[][]): SourceRecord[] {
   );
   if (headerIndex < 0) throw new Error("Coluna NOME_REDE não encontrada no modelo de planilha.");
 
+  const columns = resultadosYoyColumns(rows[headerIndex] ?? []);
   let product = "";
   const records: SourceRecord[] = [];
   for (const row of rows.slice(headerIndex + 1)) {
-    const cells = resultadosYoyCells(row);
+    const cells = resultadosYoyCells(row, columns);
     const rawProduct = String(cells.product ?? "").trim();
     if (rawProduct) product = rawProduct;
     const company = String(cells.company ?? "").trim();
