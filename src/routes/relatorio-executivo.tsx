@@ -655,7 +655,6 @@ function ChapterCoverPage({
   number,
   eyebrow,
   title,
-  description,
   partner,
   date,
   tone,
@@ -701,7 +700,6 @@ function ChapterCoverPage({
           <h1 className="max-w-4xl text-6xl font-semibold leading-[0.98] tracking-[-0.05em]">
             {title}
           </h1>
-          <p className="mt-7 max-w-2xl text-base leading-7 text-white/75">{description}</p>
         </div>
       </div>
 

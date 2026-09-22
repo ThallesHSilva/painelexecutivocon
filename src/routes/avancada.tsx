@@ -45,7 +45,7 @@ function Page() {
         <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
           Oportunidade Avançada
         </h1>
-        <p className="mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
+        <p className="page-subtitle mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
           Quantos CNPJs têm oportunidade de aquisição, winback, renovação e Vivo Tech no recorte, e
           o que esse potencial projeta em conversão, capacidade e receita.
         </p>

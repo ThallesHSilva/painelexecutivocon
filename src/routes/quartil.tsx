@@ -1,7 +1,17 @@
 import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowDownRight, ArrowUpRight, Minus, ChevronDown, Search, X } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  ChevronDown,
+  Search,
+  Minus,
+  Target,
+  TrendingUp,
+  Trophy,
+  X,
+} from "lucide-react";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { usePartners } from "@/hooks/useData";
@@ -42,20 +52,20 @@ const metrics: { id: QuartilMetric; label: string }[] = [
  * rótulo "Q1…Q5" acompanha a faixa em todos os lugares. Pares texto/fundo vêm dos
  * tokens semânticos, já verificados nos temas claro e escuro.
  */
-const QUARTILE_STYLE = [
-  "border-success/40 bg-success/10 text-success",
-  "border-info/40 bg-info/10 text-info",
-  "border-warning/40 bg-warning/10 text-warning",
-  "border-critical/40 bg-critical/10 text-critical",
-  "border-destructive/40 bg-destructive/10 text-destructive",
+const QUARTILE_STYLE = ["quartil-q1", "quartil-q2", "quartil-q3", "quartil-q4", "quartil-q5"];
+const QUARTILE_FILL = [
+  "quartil-fill-q1",
+  "quartil-fill-q2",
+  "quartil-fill-q3",
+  "quartil-fill-q4",
+  "quartil-fill-q5",
 ];
-const QUARTILE_FILL = ["bg-success", "bg-info", "bg-warning", "bg-critical", "bg-destructive"];
 const QUARTILE_TEXT = [
-  "text-success",
-  "text-info",
-  "text-warning",
-  "text-critical",
-  "text-destructive",
+  "quartil-text-q1",
+  "quartil-text-q2",
+  "quartil-text-q3",
+  "quartil-text-q4",
+  "quartil-text-q5",
 ];
 
 const TABLE_HEADER_CLASS =
@@ -82,9 +92,9 @@ type EvolutionPeriod = "3" | "6";
 type EvolutionStatus = "up" | "down" | "stable" | "missing";
 type EvolutionFilter = { period: EvolutionPeriod; status: EvolutionStatus } | null;
 const evolutionLabels: Record<EvolutionStatus, string> = {
-  up: "Evoluíram",
-  down: "Regrediram",
-  stable: "Estáveis",
+  up: "Evoluiu",
+  down: "Regrediu",
+  stable: "Neutro",
   missing: "Sem histórico",
 };
 /** Quantas competências cada janela usa, incluindo o mês corrente. Regra do cálculo. */
@@ -103,6 +113,18 @@ function quartilePoints(value: number | null) {
 
 function consultantScore(consultant: import("@/lib/quartil").QuartilConsultant) {
   return metrics.reduce((total, item) => total + quartilePoints(consultant.quartiles[item.id]), 0);
+}
+
+/**
+ * Saldo justo da trajetória: cada faixa ganha vale +1 e cada faixa perdida vale
+ * -1. Indicadores sem histórico não entram na soma; sem nenhum indicador comparável,
+ * o resultado continua sendo "sem histórico".
+ */
+function netQuartileChange(changes: Record<QuartilMetric, number | null>) {
+  const comparable = metrics
+    .map((item) => changes[item.id])
+    .filter((value): value is number => value !== null);
+  return comparable.length ? comparable.reduce((total, value) => total + value, 0) : null;
 }
 
 /** Valor do indicador: dinheiro em Receita, contagem em Móvel e FTTH; ausência é "—". */
@@ -158,23 +180,21 @@ function Change({ value }: { value: number | null }) {
 
 function Section({
   title,
-  description,
   actions,
+  className,
   children,
 }: {
   title: string;
   description?: React.ReactNode;
   actions?: React.ReactNode;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <Card className="overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
+    <Card className={cn("quartil-section overflow-hidden", className)}>
+      <div className="quartil-section-header flex flex-col gap-3 border-b border-border px-4 py-3.5 md:flex-row md:items-start md:justify-between md:gap-4 md:px-5">
         <div className="min-w-0">
           <h2 className="text-[15px] font-semibold leading-[22px] text-foreground">{title}</h2>
-          {description && (
-            <p className="mt-1 max-w-3xl text-xs leading-4 text-muted-foreground">{description}</p>
-          )}
         </div>
         {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
@@ -295,8 +315,9 @@ function QuartilPage() {
 
   return (
     <DashboardLayout title="Quartil de Consultores">
-      <header className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+      <header className="quartil-page-header mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
         <div className="min-w-0">
+          <p className="quartil-eyebrow">Performance comercial · matriz Q1–Q5</p>
           <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
             Quartil de Consultores
           </h1>
@@ -332,7 +353,7 @@ function QuartilPage() {
       </header>
 
       {isPending ? (
-        <div className="space-y-6">
+        <div className="quartil-page space-y-6">
           <Skeleton className="h-[340px] w-full" />
           <div className="grid gap-4 md:grid-cols-2">
             <Skeleton className="h-[172px] w-full" />
@@ -358,7 +379,7 @@ function QuartilPage() {
           }
         />
       ) : (
-        <div className="space-y-6">
+        <div className="quartil-page space-y-6">
           {/*
             Escopo do indicador. A seleção recorta distribuição, evolução e as colunas
             de valor/variação do ranking; a ordem do ranking continua vindo da soma dos
@@ -369,7 +390,7 @@ function QuartilPage() {
               <p className="text-sm font-medium text-foreground">
                 Indicador da distribuição e da evolução
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="page-subtitle mt-1 text-xs text-muted-foreground">
                 Altera a distribuição, a evolução e as colunas de valor do indicador. Não altera a
                 ordem do ranking geral, que soma os três quartis.
               </p>
@@ -377,7 +398,7 @@ function QuartilPage() {
             <div
               role="group"
               aria-label="Indicador do quartil"
-              className="inline-flex shrink-0 rounded-md border border-border p-0.5"
+              className="quartil-metric-switcher inline-flex shrink-0 rounded-md border border-border p-0.5"
             >
               {metrics.map((m) => (
                 <button
@@ -403,6 +424,7 @@ function QuartilPage() {
           </div>
 
           <Section
+            className="quartil-distribution"
             title={`Distribuição por parceiro · ${selectedLabel}`}
             description="Q1 reúne o melhor desempenho e Q5 o maior espaço para evolução. As faixas consideram o tempo de casa. Sem classificação é ausência de faixa no mês, diferente de um resultado igual a zero."
           >
@@ -418,23 +440,26 @@ function QuartilPage() {
                       />
                     ))}
                   </div>
-                  <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
+                  <dl className="mt-3 grid grid-cols-2 justify-items-center gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
                     {bandTotals.map((count, i) => (
-                      <div key={i} className="flex items-baseline justify-between gap-2">
+                      <div
+                        key={i}
+                        className="flex min-w-0 flex-col items-center gap-0.5 text-center"
+                      >
                         <dt className={cn("text-xs font-semibold", QUARTILE_TEXT[i])}>Q{i + 1}</dt>
-                        <dd className="text-sm tabular-nums text-foreground">
+                        <dd className="inline-flex items-baseline gap-1.5 text-sm tabular-nums text-foreground">
                           {fmtInt(count)}
-                          <span className="ml-1.5 text-xs text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             {share(count, consultants.length)}
                           </span>
                         </dd>
                       </div>
                     ))}
-                    <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex min-w-0 flex-col items-center gap-0.5 text-center">
                       <dt className="text-xs font-semibold text-muted-foreground">Sem Q</dt>
-                      <dd className="text-sm tabular-nums text-foreground">
+                      <dd className="inline-flex items-baseline gap-1.5 text-sm tabular-nums text-foreground">
                         {fmtInt(unclassified)}
-                        <span className="ml-1.5 text-xs text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {share(unclassified, consultants.length)}
                         </span>
                       </dd>
@@ -449,7 +474,7 @@ function QuartilPage() {
                 />
               ) : (
                 <TableScroll>
-                  <Table className="min-w-[860px] table-fixed">
+                  <Table className="quartil-table min-w-[860px] table-fixed">
                     <colgroup>
                       <col className="w-[184px] sm:w-[260px]" />
                       <col className="w-[110px]" />
@@ -525,11 +550,16 @@ function QuartilPage() {
               return (
                 <Section
                   key={period}
+                  className="quartil-evolution"
                   title={`Evolução em ${period} meses · ${selectedLabel}`}
                   description={
                     <>
                       Janela de {evolutionWindow[period]} competências: o mês corrente e os{" "}
                       {evolutionWindow[period] - 1} anteriores. A comparação usa o quartil de{" "}
+                      <span className="font-medium capitalize text-foreground">
+                        {selectedLabel}
+                      </span>{" "}
+                      de{" "}
                       <span className="font-medium capitalize text-foreground">
                         {labelMonth(before ?? "")}
                       </span>{" "}
@@ -558,19 +588,19 @@ function QuartilPage() {
                     {[
                       {
                         status: "up" as const,
-                        label: "Evoluíram",
+                        label: "Evoluiu",
                         count: changes.filter((v) => v !== null && v > 0).length,
                         color: "text-success",
                       },
                       {
                         status: "down" as const,
-                        label: "Regrediram",
+                        label: "Regrediu",
                         count: changes.filter((v) => v !== null && v < 0).length,
                         color: "text-destructive",
                       },
                       {
                         status: "stable" as const,
-                        label: "Estáveis",
+                        label: "Neutro",
                         count: changes.filter((v) => v === 0).length,
                         color: "text-foreground",
                       },
@@ -599,7 +629,7 @@ function QuartilPage() {
                             setExpanded(null);
                           }}
                           className={cn(
-                            "rounded-md border px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            "quartil-stat-button rounded-md border px-3 py-2.5 text-left transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                             active ? "border-primary bg-selection" : "border-border hover:bg-muted",
                           )}
                         >
@@ -617,6 +647,7 @@ function QuartilPage() {
           </div>
 
           <Section
+            className="quartil-ranking"
             title="Ranking geral de consultores"
             description="Ordem pela soma dos três quartis, de 0 a 15 pontos: Q1 vale 5, Q2 vale 4, Q3 vale 3, Q4 vale 2, Q5 vale 1 e sem classificação vale 0. Empate é decidido pela maior Receita. A ordem é a mesma para qualquer indicador selecionado; o indicador só define as colunas de valor e variação."
             actions={
@@ -673,7 +704,7 @@ function QuartilPage() {
             ) : (
               <div className="px-4 py-4 md:px-5">
                 <TableScroll hint="Role na horizontal para ver todas as colunas. O consultor permanece visível.">
-                  <Table className="min-w-[1076px] table-fixed">
+                  <Table className="quartil-table min-w-[1076px] table-fixed">
                     <colgroup>
                       <col className="w-[196px] sm:w-[268px]" />
                       <col className="w-[92px]" />
@@ -788,18 +819,19 @@ function ConsultantRows({
     label: item.label,
     value: c.comparisons["3"].changes[item.id],
   }));
+  const netRecentChange = netQuartileChange(c.comparisons["3"].changes);
   const improving = recentChanges.filter((item) => item.value !== null && item.value > 0);
   const declining = recentChanges.filter((item) => item.value !== null && item.value < 0);
   const trendText =
-    improving.length && declining.length
-      ? `Evolução em ${improving.map((item) => item.label).join(", ")} e regressão em ${declining.map((item) => item.label).join(", ")}.`
-      : improving.length
-        ? `Evolução em ${improving.map((item) => item.label).join(", ")} nos últimos 3 meses.`
-        : declining.length
-          ? `Regressão em ${declining.map((item) => item.label).join(", ")} nos últimos 3 meses.`
-          : recentChanges.every((item) => item.value === null)
-            ? "Ainda não há histórico suficiente para avaliar a trajetória."
-            : "Desempenho estável nos últimos 3 meses.";
+    netRecentChange === null
+      ? "Ainda não há histórico suficiente para avaliar a trajetória."
+      : netRecentChange > 0
+        ? `Saldo positivo: subiu ${netRecentChange} ${netRecentChange === 1 ? "faixa" : "faixas"} no conjunto dos indicadores.`
+        : netRecentChange < 0
+          ? `Saldo negativo: caiu ${Math.abs(netRecentChange)} ${Math.abs(netRecentChange) === 1 ? "faixa" : "faixas"} no conjunto dos indicadores.`
+          : improving.length && declining.length
+            ? "Saldo neutro: as evoluções e regressões se compensaram."
+            : "Saldo neutro nos últimos 3 meses.";
   const tenureLabel =
     c.tenure === null
       ? "Não informado"
@@ -866,9 +898,14 @@ function ConsultantRows({
             <h3 className="text-[15px] font-semibold leading-[22px] text-foreground">
               Análise individual · {c.name}
             </h3>
-            <dl className="mt-3 grid gap-x-6 gap-y-3 md:grid-cols-3">
-              <div>
-                <dt className="text-xs font-semibold text-foreground">Ponto forte</dt>
+            <dl className="quartil-insight-grid mt-3 grid gap-3 md:grid-cols-3">
+              <div className="quartil-insight-card quartil-insight-strength">
+                <div className="quartil-insight-heading">
+                  <span className="quartil-insight-icon" aria-hidden>
+                    <Trophy className="size-4" />
+                  </span>
+                  <dt>Ponto forte</dt>
+                </div>
                 <dd className="mt-1 text-sm text-foreground">
                   {bestQuartile === null
                     ? "Dados insuficientes para classificação."
@@ -880,8 +917,13 @@ function ConsultantRows({
                   Melhor posição atual entre os três indicadores.
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs font-semibold text-foreground">Ponto de atenção</dt>
+              <div className="quartil-insight-card quartil-insight-attention">
+                <div className="quartil-insight-heading">
+                  <span className="quartil-insight-icon" aria-hidden>
+                    <Target className="size-4" />
+                  </span>
+                  <dt>Ponto de atenção</dt>
+                </div>
                 <dd className="mt-1 text-sm text-foreground">
                   {weakestQuartile === null
                     ? "Dados insuficientes para classificação."
@@ -893,8 +935,13 @@ function ConsultantRows({
                   Indicador com maior espaço para evolução.
                 </dd>
               </div>
-              <div>
-                <dt className="text-xs font-semibold text-foreground">Trajetória</dt>
+              <div className="quartil-insight-card quartil-insight-trajectory">
+                <div className="quartil-insight-heading">
+                  <span className="quartil-insight-icon" aria-hidden>
+                    <TrendingUp className="size-4" />
+                  </span>
+                  <dt>Trajetória</dt>
+                </div>
                 <dd className="mt-1 text-sm text-foreground">{trendText}</dd>
                 <dd className="mt-0.5 text-xs text-muted-foreground">
                   Leitura baseada na variação dos quartis nos últimos 3 meses.
@@ -906,7 +953,7 @@ function ConsultantRows({
               competência sem apuração para este consultor, diferente de um valor igual a zero.
             </p>
             <TableScroll className="mt-2 rounded-md border border-border bg-card">
-              <Table className="min-w-[640px] table-fixed text-xs">
+              <Table className="quartil-table min-w-[640px] table-fixed text-xs">
                 <colgroup>
                   <col className="w-[120px]" />
                   {months.map((month) => (

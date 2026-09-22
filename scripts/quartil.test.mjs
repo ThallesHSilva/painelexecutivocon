@@ -65,6 +65,8 @@ test("coorte atual, parceiros separados, 3/6 meses, nomes normalizados e dedupli
   assert.equal(data.partners.length, 2);
   const ana = data.consultants.find((c) => c.name === "Ana" && c.partnerName === "A7");
   assert.equal(ana.history.length, 4);
+  assert.equal(ana.comparisons[3].month, "2026-06");
+  assert.equal(ana.comparisons[6].month, "2026-03");
   assert.equal(ana.comparisons[3].changes.receita, 3);
   assert.equal(ana.comparisons[6].changes.receita, 1);
   assert.equal(data.consultants.find((c) => c.name === "Bia").comparisons[3].changes.receita, null);

@@ -493,7 +493,6 @@ const STICKY_ID_WIDTH = "w-[168px] sm:w-[240px]";
 
 function Section({
   title,
-  description,
   actions,
   children,
   bodyClassName,
@@ -511,9 +510,6 @@ function Section({
           <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
             {title}
           </h2>
-          {description && (
-            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{description}</p>
-          )}
         </div>
         {actions && (
           <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">{actions}</div>

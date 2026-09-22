@@ -71,7 +71,7 @@ function Page() {
         <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
           Licenças e Serviços Digitais
         </h1>
-        <p className="mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
+        <p className="page-subtitle mt-1.5 max-w-3xl text-sm leading-5 text-muted-foreground">
           Quantos clientes do recorte estão elegíveis a TI Recorrente e quanto essa adesão projeta
           em conversão e receita.
         </p>

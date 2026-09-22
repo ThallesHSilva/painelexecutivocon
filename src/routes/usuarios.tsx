@@ -245,7 +245,7 @@ function UsersPage() {
               <h1 className="mt-4 text-3xl font-semibold tracking-tight">
                 {admin ? "Autorizações de usuários" : "Parceiros por GN"}
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+              <p className="page-subtitle mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
                 {admin
                   ? "Aprove cadastros, defina o perfil e cancele acessos quando necessário."
                   : "Defina quais parceiros cada GN poderá consultar no painel."}
@@ -319,7 +319,7 @@ function UsersPage() {
                   <h2 className="text-lg font-semibold tracking-tight">
                     Bases e acessos por parceiro
                   </h2>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
+                  <p className="page-subtitle mt-0.5 text-xs text-muted-foreground">
                     Visão consolidada das cargas disponíveis e dos GNs vinculados.
                   </p>
                 </div>
@@ -437,7 +437,7 @@ function UsersPage() {
             <h2 className="text-lg font-semibold tracking-tight">
               {admin ? "Solicitações de acesso" : "Escopo de visualização"}
             </h2>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="page-subtitle mt-1 text-xs text-muted-foreground">
               {admin
                 ? "O cancelamento encerra o acesso imediatamente."
                 : "Um GN pode receber um ou vários parceiros."}

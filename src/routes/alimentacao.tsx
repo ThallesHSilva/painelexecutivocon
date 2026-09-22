@@ -632,7 +632,7 @@ function AlimentacaoPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[28px]">
                 Atualizar bases
               </h1>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              <p className="page-subtitle mt-2 text-sm leading-6 text-muted-foreground">
                 Selecione um ou mais arquivos. Cada item é reconhecido, processado e registrado
                 separadamente.
               </p>
@@ -827,7 +827,7 @@ function AlimentacaoPage() {
                     Tipos reconhecidos
                   </p>
                   <h2 className="mt-1 text-lg font-semibold tracking-tight">Tipos na seleção</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="page-subtitle mt-1 text-xs text-muted-foreground">
                     Nenhum tipo é obrigatório; os arquivos reconhecidos aparecem abaixo.
                   </p>
                 </div>
@@ -931,7 +931,7 @@ function AlimentacaoPage() {
               <h2 className="relative mt-1 text-lg font-semibold tracking-tight">
                 Uma atualização, todas as visões.
               </h2>
-              <p className="relative mt-2 text-sm leading-5 text-muted-foreground">
+              <p className="page-subtitle relative mt-2 text-sm leading-5 text-muted-foreground">
                 Mantenha as bases nesta área para que os indicadores, oportunidades e certificações
                 trabalhem com a mesma referência.
               </p>

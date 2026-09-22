@@ -229,7 +229,6 @@ function UnavailableTag({ state }: { state: Exclude<PointState, "available"> }) 
 
 function Section({
   title,
-  description,
   actions,
   children,
   bodyClassName,
@@ -247,9 +246,6 @@ function Section({
           <h2 className="text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
             {title}
           </h2>
-          {description && (
-            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">{description}</p>
-          )}
         </div>
         {actions && (
           <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">{actions}</div>
@@ -412,7 +408,7 @@ function DomainPanel({
             <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
             {meta.label}
           </h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+          <p className="page-subtitle mt-1 text-xs leading-5 text-muted-foreground">
             {meta.context} · competência {formatCompetence(competence)} · {fmtInt(metrics.length)}{" "}
             indicadores
             {unavailableCount > 0 && ` · ${fmtInt(unavailableCount)} sem base`}

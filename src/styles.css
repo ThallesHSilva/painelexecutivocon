@@ -236,6 +236,25 @@
   .dashboard-shell {
     position: relative;
     isolation: isolate;
+    background-color: var(--surface-inset);
+    background-image:
+      radial-gradient(
+        circle at 7% 0%,
+        color-mix(in oklab, var(--primary) 12%, transparent),
+        transparent 30rem
+      ),
+      radial-gradient(
+        circle at 94% 18%,
+        color-mix(in oklab, var(--cyan) 8%, transparent),
+        transparent 28rem
+      ),
+      linear-gradient(
+        135deg,
+        color-mix(in oklab, var(--background) 96%, var(--primary)),
+        transparent 42%,
+        color-mix(in oklab, var(--background) 97%, var(--cyan))
+      );
+    background-attachment: fixed;
   }
 
   .dashboard-shell::before {
@@ -282,6 +301,248 @@
     background: radial-gradient(circle at 100% 0%, color-mix(in oklab, var(--primary) 13%, transparent), transparent 68%);
   }
 
+  .quartil-page-header {
+    border-color: color-mix(in oklab, var(--primary) 22%, var(--border));
+    background:
+      linear-gradient(118deg, color-mix(in oklab, var(--primary) 10%, var(--card)), var(--card) 48%, color-mix(in oklab, var(--cyan) 7%, var(--card)));
+    box-shadow: 0 18px 42px -30px color-mix(in oklab, var(--primary) 55%, transparent);
+  }
+
+  .quartil-page-header::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0.3rem;
+    content: "";
+    background: linear-gradient(180deg, var(--primary), var(--magenta));
+  }
+
+  .quartil-eyebrow {
+    display: none;
+    margin-bottom: 0.55rem;
+    color: var(--primary);
+    font-size: 0.68rem;
+    font-weight: 750;
+    letter-spacing: 0.15em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+
+  .page-subtitle {
+    display: none;
+  }
+
+  .quartil-page .quartil-section {
+    border-color: color-mix(in oklab, var(--primary) 15%, var(--border));
+    background: color-mix(in oklab, var(--card) 97%, var(--primary));
+    box-shadow: 0 16px 34px -28px color-mix(in oklab, var(--primary) 54%, transparent);
+  }
+
+  .quartil-page {
+    /* Escala própria do quartil: cores saturadas e separadas por matiz. */
+    --quartile-q1: oklch(0.48 0.16 155); /* verde esmeralda */
+    --quartile-q2: oklch(0.58 0.18 142); /* verde vivo */
+    --quartile-q3: oklch(0.78 0.17 90); /* amarelo */
+    --quartile-q4: oklch(0.66 0.19 55); /* laranja */
+    --quartile-q5: oklch(0.58 0.22 25); /* vermelho */
+    --quartile-q1-foreground: oklch(1 0 0);
+    --quartile-q2-foreground: oklch(1 0 0);
+    --quartile-q3-foreground: oklch(0.22 0.035 70);
+    --quartile-q4-foreground: oklch(0.22 0.035 45);
+    --quartile-q5-foreground: oklch(1 0 0);
+  }
+
+  .dark .quartil-page {
+    --quartile-q1: oklch(0.72 0.16 155);
+    --quartile-q2: oklch(0.78 0.18 142);
+    --quartile-q3: oklch(0.86 0.18 90);
+    --quartile-q4: oklch(0.78 0.18 55);
+    --quartile-q5: oklch(0.72 0.2 25);
+    --quartile-q1-foreground: oklch(0.18 0.035 155);
+    --quartile-q2-foreground: oklch(0.18 0.035 142);
+    --quartile-q3-foreground: oklch(0.2 0.035 70);
+    --quartile-q4-foreground: oklch(0.2 0.035 45);
+    --quartile-q5-foreground: oklch(0.2 0.035 25);
+  }
+
+  .quartil-q1,
+  .quartil-q2,
+  .quartil-q3,
+  .quartil-q4,
+  .quartil-q5 {
+    background: var(--quartile-color);
+    border-color: var(--quartile-color);
+    color: var(--quartile-foreground);
+    box-shadow: 0 2px 8px -5px var(--quartile-color);
+  }
+
+  .quartil-q1,
+  .quartil-fill-q1,
+  .quartil-text-q1 {
+    --quartile-color: var(--quartile-q1);
+    --quartile-foreground: var(--quartile-q1-foreground);
+  }
+
+  .quartil-q2,
+  .quartil-fill-q2,
+  .quartil-text-q2 {
+    --quartile-color: var(--quartile-q2);
+    --quartile-foreground: var(--quartile-q2-foreground);
+  }
+
+  .quartil-q3,
+  .quartil-fill-q3,
+  .quartil-text-q3 {
+    --quartile-color: var(--quartile-q3);
+    --quartile-foreground: var(--quartile-q3-foreground);
+  }
+
+  .quartil-q4,
+  .quartil-fill-q4,
+  .quartil-text-q4 {
+    --quartile-color: var(--quartile-q4);
+    --quartile-foreground: var(--quartile-q4-foreground);
+  }
+
+  .quartil-q5,
+  .quartil-fill-q5,
+  .quartil-text-q5 {
+    --quartile-color: var(--quartile-q5);
+    --quartile-foreground: var(--quartile-q5-foreground);
+  }
+
+  .quartil-fill-q1,
+  .quartil-fill-q2,
+  .quartil-fill-q3,
+  .quartil-fill-q4,
+  .quartil-fill-q5 {
+    background: var(--quartile-color);
+  }
+
+  .quartil-text-q1,
+  .quartil-text-q2,
+  .quartil-text-q3,
+  .quartil-text-q4,
+  .quartil-text-q5 {
+    color: var(--quartile-color);
+  }
+
+  .quartil-insight-grid {
+    container-type: inline-size;
+  }
+
+  .quartil-insight-card {
+    position: relative;
+    min-height: 8.75rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 0.9rem;
+    padding: 1rem 1rem 0.95rem;
+    background: linear-gradient(145deg, color-mix(in oklab, var(--card) 96%, var(--insight-color)), var(--card));
+    box-shadow: 0 12px 22px -20px color-mix(in oklab, var(--insight-color) 75%, transparent), inset 0 1px 0 color-mix(in oklab, white 62%, transparent);
+  }
+
+  .quartil-insight-card::before {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 0.22rem;
+    content: "";
+    background: var(--insight-color);
+  }
+
+  .quartil-insight-strength {
+    --insight-color: var(--quartile-q1);
+  }
+
+  .quartil-insight-attention {
+    --insight-color: var(--quartile-q4);
+  }
+
+  .quartil-insight-trajectory {
+    --insight-color: var(--primary);
+  }
+
+  .quartil-insight-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: var(--foreground);
+    font-size: 0.74rem;
+    font-weight: 750;
+    letter-spacing: 0.045em;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  .quartil-insight-icon {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid color-mix(in oklab, var(--insight-color) 28%, var(--border));
+    border-radius: 0.65rem;
+    color: var(--insight-color);
+    background: color-mix(in oklab, var(--insight-color) 12%, var(--card));
+  }
+
+  .quartil-insight-card dd.text-sm {
+    max-width: 32rem;
+    font-weight: 600;
+    line-height: 1.45;
+  }
+
+  .quartil-insight-card dd.text-xs {
+    line-height: 1.35;
+  }
+
+  .quartil-section-header {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 6%, transparent), transparent 72%);
+  }
+
+  .quartil-distribution .quartil-section-header {
+    border-bottom-color: color-mix(in oklab, var(--success) 18%, var(--border));
+    background: linear-gradient(90deg, color-mix(in oklab, var(--success) 8%, transparent), transparent 72%);
+  }
+
+  .quartil-evolution .quartil-section-header {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--cyan) 7%, transparent), transparent 72%);
+  }
+
+  .quartil-ranking .quartil-section-header {
+    border-bottom-color: color-mix(in oklab, var(--primary) 24%, var(--border));
+    background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 10%, transparent), transparent 72%);
+  }
+
+  .quartil-metric-switcher {
+    border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
+    background: color-mix(in oklab, var(--card) 72%, var(--primary));
+    box-shadow: 0 8px 20px -18px var(--primary);
+  }
+
+  .quartil-metric-switcher button[aria-pressed="true"] {
+    box-shadow: 0 6px 14px -10px var(--primary);
+  }
+
+  .quartil-stat-button {
+    background: color-mix(in oklab, var(--card) 88%, var(--primary));
+    box-shadow: inset 0 1px 0 color-mix(in oklab, white 55%, transparent);
+  }
+
+  .quartil-stat-button[aria-pressed="true"] {
+    border-color: color-mix(in oklab, var(--primary) 42%, var(--border));
+    background: color-mix(in oklab, var(--selection) 78%, var(--card));
+    box-shadow: 0 8px 18px -14px var(--primary);
+  }
+
+  .quartil-table thead {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--primary) 10%, var(--surface-strong)), var(--surface-strong));
+  }
+
+  .quartil-table tbody tr:hover {
+    background: color-mix(in oklab, var(--primary) 4%, transparent);
+  }
+
   .dashboard-card {
     border-color: color-mix(in oklab, var(--primary) 12%, var(--border));
     background: color-mix(in oklab, var(--card) 96%, var(--primary));
@@ -316,6 +577,12 @@
     border-color: color-mix(in oklab, var(--primary) 12%, var(--border));
     background: linear-gradient(145deg, var(--card), color-mix(in oklab, var(--surface-wash) 62%, var(--card)));
     box-shadow: var(--shadow-premium);
+  }
+
+  .premium-kpi.premium-kpi-emphasis {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-foreground);
   }
 
   .premium-kpi::after {

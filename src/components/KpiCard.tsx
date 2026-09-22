@@ -111,7 +111,7 @@ export function KpiCard({
     <Card
       className={cn(
         "premium-kpi relative flex min-h-[132px] flex-col p-4 md:p-5",
-        emphasis && "border-primary bg-primary text-primary-foreground",
+        emphasis && "premium-kpi-emphasis border-primary bg-primary text-primary-foreground",
         className,
       )}
     >

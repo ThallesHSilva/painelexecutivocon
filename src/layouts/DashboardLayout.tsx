@@ -335,7 +335,7 @@ export function DashboardLayout({ title, children }: { title: string; children: 
   }, []);
 
   return (
-    <div className="dashboard-shell min-h-screen w-full bg-background">
+    <div className="dashboard-shell min-h-screen w-full">
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetTrigger asChild>
           <span className="sr-only">Abrir navegação</span>

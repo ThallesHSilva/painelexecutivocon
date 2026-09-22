@@ -24,6 +24,20 @@ Rules:
 
 ## Frontend
 
+## Model routing
+
+Use the following routing policy when the corresponding models are available:
+
+- **Coordinator:** GPT-5.6 Luna (high thinking).
+- **Frontend and visual work:** Claude Sonnet 5; escalate to Claude Opus 5 for major redesigns, difficult UX decisions, or unresolved visual issues.
+- **Backend and integrations:** GPT-5.6 Terra; escalate to GPT-5.6 Sol for difficult business rules, security, architecture, or critical integrations.
+- **Mechanical isolated tasks:** Gemini 3.5 Flash Lite.
+- **Exceptional escalation:** GPT-6 Astra only for unusually difficult, high-impact problems unresolved by the normal chain.
+
+Normal escalation chains are `Luna -> Sonnet -> Opus` for frontend and
+`Luna -> Terra -> Sol` for backend. Do not delegate when Luna can reliably
+complete the task directly, and always specify the target model explicitly.
+
 Para qualquer tarefa que crie, altere ou refatore significativamente uma
 interface de usuário, use a skill `$frontend-premium`.
 

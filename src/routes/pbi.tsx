@@ -49,7 +49,7 @@ function PbiPage() {
             <MonitorPlay className="size-5" />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
+            <p className="page-subtitle text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
               Power BI
             </p>
             <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Painéis</h1>
