@@ -31,7 +31,7 @@ import { TableScroll } from "@/components/TableScroll";
 import { EmptyState, ErrorState } from "@/components/EmptyState";
 import { fmtBRL, fmtInt, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
+import type { QuartilConsultant, QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
 
 export const Route = createFileRoute("/quartil")({
   head: () => ({ meta: [{ title: "Quartil de Consultores — Mapa Parque" }] }),
@@ -89,22 +89,33 @@ const labelMonth = (month: string) =>
       })
     : "—";
 type EvolutionPeriod = "3" | "6";
-type EvolutionStatus = "up" | "down" | "stable" | "missing";
-type EvolutionFilter = { period: EvolutionPeriod; status: EvolutionStatus } | null;
+type EvolutionStatus = "up" | "down" | "stable";
+type RankingMode = "score" | "product";
+type TenureFilter = "all" | "experienced" | "new";
+type QuartileFilter = number | "unclassified" | null;
+type ListFilter =
+  | { type: "evolution"; period: EvolutionPeriod; status: EvolutionStatus }
+  | { type: "alert" }
+  | null;
 const evolutionLabels: Record<EvolutionStatus, string> = {
   up: "Evoluiu",
   down: "Regrediu",
   stable: "Neutro",
-  missing: "Sem histórico",
 };
 /** Quantas competências cada janela usa, incluindo o mês corrente. Regra do cálculo. */
 const evolutionWindow: Record<EvolutionPeriod, number> = { "3": 3, "6": 6 };
 
 function matchesEvolution(value: number | null, status: EvolutionStatus) {
-  if (status === "missing") return value === null;
   if (status === "stable") return value === 0;
   if (status === "up") return value !== null && value > 0;
   return value !== null && value < 0;
+}
+
+function isQuartileAlert(
+  consultant: import("@/lib/quartil").QuartilConsultant,
+  metric: QuartilMetric,
+) {
+  return consultant.tenure === "experienced" && consultant.quartiles[metric] === 5;
 }
 
 function quartilePoints(value: number | null) {
@@ -135,6 +146,25 @@ function metricValue(metric: QuartilMetric, value: number | null | undefined) {
 /** Participação sobre um total, sem inventar 0% quando não há base para comparar. */
 function share(count: number, total: number) {
   return total ? fmtPct(count / total) : "—";
+}
+
+function distributionFor(consultants: QuartilConsultant[], metric: QuartilMetric) {
+  return [...new Set(consultants.map((consultant) => consultant.partnerId))]
+    .map((id) => {
+      const rows = consultants.filter((consultant) => consultant.partnerId === id);
+      return {
+        id,
+        name: rows[0].partnerName,
+        count: rows.length,
+        bands: Array.from(
+          { length: 5 },
+          (_, index) =>
+            rows.filter((consultant) => consultant.quartiles[metric] === index + 1).length,
+        ),
+        missing: rows.filter((consultant) => consultant.quartiles[metric] === null).length,
+      };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function Quartile({ value }: { value: number | null | undefined }) {
@@ -207,10 +237,12 @@ function QuartilPage() {
   const { effectiveSelected, selected, role, allowedPartnerIds } = usePartnerFilter();
   const { data: partnerList = [] } = usePartners();
   const [metric, setMetric] = useState<QuartilMetric>("receita");
+  const [rankingMode, setRankingMode] = useState<RankingMode>("score");
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [page, setPage] = useState(0);
-  const [evolutionFilter, setEvolutionFilter] = useState<EvolutionFilter>(null);
+  const [listFilter, setListFilter] = useState<ListFilter>(null);
+  const [quartileFilter, setQuartileFilter] = useState<QuartileFilter>(null);
+  const [tenureFilter, setTenureFilter] = useState<TenureFilter>("all");
   const { data, isPending, error, refetch } = useQuery<QuartilSnapshot>({
     queryKey: ["quartil", effectiveSelected],
     queryFn: async () => {
@@ -223,6 +255,13 @@ function QuartilPage() {
     enabled: role === "director" || role === "gn",
   });
   const consultants = useMemo(() => data?.consultants ?? [], [data]);
+  const tenureScopedConsultants = useMemo(
+    () =>
+      tenureFilter === "all"
+        ? consultants
+        : consultants.filter((consultant) => consultant.tenure === tenureFilter),
+    [consultants, tenureFilter],
+  );
   /**
    * Recorte em texto, sem alterar o filtro: nenhuma seleção continua significando
    * consolidado, e o GN sem seleção continua vendo apenas os parceiros vinculados.
@@ -240,30 +279,19 @@ function QuartilPage() {
     : role === "gn"
       ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
       : "Todos os parceiros (consolidado)";
-  const distribution = useMemo(
-    () =>
-      [...new Set(consultants.map((c) => c.partnerId))]
-        .map((id) => {
-          const rows = consultants.filter((c) => c.partnerId === id);
-          return {
-            id,
-            name: rows[0].partnerName,
-            count: rows.length,
-            bands: Array.from(
-              { length: 5 },
-              (_, i) => rows.filter((c) => c.quartiles[metric] === i + 1).length,
-            ),
-            missing: rows.filter((c) => c.quartiles[metric] === null).length,
-          };
-        })
-        .sort((a, b) => a.name.localeCompare(b.name)),
-    [consultants, metric],
-  );
+  const distribution = useMemo(() => distributionFor(consultants, metric), [consultants, metric]);
   const normalizedSearch = search
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
   const rankedConsultants = [...consultants].sort((a, b) => {
+    if (rankingMode === "product") {
+      const aQuartile = a.quartiles[metric] ?? Infinity;
+      const bQuartile = b.quartiles[metric] ?? Infinity;
+      if (aQuartile !== bQuartile) return aQuartile - bQuartile;
+      const productDifference = (b.values[metric] ?? -Infinity) - (a.values[metric] ?? -Infinity);
+      return productDifference || a.name.localeCompare(b.name);
+    }
     const scoreDifference = consultantScore(b) - consultantScore(a);
     if (scoreDifference) return scoreDifference;
     const revenueDifference = (b.values.receita ?? -Infinity) - (a.values.receita ?? -Infinity);
@@ -272,15 +300,33 @@ function QuartilPage() {
   const ranking = new Map<string, number>();
   let lastRankedScore: number | undefined;
   let lastRankedRevenue: number | null | undefined;
+  let lastRankedProductQuartile: number | null | undefined;
+  let lastRankedProductValue: number | null | undefined;
   let currentRank = 0;
   rankedConsultants.forEach((consultant, index) => {
     const score = consultantScore(consultant);
     const revenue = consultant.values.receita;
-    if (lastRankedScore === undefined || score !== lastRankedScore || revenue !== lastRankedRevenue)
+    const productQuartile = consultant.quartiles[metric];
+    const productValue = consultant.values[metric];
+    if (rankingMode === "product") {
+      if (
+        lastRankedProductQuartile === undefined ||
+        productQuartile !== lastRankedProductQuartile ||
+        productValue !== lastRankedProductValue
+      )
+        currentRank = index + 1;
+    } else if (
+      lastRankedScore === undefined ||
+      score !== lastRankedScore ||
+      revenue !== lastRankedRevenue
+    ) {
       currentRank = index + 1;
+    }
     ranking.set(consultant.id, currentRank);
     lastRankedScore = score;
     lastRankedRevenue = revenue;
+    lastRankedProductQuartile = productQuartile;
+    lastRankedProductValue = productValue;
   });
   const rows = rankedConsultants
     .filter((c) =>
@@ -290,16 +336,20 @@ function QuartilPage() {
         .toLowerCase()
         .includes(normalizedSearch),
     )
+    .filter((c) => (tenureFilter === "all" ? true : c.tenure === tenureFilter))
     .filter((c) =>
-      evolutionFilter
-        ? matchesEvolution(
-            c.comparisons[evolutionFilter.period].changes[metric],
-            evolutionFilter.status,
-          )
-        : true,
-    );
-  const actualPage = Math.min(page, Math.max(0, Math.ceil(rows.length / 20) - 1));
-  const shown = rows.slice(actualPage * 20, actualPage * 20 + 20);
+      quartileFilter === null
+        ? true
+        : quartileFilter === "unclassified"
+          ? c.quartiles[metric] === null
+          : c.quartiles[metric] === quartileFilter,
+    )
+    .filter((c) => {
+      if (!listFilter) return true;
+      if (listFilter.type === "alert") return isQuartileAlert(c, metric);
+      return matchesEvolution(c.comparisons[listFilter.period].changes[metric], listFilter.status);
+    });
+  const shown = rows;
   const selectedLabel = metrics.find((m) => m.id === metric)!.label;
   const bandTotals = Array.from(
     { length: 5 },
@@ -308,14 +358,20 @@ function QuartilPage() {
   const unclassified = consultants.filter((c) => c.quartiles[metric] === null).length;
   const clearFilters = () => {
     setSearch("");
-    setEvolutionFilter(null);
-    setPage(0);
+    setListFilter(null);
+    setQuartileFilter(null);
+    setTenureFilter("all");
     setExpanded(null);
   };
 
   return (
     <DashboardLayout title="Quartil de Consultores">
-      <header className="quartil-page-header mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+      <QuartilPrintReport
+        consultants={consultants}
+        latestMonth={data?.latestMonth ?? null}
+        scopeLabel={scopeLabel}
+      />
+      <header className="quartil-screen-only quartil-page-header mb-6 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
         <div className="min-w-0">
           <p className="quartil-eyebrow">Performance comercial · matriz Q1–Q5</p>
           <h1 className="text-2xl font-semibold leading-[1.2] tracking-tight text-foreground md:text-[28px] md:leading-[34px]">
@@ -379,11 +435,10 @@ function QuartilPage() {
           }
         />
       ) : (
-        <div className="quartil-page space-y-6">
+        <div className="quartil-screen-only quartil-page space-y-6">
           {/*
-            Escopo do indicador. A seleção recorta distribuição, evolução e as colunas
-            de valor/variação do ranking; a ordem do ranking continua vindo da soma dos
-            três quartis e não muda com esta escolha.
+            Escopo do indicador. A seleção é a fonte única do produto exibido no ranking:
+            distribuição, evolução, valores e Ranking Produto acompanham este filtro.
           */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -391,8 +446,8 @@ function QuartilPage() {
                 Indicador da distribuição e da evolução
               </p>
               <p className="page-subtitle mt-1 text-xs text-muted-foreground">
-                Altera a distribuição, a evolução e as colunas de valor do indicador. Não altera a
-                ordem do ranking geral, que soma os três quartis.
+                Altera a distribuição, a evolução e o produto usado no Ranking Produto. O Ranking
+                Score continua somando os três quartis.
               </p>
             </div>
             <div
@@ -406,7 +461,6 @@ function QuartilPage() {
                   type="button"
                   onClick={() => {
                     setMetric(m.id);
-                    setPage(0);
                     setExpanded(null);
                   }}
                   aria-pressed={metric === m.id}
@@ -441,21 +495,52 @@ function QuartilPage() {
                     ))}
                   </div>
                   <dl className="mt-3 grid grid-cols-2 justify-items-center gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
-                    {bandTotals.map((count, i) => (
-                      <div
-                        key={i}
-                        className="flex min-w-0 flex-col items-center gap-0.5 text-center"
-                      >
-                        <dt className={cn("text-xs font-semibold", QUARTILE_TEXT[i])}>Q{i + 1}</dt>
-                        <dd className="inline-flex items-baseline gap-1.5 text-sm tabular-nums text-foreground">
-                          {fmtInt(count)}
-                          <span className="text-xs text-muted-foreground">
-                            {share(count, consultants.length)}
-                          </span>
-                        </dd>
-                      </div>
-                    ))}
-                    <div className="flex min-w-0 flex-col items-center gap-0.5 text-center">
+                    {bandTotals.map((count, i) => {
+                      const active = quartileFilter === i + 1;
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          aria-pressed={active}
+                          aria-label={`Filtrar consultores do Q${i + 1}`}
+                          onClick={() => {
+                            setQuartileFilter((current) => (current === i + 1 ? null : i + 1));
+                            setExpanded(null);
+                          }}
+                          className={cn(
+                            "flex min-w-0 flex-col items-center gap-0.5 rounded-md px-2 py-1 text-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                            active ? "bg-selection ring-1 ring-primary" : "hover:bg-muted",
+                          )}
+                        >
+                          <dt className={cn("text-xs font-semibold", QUARTILE_TEXT[i])}>
+                            Q{i + 1}
+                          </dt>
+                          <dd className="inline-flex items-baseline gap-1.5 text-sm tabular-nums text-foreground">
+                            {fmtInt(count)}
+                            <span className="text-xs text-muted-foreground">
+                              {share(count, consultants.length)}
+                            </span>
+                          </dd>
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      aria-pressed={quartileFilter === "unclassified"}
+                      aria-label="Filtrar consultores sem quartil"
+                      onClick={() => {
+                        setQuartileFilter((current) =>
+                          current === "unclassified" ? null : "unclassified",
+                        );
+                        setExpanded(null);
+                      }}
+                      className={cn(
+                        "flex min-w-0 flex-col items-center gap-0.5 rounded-md px-2 py-1 text-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        quartileFilter === "unclassified"
+                          ? "bg-selection ring-1 ring-primary"
+                          : "hover:bg-muted",
+                      )}
+                    >
                       <dt className="text-xs font-semibold text-muted-foreground">Sem Q</dt>
                       <dd className="inline-flex items-baseline gap-1.5 text-sm tabular-nums text-foreground">
                         {fmtInt(unclassified)}
@@ -463,7 +548,7 @@ function QuartilPage() {
                           {share(unclassified, consultants.length)}
                         </span>
                       </dd>
-                    </div>
+                    </button>
                   </dl>
                 </div>
               )}
@@ -537,8 +622,10 @@ function QuartilPage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             {(["3", "6"] as const).map((period) => {
-              const changes = consultants.map((c) => c.comparisons[period].changes[metric]);
-              const before = consultants[0]?.comparisons[period].month;
+              const changes = tenureScopedConsultants.map(
+                (c) => c.comparisons[period].changes[metric],
+              );
+              const before = tenureScopedConsultants[0]?.comparisons[period].month;
               const beforeInBase = before ? (data.months?.includes(before) ?? false) : false;
               /**
                * Competências reais da base dentro da janela comparada. É leitura, não
@@ -605,27 +692,34 @@ function QuartilPage() {
                         color: "text-foreground",
                       },
                       {
-                        status: "missing" as const,
-                        label: "Sem histórico",
-                        count: changes.filter((v) => v === null).length,
-                        color: "text-muted-foreground",
+                        type: "alert" as const,
+                        label: "Alerta",
+                        count: tenureScopedConsultants.filter((c) => isQuartileAlert(c, metric))
+                          .length,
+                        color: "text-destructive",
                       },
                     ].map((item) => {
                       const active =
-                        evolutionFilter?.period === period &&
-                        evolutionFilter.status === item.status;
+                        "type" in item
+                          ? listFilter?.type === "alert"
+                          : listFilter?.type === "evolution" &&
+                            listFilter.period === period &&
+                            listFilter.status === item.status;
                       return (
                         <button
                           key={item.label}
                           type="button"
                           aria-pressed={active}
                           onClick={() => {
-                            setEvolutionFilter((current) =>
-                              current?.period === period && current.status === item.status
+                            setListFilter((current) => {
+                              if ("type" in item)
+                                return current?.type === "alert" ? null : { type: "alert" };
+                              return current?.type === "evolution" &&
+                                current.period === period &&
+                                current.status === item.status
                                 ? null
-                                : { period, status: item.status },
-                            );
-                            setPage(0);
+                                : { type: "evolution", period, status: item.status };
+                            });
                             setExpanded(null);
                           }}
                           className={cn(
@@ -637,6 +731,11 @@ function QuartilPage() {
                             {fmtInt(item.count)}
                           </p>
                           <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
+                          {"type" in item && (
+                            <p className="mt-0.5 text-[11px] text-muted-foreground">
+                              3+ meses no Q5
+                            </p>
+                          )}
                         </button>
                       );
                     })}
@@ -649,39 +748,118 @@ function QuartilPage() {
           <Section
             className="quartil-ranking"
             title="Ranking geral de consultores"
-            description="Ordem pela soma dos três quartis, de 0 a 15 pontos: Q1 vale 5, Q2 vale 4, Q3 vale 3, Q4 vale 2, Q5 vale 1 e sem classificação vale 0. Empate é decidido pela maior Receita. A ordem é a mesma para qualquer indicador selecionado; o indicador só define as colunas de valor e variação."
+            description={
+              rankingMode === "score"
+                ? "Ranking Score: soma dos três quartis, de 0 a 15 pontos. Q1 vale 5, Q2 vale 4, Q3 vale 3, Q4 vale 2, Q5 vale 1 e sem classificação vale 0."
+                : `Ranking Produto: ordenado por ${selectedLabel}, do Q1 ao Q5; empates usam o valor do produto selecionado acima.`
+            }
             actions={
-              <div className="relative w-full sm:w-72">
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
-                  aria-hidden
-                />
-                <Input
-                  aria-label="Buscar consultor ou parceiro"
-                  placeholder="Buscar consultor ou parceiro"
-                  className="pl-9"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(0);
-                  }}
-                />
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+                <div
+                  role="group"
+                  aria-label="Modo do ranking"
+                  className="inline-flex shrink-0 rounded-md border border-border p-0.5"
+                >
+                  {[
+                    ["score", "Ranking Score"],
+                    ["product", "Ranking Produto"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={rankingMode === value}
+                      onClick={() => {
+                        setRankingMode(value as RankingMode);
+                        setExpanded(null);
+                      }}
+                      className={cn(
+                        "rounded-[4px] px-2.5 py-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        rankingMode === value
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {rankingMode === "product" && (
+                  <span className="inline-flex shrink-0 items-center rounded-md border border-primary/30 bg-selection px-2.5 py-2 text-xs font-medium text-foreground">
+                    Produto: {selectedLabel} · filtro acima
+                  </span>
+                )}
+                <div className="relative w-full sm:w-72">
+                  <Search
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                    aria-hidden
+                  />
+                  <Input
+                    aria-label="Buscar consultor ou parceiro"
+                    placeholder="Buscar consultor ou parceiro"
+                    className="pl-9"
+                    value={search}
+                    onChange={(e) => {
+                      setSearch(e.target.value);
+                    }}
+                  />
+                </div>
+                <div
+                  role="group"
+                  aria-label="Filtro de tempo de casa"
+                  className="inline-flex shrink-0 rounded-md border border-border p-0.5"
+                >
+                  {[
+                    ["all", "Todos"],
+                    ["experienced", "Acima de 3 meses"],
+                    ["new", "Até 3 meses"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={tenureFilter === value}
+                      onClick={() => {
+                        setTenureFilter(value as TenureFilter);
+                        setExpanded(null);
+                      }}
+                      className={cn(
+                        "rounded-[4px] px-2.5 py-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                        tenureFilter === value
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             }
           >
-            {evolutionFilter && (
+            {(listFilter || quartileFilter !== null || tenureFilter !== "all") && (
               <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/40 px-4 py-2.5 text-xs md:px-5">
                 <span className="text-muted-foreground">Recorte da lista:</span>
                 <span className="font-medium text-foreground">
-                  {evolutionLabels[evolutionFilter.status]} · {selectedLabel} ·{" "}
-                  {evolutionFilter.period} meses
+                  {listFilter?.type === "alert"
+                    ? `Alerta · ${selectedLabel} · 3+ meses no Q5`
+                    : listFilter?.type === "evolution"
+                      ? `${evolutionLabels[listFilter.status]} · ${selectedLabel} · ${listFilter.period} meses`
+                      : null}
+                  {quartileFilter !== null && (
+                    <>
+                      {listFilter ? " · " : ""}
+                      {quartileFilter === "unclassified" ? "Sem Q" : `Q${quartileFilter}`}
+                    </>
+                  )}
+                  {tenureFilter !== "all" && (
+                    <>
+                      {listFilter || quartileFilter !== null ? " · " : ""}
+                      {tenureFilter === "experienced" ? "Acima de 3 meses" : "Até 3 meses"}
+                    </>
+                  )}
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setEvolutionFilter(null);
-                    setPage(0);
-                  }}
+                  onClick={clearFilters}
                   className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-medium text-foreground transition-colors duration-150 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
                   Remover
@@ -693,7 +871,7 @@ function QuartilPage() {
               <div className="px-4 py-4 md:px-5">
                 <EmptyState
                   title="Nenhum consultor no recorte"
-                  description="A busca e o filtro de evolução foram preservados. Ajuste os termos ou limpe os filtros para ver a lista completa."
+                  description="A busca e os filtros foram preservados. Ajuste os termos ou limpe os filtros para ver a lista completa."
                   action={
                     <Button variant="outline" size="sm" className="mt-1" onClick={clearFilters}>
                       Limpar filtros da lista
@@ -703,84 +881,143 @@ function QuartilPage() {
               </div>
             ) : (
               <div className="px-4 py-4 md:px-5">
-                <TableScroll hint="Role na horizontal para ver todas as colunas. O consultor permanece visível.">
-                  <Table className="quartil-table min-w-[1076px] table-fixed">
-                    <colgroup>
-                      <col className="w-[196px] sm:w-[268px]" />
-                      <col className="w-[92px]" />
-                      <col className="w-[132px]" />
-                      <col className="w-[84px]" />
-                      <col className="w-[84px]" />
-                      <col className="w-[84px]" />
-                      <col className="w-[132px]" />
-                      <col className="w-[136px]" />
-                      <col className="w-[136px]" />
-                    </colgroup>
-                    <TableHeader className={TABLE_HEADER_CLASS}>
-                      <TableRow className="hover:bg-transparent">
-                        <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>
-                          Posição e consultor
-                        </TableHead>
-                        <TableHead align="numeric">Pontos</TableHead>
-                        <TableHead>Tempo de casa</TableHead>
-                        {metrics.map((m) => (
-                          <TableHead key={m.id} align="state">
-                            {m.label}
+                <div className="quartil-ranking-scroll max-h-[min(65vh,42rem)] overflow-y-auto">
+                  <TableScroll hint="Role na horizontal para ver todas as colunas. O consultor permanece visível.">
+                    <Table className="quartil-table min-w-[1076px] table-fixed">
+                      <colgroup>
+                        <col className="w-[196px] sm:w-[268px]" />
+                        <col className="w-[92px]" />
+                        <col className="w-[132px]" />
+                        <col className="w-[84px]" />
+                        <col className="w-[84px]" />
+                        <col className="w-[84px]" />
+                        <col className="w-[132px]" />
+                        <col className="w-[136px]" />
+                        <col className="w-[136px]" />
+                      </colgroup>
+                      <TableHeader className={cn(TABLE_HEADER_CLASS, "sticky top-0 z-[2]")}>
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>
+                            Posição e consultor
                           </TableHead>
+                          <TableHead align="numeric">Pontos</TableHead>
+                          <TableHead>Tempo de casa</TableHead>
+                          {metrics.map((m) => (
+                            <TableHead key={m.id} align="state">
+                              {m.label}
+                            </TableHead>
+                          ))}
+                          <TableHead align="numeric">{selectedLabel} atual</TableHead>
+                          <TableHead>Evolução 3 meses</TableHead>
+                          <TableHead>Evolução 6 meses</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className={TABLE_BODY_CLASS}>
+                        {shown.map((c) => (
+                          <ConsultantRows
+                            key={c.id}
+                            consultant={c}
+                            rank={ranking.get(c.id) ?? 0}
+                            score={consultantScore(c)}
+                            metric={metric}
+                            months={data.months.slice(-7)}
+                            expanded={expanded === c.id}
+                            onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
+                          />
                         ))}
-                        <TableHead align="numeric">{selectedLabel} atual</TableHead>
-                        <TableHead>Evolução 3 meses</TableHead>
-                        <TableHead>Evolução 6 meses</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className={TABLE_BODY_CLASS}>
-                      {shown.map((c) => (
-                        <ConsultantRows
-                          key={c.id}
-                          consultant={c}
-                          rank={ranking.get(c.id) ?? 0}
-                          score={consultantScore(c)}
-                          metric={metric}
-                          months={data.months.slice(-7)}
-                          expanded={expanded === c.id}
-                          onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
-                        />
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableScroll>
+                      </TableBody>
+                    </Table>
+                  </TableScroll>
+                </div>
               </div>
             )}
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-3 text-xs text-muted-foreground md:px-5">
               <span>
-                <span className="tabular-nums">{fmtInt(rows.length)}</span> de{" "}
-                <span className="tabular-nums">{fmtInt(consultants.length)}</span> consultores ·
-                página <span className="tabular-nums">{actualPage + 1}</span> de{" "}
-                <span className="tabular-nums">{Math.max(1, Math.ceil(rows.length / 20))}</span>
+                <span className="tabular-nums">{fmtInt(rows.length)}</span> consultores no recorte
               </span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={actualPage === 0}
-                  onClick={() => setPage(actualPage - 1)}
-                >
-                  Anterior
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={(actualPage + 1) * 20 >= rows.length}
-                  onClick={() => setPage(actualPage + 1)}
-                >
-                  Próxima
-                </Button>
-              </div>
+              <span>Role verticalmente para ver toda a lista</span>
             </div>
           </Section>
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+function QuartilPrintReport({
+  consultants,
+  latestMonth,
+  scopeLabel,
+}: {
+  consultants: QuartilConsultant[];
+  latestMonth: string | null;
+  scopeLabel: string;
+}) {
+  return (
+    <div className="quartil-print-report" aria-label="Relatório de distribuição por parceiro">
+      <header className="quartil-print-report-header">
+        <div>
+          <p className="quartil-print-kicker">Mapa Parque · Quartil de Consultores</p>
+          <h1>Distribuição por parceiro</h1>
+        </div>
+        <dl>
+          <div>
+            <dt>Recorte</dt>
+            <dd>{scopeLabel}</dd>
+          </div>
+          <div>
+            <dt>Competência</dt>
+            <dd>{latestMonth ? labelMonth(latestMonth) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Consultores</dt>
+            <dd>{fmtInt(consultants.length)}</dd>
+          </div>
+        </dl>
+      </header>
+      <div className="quartil-print-grid">
+        {metrics.map((metric) => {
+          const rows = distributionFor(consultants, metric.id);
+          const total = consultants.length;
+          return (
+            <section key={metric.id} className="quartil-print-card">
+              <h2>{metric.label}</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Parceiro</th>
+                    <th>Consult.</th>
+                    {[1, 2, 3, 4, 5].map((quartile) => (
+                      <th key={quartile}>Q{quartile}</th>
+                    ))}
+                    <th>Sem Q</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr key={row.id}>
+                      <th>{row.name}</th>
+                      <td>{fmtInt(row.count)}</td>
+                      {row.bands.map((count, index) => (
+                        <td key={index}>{fmtInt(count)}</td>
+                      ))}
+                      <td>{fmtInt(row.missing)}</td>
+                    </tr>
+                  ))}
+                  {!rows.length && (
+                    <tr>
+                      <td colSpan={8}>Sem parceiros no recorte</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              <p>Total: {fmtInt(total)} consultores · Q1–Q5 + Sem Q</p>
+            </section>
+          );
+        })}
+      </div>
+      <footer>Distribuição da competência mais recente · fonte: base Quartil</footer>
+    </div>
   );
 }
 

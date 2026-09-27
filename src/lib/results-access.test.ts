@@ -86,12 +86,13 @@ const torres = {
       columns: [
         { key: "forecast", label: "Forecast", format: "number" },
         { key: "bgxpc", label: "BG x PC", format: "percent" },
+        { key: "excelDate", label: "46279", format: "number" },
       ],
       rows: [
-        { partner: "Alpha", values: { forecast: 10, bgxpc: 0.75 } },
-        { partner: "Beta", values: { forecast: 20, bgxpc: 0.9 } },
+        { partner: "Alpha", values: { forecast: 10, bgxpc: 0.75, excelDate: 1 } },
+        { partner: "Beta", values: { forecast: 20, bgxpc: 0.9, excelDate: 2 } },
       ],
-      total: { forecast: 999, bgxpc: 9.99 },
+      total: { forecast: 999, bgxpc: 9.99, excelDate: 3 },
     },
   ],
 } satisfies TorresServicoSnapshot;
@@ -115,7 +116,12 @@ test("Diretor preserva todas as linhas e o total global importado das Torres", (
     payload.torres.towers[0]?.rows.map((row) => row.partner),
     ["Álpha Telecom", "Beta Business"],
   );
-  assert.deepEqual(payload.torres.towers[0]?.total, torres.towers[0]?.total);
+  assert.deepEqual(payload.torres.towers[0]?.total, { forecast: 999, bgxpc: 9.99 });
+  assert.deepEqual(
+    payload.torres.towers[0]?.columns.map((column) => column.label),
+    ["Forecast", "BG x PC"],
+  );
+  assert.equal(JSON.stringify(payload.torres).includes("46279"), false);
 });
 
 test("GN com vínculo recebe somente o parceiro autorizado em todos os datasets", () => {

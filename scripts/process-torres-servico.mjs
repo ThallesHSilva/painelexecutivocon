@@ -35,7 +35,7 @@ function value(value) {
 const towers = definitions.map((definition) => {
   const end = definition.end;
   const hiddenColumns = new Set([
-    ...(definition.id === "altas-movel" ? ["DEAL?", "BIG DEAL", "BRUTO", "46259"] : []),
+    ...(definition.id === "altas-movel" ? ["DEAL?", "BIG DEAL", "BRUTO", "46259", "46279"] : []),
     ...(definition.id !== "aparelhos" ? ["BRUTO"] : []),
   ]);
   const columns = Array.from({ length: end - definition.start - 1 }, (_, offset) => {
@@ -62,7 +62,11 @@ const towers = definitions.map((definition) => {
   const fallbackTotal = Object.fromEntries(
     columns.map((column) => [
       column.key,
-      dataRows.reduce((sum, row) => sum + (typeof row.values[column.key] === "number" ? row.values[column.key] : 0), 0),
+      dataRows.reduce(
+        (sum, row) =>
+          sum + (typeof row.values[column.key] === "number" ? row.values[column.key] : 0),
+        0,
+      ),
     ]),
   );
   return {
@@ -90,4 +94,10 @@ const snapshot = {
 };
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 await fs.writeFile(outputPath, `${JSON.stringify(snapshot, null, 2)}\n`);
-console.log(JSON.stringify({ outputPath, towers: towers.length, rows: towers.reduce((sum, tower) => sum + tower.rows.length, 0) }));
+console.log(
+  JSON.stringify({
+    outputPath,
+    towers: towers.length,
+    rows: towers.reduce((sum, tower) => sum + tower.rows.length, 0),
+  }),
+);

@@ -21,6 +21,11 @@ type ResultsSnapshots = {
   torres: TorresServicoSnapshot;
 };
 
+// These Excel serial-date headers are source artifacts, not business metrics.
+// Keep them out of every authorized payload, including snapshots imported before
+// the processor started filtering them.
+const HIDDEN_TOWER_COLUMN_LABELS = new Set(["46259", "46279"]);
+
 export function normalizeCompany(value: string) {
   return value
     .normalize("NFD")
@@ -57,13 +62,24 @@ function reconcileTowerPartnerNames(
   const resolvePartnerName = createPartnerNameResolver(partners);
   return {
     ...snapshot,
-    towers: snapshot.towers.map((tower) => ({
-      ...tower,
-      rows: tower.rows.map((row) => ({
-        ...row,
-        partner: resolvePartnerName(row.partner),
-      })),
-    })),
+    towers: snapshot.towers.map((tower) => {
+      const columns = tower.columns.filter(
+        (column) => !HIDDEN_TOWER_COLUMN_LABELS.has(column.label.trim().toUpperCase()),
+      );
+      const visibleValues = (values: Record<string, string | number | null>) =>
+        Object.fromEntries(columns.map((column) => [column.key, values[column.key]]));
+
+      return {
+        ...tower,
+        columns,
+        rows: tower.rows.map((row) => ({
+          ...row,
+          partner: resolvePartnerName(row.partner),
+          values: visibleValues(row.values),
+        })),
+        total: visibleValues(tower.total),
+      };
+    }),
   };
 }
 
