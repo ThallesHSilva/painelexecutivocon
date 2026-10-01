@@ -24,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fmtInt } from "@/lib/format";
+import { fmtInt, fmtQscPct } from "@/lib/format";
 import type { QscDomain, QscMetricPoint, QscMetricSeries } from "@/lib/qsc";
 import { cn } from "@/lib/utils";
 
@@ -107,15 +107,6 @@ const PULSE_METRIC_IDS = [
   "churn-movel",
   "saldo-portabilidade",
 ] as const;
-
-const qscPercentFormatter = new Intl.NumberFormat("pt-BR", {
-  style: "percent",
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
-
-const fmtQscPct = (value: number | null | undefined) =>
-  value == null || !Number.isFinite(value) ? "—" : qscPercentFormatter.format(value);
 
 const maximumMetricScore = (metric: QscMetricSeries) =>
   Math.max(0, ...metric.scoreRules.map((rule) => rule.score));

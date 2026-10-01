@@ -4,7 +4,7 @@ import { ArrowLeft, BarChart3, Gauge, Printer, ShieldCheck, Smartphone, Wifi } f
 import { Button } from "@/components/ui/button";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { useFtth, useMobile, usePartners, useQsc } from "@/hooks/useData";
-import { fmtBRLCompact, fmtDec, fmtInt, fmtPct } from "@/lib/format";
+import { fmtBRLCompact, fmtDec, fmtInt, fmtPct, fmtQscPct } from "@/lib/format";
 import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
 import type { QscDomain, QscMetricSeries } from "@/lib/qsc";
 import type {
@@ -965,7 +965,7 @@ function QscReportPage({
               </p>
               <div className="mt-2 flex items-end justify-between gap-2">
                 <strong className="text-xl tabular-nums text-slate-950">
-                  {fmtPct(metric.latest?.value)}
+                  {fmtQscPct(metric.latest?.value)}
                 </strong>
                 <span className="rounded-full bg-violet-100 px-2 py-1 text-[9px] font-bold text-violet-700">
                   F{metric.latest?.scoreBand ?? "—"}

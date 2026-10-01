@@ -10,23 +10,7 @@ type StoredMetric = StoredScope["metrics"][number];
 
 function scoreRulesForMetric(metric: StoredMetric, competence: string) {
   if (metric.id !== "aceite-digital") return metric.scoreRules;
-  const value = String(competence ?? "")
-    .trim()
-    .toUpperCase();
-  const isAugust = /(?:^|[-/])0?8(?:$|[-/])/.test(value) || /\b(?:AGO|AGOSTO)\b/.test(value);
-  return isAugust
-    ? [
-        { start: 0, end: 85, score: 20, band: "4" },
-        { start: 85, end: 90, score: 20, band: "3" },
-        { start: 90, end: 95, score: 20, band: "2" },
-        { start: 95, end: 100, score: 20, band: "1" },
-      ]
-    : [
-        { start: 0, end: 85, score: 0, band: "4" },
-        { start: 85, end: 90, score: 10, band: "3" },
-        { start: 90, end: 95, score: 14, band: "2" },
-        { start: 95, end: 100, score: 20, band: "1" },
-      ];
+  return metric.scoreRules.map((rule) => ({ ...rule, score: 20 }));
 }
 
 async function readQscSnapshot() {

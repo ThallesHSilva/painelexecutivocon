@@ -36,9 +36,14 @@ function movementValue(records, competence, scopeId, selector) {
     ? suffixMatches.filter((record) => normalize(record.movement) === normalize(selector.movement))
     : [];
   const matches = exactMatches.length > 0 ? exactMatches : suffixMatches;
-  const field = selector.measure === "rows" ? "rows" : "quantity";
+  const field =
+    selector.measure === "rows"
+      ? "rows"
+      : selector.measure === "documents"
+        ? "documentCount"
+        : "quantity";
   return {
-    value: matches.reduce((total, record) => total + record[field], 0),
+    value: matches.reduce((total, record) => total + (Number(record[field]) || 0), 0),
     found: matches.length > 0,
   };
 }
@@ -52,17 +57,22 @@ function detailValue(records, competence, scopeId, selector) {
       matchesSuffix(record.movementDetail, selector.detail) &&
       matchesSubIndicator(record.subIndicator, selector.subIndicators),
   );
-  const field = selector.measure === "rows" ? "rows" : "quantity";
-  return matches.reduce((total, record) => total + record[field], 0);
+  const field =
+    selector.measure === "rows"
+      ? "rows"
+      : selector.measure === "documents"
+        ? "documentCount"
+        : "quantity";
+  return matches.reduce((total, record) => total + (Number(record[field]) || 0), 0);
 }
 
 const ranges = (...values) =>
   values.map(([start, end, score, band]) => ({ start, end, score, band: String(band) }));
 
 const ACEITE_DEFAULT_SCORE_RULES = ranges(
-  [0, 85, 0, 4],
-  [85, 90, 10, 3],
-  [90, 95, 14, 2],
+  [0, 85, 20, 4],
+  [85, 90, 20, 3],
+  [90, 95, 20, 2],
   [95, 100, 20, 1],
 );
 const ACEITE_AUGUST_SCORE_RULES = ranges(
@@ -140,6 +150,7 @@ const METRICS = [
     scoreRules: ranges([0, 1.4, 20, 1], [1.4, 1.7, 14, 2], [1.7, 2, 10, 3], [2, 100, 0, 4]),
     numerator: { movement: "CHURN", subIndicators: ["% Churn Banda Larga"] },
     denominator: { movement: "PARQUE BL", subIndicators: ["% Churn Banda Larga"] },
+    denominatorMode: "plus-numerator",
   },
   {
     id: "invasao-carteira",
@@ -151,6 +162,7 @@ const METRICS = [
     scoreRules: ranges([0, 10, 25, 1], [10, 20, 20, 2], [20, 25, 15, 3], [25, 100, 0, 4]),
     numerator: { movement: "CLIENTE INVADIDO", subIndicators: ["% Invasao de Carteira"] },
     denominator: { movement: "ALTA CARTEIRA", subIndicators: ["% Invasao de Carteira"] },
+    denominatorMode: "plus-numerator",
   },
   {
     id: "car",
@@ -260,8 +272,8 @@ const METRICS = [
     id: "digitalizacao-fixa",
     domain: "fixa",
     label: "Digitalização Altas Fixa Básica",
-    formula: "CLIENTE DIGITALIZADO ÷ (CLIENTE POTENCIAL − DIGITALIZADO)",
-    interpretation: "Adoção de banda larga com serviços digitais dentro do potencial remanescente.",
+    formula: "CLIENTE DIGITALIZADO ÷ (CLIENTE POTENCIAL + DIGITALIZADO)",
+    interpretation: "Adoção de banda larga com serviços digitais sobre o universo potencial.",
     favorableDirection: "up",
     scoreRules: ranges([0, 2, 0, 4], [2, 4, 1, 3], [4, 6, 3, 2], [6, 100, 5, 1]),
     numerator: {
@@ -272,7 +284,7 @@ const METRICS = [
       movement: "CLIENTE POTENCIAL",
       subIndicators: ["Digitalizacao Altas (Fixa Basica + Servicos Digitais)"],
     },
-    denominatorMode: "minus-numerator",
+    denominatorMode: "plus-numerator",
   },
   {
     id: "tfp-fixa",
@@ -317,6 +329,7 @@ const METRICS = [
     scoreRules: ranges([0, 10, 30, 1], [10, 15, 23, 2], [15, 20, 18, 3], [20, 100, 0, 4]),
     numerator: { movement: "BAIXAS PREMATURAS", subIndicators: ["Early Churn Movel"] },
     denominator: { movement: "ALTAS SAFRA M-9", subIndicators: ["Early Churn Movel"] },
+    denominatorMode: "plus-numerator",
   },
   {
     id: "saldo-portabilidade",
@@ -379,8 +392,9 @@ const METRICS = [
     numerator: {
       movement: "CLIENTE COM FATURA PAGA",
       subIndicators: ["TFP"],
+      measure: "documents",
     },
-    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"] },
+    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"], measure: "documents" },
     denominatorMode: "plus-numerator",
   },
 ];

@@ -20,6 +20,20 @@ export const fmtDec = (n: number | undefined | null) => (unavailable(n) ? "—" 
 export const fmtBRL = (n: number | undefined | null) => (unavailable(n) ? "—" : cf.format(n));
 export const fmtPct = (n: number | undefined | null) => (unavailable(n) ? "—" : pf.format(n));
 
+/**
+ * Percentuais de QSC seguem a precisão do arquivo de referência: quatro casas
+ * decimais na fração antes da exibição com duas casas percentuais.
+ * O cálculo e a pontuação continuam usando o valor integral do indicador.
+ */
+const qscPercentFormatter = new Intl.NumberFormat("pt-BR", {
+  style: "percent",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+export const fmtQscPct = (n: number | undefined | null) =>
+  unavailable(n) ? "—" : qscPercentFormatter.format(Math.trunc(n * 10_000) / 10_000);
+
 export function fmtCompact(n: number | undefined | null): string {
   if (unavailable(n)) return "—";
   const abs = Math.abs(n);
