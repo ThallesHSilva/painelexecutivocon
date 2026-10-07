@@ -184,20 +184,18 @@ async function* parseDelimited(filePath, encoding, delimiter = ";") {
 }
 
 function createAccumulator(base) {
-  return { ...base, quantity: 0, rows: 0, documentKeys: new Set() };
+  return { ...base, quantity: 0, rows: 0 };
 }
 
-function addToAccumulator(map, key, base, quantity, document) {
+function addToAccumulator(map, key, base, quantity) {
   const current = map.get(key) ?? createAccumulator(base);
   current.quantity += quantity;
   current.rows += 1;
-  if (document) current.documentKeys.add(document);
   map.set(key, current);
 }
 
 function serializeAccumulator(value) {
-  const { documentKeys, ...record } = value;
-  return { ...record, documentCount: documentKeys.size };
+  return value;
 }
 
 let mapaPartners = [];
@@ -269,7 +267,6 @@ for (const { domain, semester, filePath } of inputs) {
     competence: index("COMPETENCIA"),
     partnerName: index("GRUPO REDE TERMO"),
     partnerDocument: index("CNPJ PARCEIRO"),
-    document: index("DOCUMENTO CLIENTE"),
     movement: index("TIPO MOVIMENTO"),
     movementDetail: index("DETALHE TIPO MOVIMENTO"),
     quantity: index("QUANTIDADE"),
@@ -318,16 +315,10 @@ for (const { domain, semester, filePath } of inputs) {
       partnerId,
       cachedNormalizeKey(movement),
     ].join("\u001f");
-    addToAccumulator(movementGroups, movementKey, base, quantity, valueAt(row, columns.document));
+    addToAccumulator(movementGroups, movementKey, base, quantity);
 
     const detailKey = `${movementKey}\u001f${cachedNormalizeKey(movementDetail)}`;
-    addToAccumulator(
-      detailGroups,
-      detailKey,
-      { ...base, movementDetail },
-      quantity,
-      valueAt(row, columns.document),
-    );
+    addToAccumulator(detailGroups, detailKey, { ...base, movementDetail }, quantity);
   }
 
   source.push({

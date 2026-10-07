@@ -32,9 +32,9 @@ function movementValue(records, competence, scopeId, selector) {
       matchesSuffix(record.movement, selector.movement) &&
       matchesSubIndicator(record.subIndicator, selector.subIndicators),
   );
-  const exactMatches = selector.preferExact
-    ? suffixMatches.filter((record) => normalize(record.movement) === normalize(selector.movement))
-    : [];
+  const exactMatches = suffixMatches.filter(
+    (record) => normalize(record.movement) === normalize(selector.movement),
+  );
   const matches = exactMatches.length > 0 ? exactMatches : suffixMatches;
   const field =
     selector.measure === "rows"
@@ -132,12 +132,10 @@ const METRICS = [
     numerator: {
       movement: "PARQUE FIDELIZADO M17",
       subIndicators: ["Fidelizacao Movel"],
-      preferExact: true,
     },
     denominator: {
       movement: "PARQUE MOVEL",
       subIndicators: ["Churn/Fidelizacao Movel"],
-      preferExact: true,
     },
   },
   {
@@ -392,9 +390,8 @@ const METRICS = [
     numerator: {
       movement: "CLIENTE COM FATURA PAGA",
       subIndicators: ["TFP"],
-      measure: "documents",
     },
-    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"], measure: "documents" },
+    denominator: { movement: "CLIENTE SAFRA", subIndicators: ["TFP"] },
     denominatorMode: "plus-numerator",
   },
 ];

@@ -57,6 +57,26 @@ test("mantém KPI 2 de CAR sem somar o numerador", () => {
   assert.deepEqual([car.latest.numerator, car.latest.denominator], [4_672, 27_461]);
 });
 
+test("prioriza o tipo de movimento exato quando há alias prefixado duplicado", () => {
+  const snapshot = calculateQscSnapshot({
+    movements: [
+      metric("CHURN", 206, 0, "% Churn Banda Larga", { competence: "2026-08" }),
+      metric("% Churn Banda Larga CHURN", 206, 0, "% Churn Banda Larga", {
+        competence: "2026-08",
+      }),
+      metric("PARQUE BL", 14_204, 0, "% Churn Banda Larga", { competence: "2026-08" }),
+      metric("% Churn Banda Larga PARQUE BL", 14_204, 0, "% Churn Banda Larga", {
+        competence: "2026-08",
+      }),
+    ],
+    details: [],
+    partners: [{ id: "a7connect", name: "A7CONNECT" }],
+    competencies: ["2026-08"],
+  });
+  const churn = snapshot.scopes[0].metrics.find((item) => item.id === "churn-bl");
+  assert.deepEqual([churn.latest.numerator, churn.latest.denominator], [206, 14_410]);
+});
+
 test("reproduz o denominador de EC Movel com a safra somada ao numerador", () => {
   const snapshot = calculateQscSnapshot({
     movements: [
@@ -71,16 +91,14 @@ test("reproduz o denominador de EC Movel com a safra somada ao numerador", () =>
   assert.deepEqual([earlyChurn.latest.numerator, earlyChurn.latest.denominator], [140, 853]);
 });
 
-test("usa documentos distintos no TFP Movel", () => {
+test("usa a quantidade reportada no TFP Movel", () => {
   const snapshot = calculateQscSnapshot({
     movements: [
       metric("CLIENTE COM FATURA PAGA", 4, 0, "TFP", {
         domain: "movel",
-        documentCount: 3,
       }),
       metric("CLIENTE SAFRA", 3, 0, "TFP", {
         domain: "movel",
-        documentCount: 2,
       }),
     ],
     details: [],
@@ -88,7 +106,7 @@ test("usa documentos distintos no TFP Movel", () => {
     competencies: ["2026-09"],
   });
   const tfp = snapshot.scopes[0].metrics.find((item) => item.id === "tfp-movel");
-  assert.deepEqual([tfp.latest.numerator, tfp.latest.denominator], [3, 5]);
+  assert.deepEqual([tfp.latest.numerator, tfp.latest.denominator], [4, 7]);
 });
 
 test("reproduz os cinco KPIs de MÃ³vel do resumo normalizado", () => {
