@@ -229,12 +229,14 @@ const METRICS = [
     id: "re-alta-fixa",
     domain: "fixa",
     label: "Re-Alta",
-    formula: "RE-ALTA ≤ 270 dias ÷ ALTAS M0",
-    interpretation: "Recorrência de altas de fixa dentro da janela de 270 dias.",
+    formula: "RE-ALTA ≤ 270 dias ÷ (ALTAS M0 + RE-ALTA)",
+    interpretation:
+      "Recorrência de altas de fixa dentro da janela de 270 dias sobre todas as altas do mês.",
     favorableDirection: "down",
     scoreRules: ranges([0, 2, 15, 1], [2, 3, 10, 2], [3, 4, 7, 3], [4, 100, 0, 4]),
     numerator: { movement: "RE-ALTA", subIndicators: ["Re-alta"] },
     denominator: { movement: "ALTAS", subIndicators: ["Re-alta"] },
+    denominatorMode: "plus-numerator",
   },
   {
     id: "early-churn-fixa",
@@ -365,8 +367,8 @@ const METRICS = [
     id: "digitalizacao-movel",
     domain: "movel",
     label: "Digitalização Altas Móvel",
-    formula: "ALTA DIGITALIZADA ÷ (CLIENTE POTENCIAL − DIGITALIZADO)",
-    interpretation: "Altas móveis com serviços digitais sobre o potencial remanescente.",
+    formula: "ALTA DIGITALIZADA ÷ (CLIENTE POTENCIAL + DIGITALIZADO)",
+    interpretation: "Altas móveis com serviços digitais sobre o universo potencial.",
     favorableDirection: "up",
     scoreRules: ranges([0, 4, 0, 4], [4, 6, 7, 3], [6, 8, 10, 2], [8, 100, 15, 1]),
     numerator: {
@@ -377,7 +379,7 @@ const METRICS = [
       movement: "CLIENTE POTENCIAL",
       subIndicators: ["% Digitalizacao Altas (Movel + Servicos Digitais)"],
     },
-    denominatorMode: "minus-numerator",
+    denominatorMode: "plus-numerator",
   },
   {
     id: "tfp-movel",
@@ -411,9 +413,6 @@ function calculateMetric(definition, movements, details, competence, scopeId) {
   let denominator = denominatorBase.value;
 
   if (definition.denominatorMode === "plus-numerator") denominator += numerator;
-  if (definition.denominatorMode === "minus-numerator") {
-    denominator = Math.max(0, denominator - numerator);
-  }
 
   const available = numeratorBase.found || denominatorBase.found;
   const value = available && denominator > 0 ? numerator / denominator : null;

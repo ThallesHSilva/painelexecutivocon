@@ -57,6 +57,20 @@ test("mantém KPI 2 de CAR sem somar o numerador", () => {
   assert.deepEqual([car.latest.numerator, car.latest.denominator], [4_672, 27_461]);
 });
 
+test("inclui Re-Alta no total de altas do KPI 2", () => {
+  const snapshot = calculateQscSnapshot({
+    movements: [
+      metric("RE-ALTA", 2, 0, "Re-alta", { domain: "fixa", competence: "2026-08" }),
+      metric("ALTAS", 169, 0, "Re-alta", { domain: "fixa", competence: "2026-08" }),
+    ],
+    details: [],
+    partners: [{ id: "a7connect", name: "A7CONNECT" }],
+    competencies: ["2026-08"],
+  });
+  const reAlta = snapshot.scopes[0].metrics.find((item) => item.id === "re-alta-fixa");
+  assert.deepEqual([reAlta.latest.numerator, reAlta.latest.denominator], [2, 171]);
+});
+
 test("prioriza o tipo de movimento exato quando há alias prefixado duplicado", () => {
   const snapshot = calculateQscSnapshot({
     movements: [
@@ -152,7 +166,7 @@ test("reproduz os cinco KPIs de MÃ³vel do resumo normalizado", () => {
       ["early-churn-movel", 140, 853, 18],
       ["saldo-portabilidade", 367, 741, 14],
       ["totalizacao-movel", 55, 74, 15],
-      ["digitalizacao-movel", 42, 282, 15],
+      ["digitalizacao-movel", 42, 366, 15],
       ["tfp-movel", 374, 447, 10],
     ],
   );
