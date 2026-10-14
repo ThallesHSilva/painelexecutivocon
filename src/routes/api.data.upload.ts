@@ -244,6 +244,24 @@ async function listQscInputs(qscDirectory: string) {
   return { inputs, available };
 }
 
+async function listQscSummaryInputs(qscDirectory: string) {
+  if (!(await exists(qscDirectory))) return [];
+  const partnersDirectory = path.join(qscDirectory, "partners");
+  if (!(await exists(partnersDirectory))) return [];
+  const inputs: string[] = [];
+  const partnerEntries = await readdir(partnersDirectory, { withFileTypes: true });
+  for (const partnerEntry of partnerEntries.filter((entry) => entry.isDirectory())) {
+    const partnerDirectory = path.join(partnersDirectory, partnerEntry.name);
+    const partnerFiles = await readdir(partnerDirectory, { withFileTypes: true });
+    inputs.push(
+      ...partnerFiles
+        .filter((entry) => entry.isFile() && /\.xlsx$/i.test(entry.name))
+        .map((entry) => path.join(partnerDirectory, entry.name)),
+    );
+  }
+  return inputs.sort();
+}
+
 async function processStoredQsc(context: QscProcessingContext) {
   const { inputs } = await listQscInputs(context.qscDirectory);
   const processor = path.resolve("scripts", "process-qsc.mjs");
@@ -354,7 +372,7 @@ export const Route = createFileRoute("/api/data/upload")({
           kind === "Mapa Parque"
             ? /\.(csv|xlsx)$/i.test(originalName)
             : isQsc
-              ? /\.csv$/i.test(originalName)
+              ? /\.xlsx$/i.test(originalName)
               : /\.xlsx?$/i.test(originalName);
         if (!validExtension) {
           return Response.json(
@@ -417,8 +435,6 @@ export const Route = createFileRoute("/api/data/upload")({
             await rm(completedUploadPath, { force: true });
           }
         }
-        if (isQsc) noteQscUploadActivity();
-
         try {
           if (chunkDirectory) {
             await mkdir(chunkDirectory, { recursive: true });
@@ -574,6 +590,97 @@ export const Route = createFileRoute("/api/data/upload")({
               imported: true,
               processed: true,
               result: JSON.parse(stdout),
+            });
+          }
+
+          {
+            const qscDirectory = path.join(uploadDirectory, "qsc-summary");
+            await mkdir(qscDirectory, { recursive: true });
+            const processor = path.resolve("scripts", "process-qsc-summary.mjs");
+            const { stdout: metadataOutput } = await execFileAsync(
+              process.execPath,
+              [processor, "--inspect", uploadedPath],
+              { maxBuffer: 10 * 1024 * 1024, timeout: 5 * 60 * 1000 },
+            );
+            const metadata = JSON.parse(metadataOutput) as {
+              domain: "carteira" | "fixa" | "movel";
+              partnerName: string;
+              sourceCompetence: string;
+              qscType: string;
+            };
+            const expectedKind =
+              metadata.domain === "carteira"
+                ? "QSC Carteira"
+                : metadata.domain === "movel"
+                  ? "QSC MÃ³vel"
+                  : "QSC Fixa";
+            const detectedKind =
+              metadata.domain === "carteira"
+                ? "QSC Carteira"
+                : metadata.domain === "movel"
+                  ? `QSC M${String.fromCharCode(0x00f3)}vel`
+                  : "QSC Fixa";
+            if (detectedKind !== kind) {
+              throw new Error(
+                `O arquivo informa ${metadata.qscType}, mas foi enviado como ${kind}.`,
+              );
+            }
+            const sourcePartner = await canonicalQscPartner(
+              metadata.partnerName,
+              snapshotDirectory,
+            );
+            if (user?.role === "gn" && !user.partnerIds.includes(sourcePartner.id)) {
+              return Response.json(
+                {
+                  message: `O parceiro ${sourcePartner.name} nÃ£o estÃ¡ vinculado ao seu perfil de acesso.`,
+                },
+                { status: 403 },
+              );
+            }
+            const storagePartnerId =
+              partnerSlug(sourcePartner.id) ||
+              partnerSlug(sourcePartner.name) ||
+              "parceiro-nao-informado";
+            const partnerDirectory = path.join(qscDirectory, "partners", storagePartnerId);
+            await mkdir(partnerDirectory, { recursive: true });
+            const finalPath = path.join(
+              partnerDirectory,
+              `qsc-${metadata.domain}-${metadata.sourceCompetence}.xlsx`,
+            );
+            await rm(finalPath, { force: true });
+            await rename(uploadedPath, finalPath);
+
+            const storedInputs = await listQscSummaryInputs(qscDirectory);
+            const snapshotPath = path.join(snapshotDirectory, "qsc.snapshot.json");
+            const mapaSnapshotPath = path.join(snapshotDirectory, "mapa-parque.snapshot.json");
+            const { stdout: resultOutput } = await execFileAsync(
+              process.execPath,
+              [processor, "--output", snapshotPath, ...storedInputs],
+              {
+                maxBuffer: 20 * 1024 * 1024,
+                timeout: 30 * 60 * 1000,
+                env: { ...process.env, MAPA_PARQUE_SNAPSHOT_PATH: mapaSnapshotPath },
+              },
+            );
+            await persistSnapshot({
+              kind: "qsc",
+              snapshotPath,
+              sourceName: originalName,
+              uploadedBy: user?.email,
+              sizeBytes: declaredFileSize || contentLength,
+              recordImport: false,
+            });
+            recordDataImportSuccess({
+              kind,
+              sourceName: originalName,
+              uploadedBy: user?.email,
+              sizeBytes: declaredFileSize || contentLength,
+              message: "Resumo QSC importado sem recÃ¡lculo de KPIs.",
+            });
+            return importedResponse({
+              imported: true,
+              processed: true,
+              result: JSON.parse(resultOutput),
             });
           }
 

@@ -109,7 +109,12 @@ const PULSE_METRIC_IDS = [
 ] as const;
 
 const maximumMetricScore = (metric: QscMetricSeries) =>
-  Math.max(0, ...metric.scoreRules.map((rule) => rule.score));
+  Math.max(
+    0,
+    ...metric.scoreRules.map((rule) => rule.score),
+    ...metric.history.map((point) => point.score ?? 0),
+    metric.latest?.score ?? 0,
+  );
 
 /**
  * Disponibilidade do ponto, em três estados distintos.
@@ -535,7 +540,7 @@ function DomainPanel({
 
 const SEMESTER_DOMAINS: Array<{ domain: QscDomain; label: string }> = [
   { domain: "carteira", label: "QSC Carteira" },
-  { domain: "fixa", label: "QSC Fixa" },
+  { domain: "fixa", label: "QSC Banda Larga" },
   { domain: "movel", label: "QSC Móvel" },
 ];
 

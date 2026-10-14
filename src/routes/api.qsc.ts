@@ -8,32 +8,15 @@ type StoredSnapshot = SnapshotFor<"qsc">;
 type StoredScope = StoredSnapshot["scopes"][number];
 type StoredMetric = StoredScope["metrics"][number];
 
-function scoreRulesForMetric(metric: StoredMetric, competence: string) {
-  if (metric.id !== "aceite-digital") return metric.scoreRules;
-  return metric.scoreRules.map((rule) => ({ ...rule, score: 20 }));
-}
-
 async function readQscSnapshot() {
   return getDataSnapshot("qsc");
 }
 
 function withMetricScore(
   point: QscMetricSeries["latest"],
-  scoreRules: QscMetricSeries["scoreRules"],
+  _scoreRules: QscMetricSeries["scoreRules"],
 ) {
-  if (!point || point.value === null || !Number.isFinite(point.value)) return point;
-
-  const percentage = point.value * 100;
-  const matchingRule = scoreRules.find(
-    (rule, index) =>
-      percentage >= rule.start && (index === scoreRules.length - 1 || percentage < rule.end),
-  );
-
-  return {
-    ...point,
-    score: matchingRule?.score ?? null,
-    scoreBand: matchingRule?.band ?? null,
-  };
+  return point;
 }
 
 function currentCompetence(snapshot: StoredSnapshot) {
@@ -49,10 +32,8 @@ function metricForResponse(metric: StoredMetric, history: StoredMetric[] = []) {
     interpretation: metric.interpretation,
     favorableDirection: metric.favorableDirection,
     scoreRules: metric.scoreRules,
-    latest: withMetricScore(metric.latest, scoreRulesForMetric(metric, metric.latest.competence)),
-    history: history.map((point) =>
-      withMetricScore(point.latest, scoreRulesForMetric(metric, point.latest.competence)),
-    ),
+    latest: withMetricScore(metric.latest, metric.scoreRules),
+    history: history.map((point) => withMetricScore(point.latest, metric.scoreRules)),
   } as QscMetricSeries;
 }
 
@@ -109,6 +90,11 @@ function aggregateScopes(snapshot: StoredSnapshot, scopeIds: string[], competenc
       historicPoint.denominator += storedMetric.latest.denominator;
       historicPoint.available ||= storedMetric.latest.available;
       historicPoint.zeroPark &&= storedMetric.latest.zeroPark;
+      historicPoint.score =
+        historicPoint.score === null || storedMetric.latest.score === null
+          ? null
+          : historicPoint.score + storedMetric.latest.score;
+      historicPoint.scoreBand = null;
       historicPoint.value =
         historicPoint.available && historicPoint.denominator > 0
           ? historicPoint.numerator / historicPoint.denominator

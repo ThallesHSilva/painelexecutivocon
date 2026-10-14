@@ -216,16 +216,43 @@ function identifyQscByContent(
   return null;
 }
 
+function filterValueFromSummary(rows: unknown[][], key: string) {
+  const cell = rows
+    .flat()
+    .map((value) => String(value ?? ""))
+    .find((value) => /filtros aplicados\s*:/i.test(value));
+  if (!cell) return null;
+  const normalizedKey = normalizeHeader(key);
+  for (const line of cell.split(/\r?\n/).map((value) => value.trim())) {
+    const normalizedLine = line.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const match = normalizedLine.match(/^(.+?)\s+e\s+(.+)$/i);
+    if (match && normalizeHeader(match[1]) === normalizedKey) return match[2].trim();
+  }
+  return null;
+}
+
+function identifyQscBySummaryFilters(rows: unknown[][]) {
+  const qscType = filterValueFromSummary(rows, "TIPO_QSC");
+  if (!qscType) return null;
+  const normalizedType = normalizeHeader(qscType);
+  if (normalizedType === "MOVEL") return "QSC M\u00f3vel" as const;
+  if (normalizedType === "CARTEIRA") return "QSC Carteira" as const;
+  if (normalizedType === "BANDALARGA" || normalizedType === "FIXA") return "QSC Fixa" as const;
+  throw new Error(`TIPO_QSC nÃ£o suportado: ${qscType}.`);
+}
+
 async function identifySpreadsheet(file: File): Promise<FileKind> {
   const extension = formatExtension(file.name);
   const normalizedName = normalizeHeader(file.name);
   const identifiedByName = identifyByFileName(file.name);
-  if (identifiedByName) return identifiedByName;
 
   const rows =
     extension === "CSV"
       ? parseCsvSample(await file.slice(0, IDENTIFICATION_SAMPLE_BYTES).text())
       : await readXlsxRows(file);
+  const summaryQsc = identifyQscBySummaryFilters(rows);
+  if (summaryQsc) return summaryQsc;
+  if (identifiedByName) return identifiedByName;
   const headers = headersFromRows(rows);
   const firstMatching = (required: string[]) => headers.some((row) => hasHeaders(row, required));
   const combinedHeaders = new Set(headers.flatMap((row) => [...row]));

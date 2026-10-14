@@ -108,7 +108,7 @@ function scoreMetric(value, scoreRules) {
   };
 }
 
-const METRICS = [
+export const QSC_METRIC_DEFINITIONS = [
   {
     id: "churn-movel",
     domain: "carteira",
@@ -461,12 +461,12 @@ export function calculateQscSnapshot({ movements, details, partners, competencie
       ...scope,
       rowsByCompetence: scopeRows,
       metrics: competencies.flatMap((competence) =>
-        METRICS.map((definition) =>
+        QSC_METRIC_DEFINITIONS.map((definition) =>
           calculateMetric(definition, movements, details, competence, scope.id),
         ),
       ),
     };
   });
 
-  return { scopes: calculatedScopes, metricCount: METRICS.length };
+  return { scopes: calculatedScopes, metricCount: QSC_METRIC_DEFINITIONS.length };
 }
