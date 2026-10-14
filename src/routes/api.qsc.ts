@@ -19,6 +19,22 @@ function withMetricScore(
   return point;
 }
 
+function scoreForValue(value: number | null, scoreRules: QscMetricSeries["scoreRules"]) {
+  if (value === null || !Number.isFinite(value)) {
+    return { score: null, scoreBand: null };
+  }
+
+  const percentage = value * 100;
+  const matchingRule = scoreRules.find(
+    (rule, index) =>
+      percentage >= rule.start && (index === scoreRules.length - 1 || percentage < rule.end),
+  );
+  return {
+    score: matchingRule?.score ?? null,
+    scoreBand: matchingRule?.band ?? null,
+  };
+}
+
 function currentCompetence(snapshot: StoredSnapshot) {
   return [...snapshot.competencies].sort().at(-1) ?? "";
 }
@@ -109,11 +125,15 @@ function aggregateScopes(snapshot: StoredSnapshot, scopeIds: string[], competenc
         .sort((left, right) => left.competence.localeCompare(right.competence))
         .map((point) => withMetricScore(point, metric.scoreRules))
         .filter((point): point is NonNullable<QscMetricSeries["latest"]> => point !== null);
+      const scoredHistory = history.map((point) => ({
+        ...point,
+        ...scoreForValue(point.value, metric.scoreRules),
+      }));
 
       return {
         ...metric,
-        history,
-        latest: history.find((point) => point?.competence === competence) ?? null,
+        history: scoredHistory,
+        latest: scoredHistory.find((point) => point.competence === competence) ?? null,
       };
     }),
   };

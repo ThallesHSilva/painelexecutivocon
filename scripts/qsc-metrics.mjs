@@ -91,7 +91,7 @@ function scoreRulesFor(definition, competence) {
   return isAugust ? ACEITE_AUGUST_SCORE_RULES : ACEITE_DEFAULT_SCORE_RULES;
 }
 
-function scoreMetric(value, scoreRules) {
+export function scoreMetric(value, scoreRules) {
   if (value === null || value === undefined || !Number.isFinite(value)) {
     return { score: null, scoreBand: null };
   }

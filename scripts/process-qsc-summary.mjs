@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { readSpreadsheetRows, normalizeHeader } from "./spreadsheet-reader.mjs";
-import { QSC_METRIC_DEFINITIONS } from "./qsc-metrics.mjs";
+import { QSC_METRIC_DEFINITIONS, scoreMetric } from "./qsc-metrics.mjs";
 
 const definitionsById = new Map(
   QSC_METRIC_DEFINITIONS.map((definition) => [definition.id, definition]),
@@ -264,7 +264,7 @@ function metricFor(record) {
   };
 }
 
-function aggregateRecords(records) {
+export function aggregateRecords(records) {
   const groups = new Map();
   for (const record of records) {
     const key = `${record.id}\u001f${record.competence}`;
@@ -273,14 +273,12 @@ function aggregateRecords(records) {
       kpi1: 0,
       kpi2: 0,
       note: 0,
-      allNotes: true,
       recordCount: 0,
     };
     current.kpi1 += record.kpi1;
     current.kpi2 += record.kpi2;
     current.recordCount += 1;
-    if (record.note === null) current.allNotes = false;
-    else current.note += record.note;
+    if (record.note !== null) current.note += record.note;
     current.band = current.recordCount === 1 ? record.band : null;
     current.sourcePercent = current.recordCount === 1 ? record.percent : null;
     current.percent = current.kpi2 > 0 ? current.kpi1 / current.kpi2 : null;
@@ -288,11 +286,16 @@ function aggregateRecords(records) {
   }
   return [...groups.values()].map((record) => {
     const isSingleSource = record.recordCount === 1;
-    const { allNotes, recordCount, sourcePercent, ...cleanRecord } = record;
+    const { recordCount, sourcePercent, ...cleanRecord } = record;
+    const percent = isSingleSource ? sourcePercent : cleanRecord.percent;
+    const consolidatedScore = isSingleSource
+      ? { score: cleanRecord.note, scoreBand: cleanRecord.band }
+      : scoreMetric(percent, definitionFor(cleanRecord).scoreRules);
     return {
       ...cleanRecord,
-      percent: isSingleSource ? sourcePercent : cleanRecord.percent,
-      note: isSingleSource || allNotes ? cleanRecord.note : null,
+      percent,
+      note: consolidatedScore.score,
+      band: consolidatedScore.scoreBand,
     };
   });
 }
