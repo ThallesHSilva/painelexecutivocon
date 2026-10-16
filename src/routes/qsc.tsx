@@ -167,6 +167,13 @@ function formatCompetence(competence?: string) {
     .replace(".", "");
 }
 
+function previousCompetence(competence: string) {
+  const [year, month] = competence.split("-").map(Number);
+  if (!year || !month) return "";
+  const previous = new Date(Date.UTC(year, month - 2, 1));
+  return [previous.getUTCFullYear(), String(previous.getUTCMonth() + 1).padStart(2, "0")].join("-");
+}
+
 function formatUpdatedAt(value?: string) {
   if (!value) return "Aguardando atualização";
 
@@ -456,14 +463,19 @@ function DomainPanel({
                 </TableRow>
               </TableHeader>
               <TableBody className={TABLE_BODY_CLASS}>
-                {metrics.map((metric) => {
+                {metrics.map((metric, metricIndex) => {
                   const isExpanded = expandedMetricId === metric.id;
                   const history = metric.history.slice(-6);
                   const maximumScore = maximumMetricScore(metric);
 
                   return (
                     <Fragment key={metric.id}>
-                      <TableRow>
+                      <TableRow
+                        className={cn(
+                          metricIndex > 0 && "border-t-2 border-border/80",
+                          isExpanded && "bg-muted/20",
+                        )}
+                      >
                         <TableCell
                           className={cn(
                             STICKY_ID_CLASS,
@@ -492,30 +504,61 @@ function DomainPanel({
                       </TableRow>
                       {isExpanded && (
                         <>
-                          <TableRow id={`${metric.id}-detalhe`} className="bg-muted/40">
-                            <TableCell colSpan={6} className="!whitespace-normal">
-                              <MetricRules metric={metric} />
+                          <TableRow id={`${metric.id}-detalhe`} className="border-b-0 bg-card">
+                            <TableCell colSpan={6} className="!whitespace-normal p-0">
+                              <div className="border-l-2 border-primary/25 bg-muted/25 px-4 py-3 md:px-5">
+                                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                  Detalhes do indicador
+                                </p>
+                                <MetricRules metric={metric} />
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                          <TableRow className="border-y border-primary/20 bg-muted/60">
+                            <TableCell
+                              colSpan={6}
+                              className="!whitespace-normal px-4 py-2.5 md:px-5"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="size-1.5 rounded-full bg-primary"
+                                    aria-hidden="true"
+                                  />
+                                  <span className="text-xs font-semibold text-foreground">
+                                    Histórico recente
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                  {history.length > 0
+                                    ? `${history.length} ${history.length === 1 ? "competência" : "competências"}`
+                                    : "sem competências"}
+                                </span>
+                              </div>
                             </TableCell>
                           </TableRow>
                           {history.length === 0 ? (
-                            <TableRow className="bg-muted/40">
+                            <TableRow className="border-b-2 border-border/70 bg-muted/25">
                               <TableCell
                                 colSpan={6}
-                                className="!whitespace-normal text-xs text-muted-foreground"
+                                className="!whitespace-normal border-l-2 border-primary/20 pl-9 text-xs text-muted-foreground"
                               >
                                 Sem histórico disponível para {metric.label}.
                               </TableCell>
                             </TableRow>
                           ) : (
-                            history.map((point) => (
+                            history.map((point, index) => (
                               <TableRow
                                 key={`${metric.id}-${point.competence}`}
-                                className="bg-muted/40"
+                                className={cn(
+                                  "bg-muted/25",
+                                  index === history.length - 1 && "border-b-2 border-border/70",
+                                )}
                               >
                                 <TableCell
                                   className={cn(
                                     STICKY_ID_CLASS,
-                                    "bg-muted pl-9 text-xs font-medium text-muted-foreground",
+                                    "border-l-2 border-primary/20 bg-muted/40 pl-9 text-xs font-medium text-muted-foreground",
                                   )}
                                 >
                                   Histórico · {formatCompetence(point.competence)}
@@ -698,9 +741,11 @@ function SemesterHistoryPanel({
  * percentual das tabelas, para não sugerir uma segunda fonte de verdade.
  */
 function PulseStrip({ metrics, competence }: { metrics: QscMetricSeries[]; competence: string }) {
+  const previous = previousCompetence(competence);
   const pulseMetrics = PULSE_METRIC_IDS.flatMap((id) => {
     const metric = metrics.find((item) => item.id === id);
-    return metric ? [metric] : [];
+    const point = metric?.history.find((item) => item.competence === previous) ?? null;
+    return metric ? [{ metric, point }] : [];
   });
 
   if (!pulseMetrics.length) return null;
@@ -708,11 +753,11 @@ function PulseStrip({ metrics, competence }: { metrics: QscMetricSeries[]; compe
   return (
     <section aria-labelledby="qsc-pulso">
       <h2 id="qsc-pulso" className="mb-2 text-[13px] font-semibold text-muted-foreground">
-        Indicadores críticos · competência {formatCompetence(competence)}
+        Indicadores críticos · competência {formatCompetence(previous)}
       </h2>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        {pulseMetrics.map((metric) => {
-          const state = pointState(metric.latest);
+        {pulseMetrics.map(({ metric, point }) => {
+          const state = pointState(point);
           const available = state === "available";
           const maximumScore = maximumMetricScore(metric);
 
@@ -723,11 +768,11 @@ function PulseStrip({ metrics, competence }: { metrics: QscMetricSeries[]; compe
               </p>
               <div className="mt-1.5 flex items-baseline justify-between gap-2">
                 <p className="text-2xl font-semibold leading-[30px] tabular-nums text-foreground">
-                  {available ? fmtQscPct(metric.latest?.value) : "—"}
+                  {available ? fmtQscPct(point?.value) : "—"}
                 </p>
                 {available ? (
-                  metric.latest?.scoreBand ? (
-                    <IndicatorBand band={metric.latest.scoreBand} />
+                  point?.scoreBand ? (
+                    <IndicatorBand band={point.scoreBand} />
                   ) : (
                     <span className="text-xs text-muted-foreground">Sem faixa</span>
                   )
@@ -739,14 +784,14 @@ function PulseStrip({ metrics, competence }: { metrics: QscMetricSeries[]; compe
                 <div className="flex items-baseline gap-1">
                   <dt>Nota</dt>
                   <dd className="font-medium tabular-nums text-foreground">
-                    {available ? scoreContent(metric.latest?.score, maximumScore) : "—"}
+                    {available ? scoreContent(point?.score, maximumScore) : "—"}
                   </dd>
                 </div>
                 <div className="flex items-baseline gap-1">
                   <dt className="sr-only">KPI1 e KPI2</dt>
                   <dd className="tabular-nums">
                     {available
-                      ? `${fmtInt(metric.latest?.numerator)} / ${fmtInt(metric.latest?.denominator)}`
+                      ? `${fmtInt(point?.numerator)} / ${fmtInt(point?.denominator)}`
                       : "—"}
                   </dd>
                 </div>

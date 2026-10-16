@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, TriangleAlert } from "lucide-react";
 import {
   CertificationQscHistory,
   type CertificationQscField,
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { usePartners } from "@/hooks/useData";
-import { fmtInt } from "@/lib/format";
+import { fmtBRL, fmtInt } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -375,6 +375,19 @@ const formatCurrency = (value: number) =>
     value,
   );
 
+/**
+ * A Certificação usa a mesma escala da tabela histórica do QSC: cada mês é a
+ * soma das notas dos indicadores do domínio; o totalizador é a média dos meses
+ * preenchidos e a pontuação vem da faixa desse totalizador.
+ */
+const QSC_TOTAL_SCORE_RULES = [
+  { minimum: 90, band: "FAIXA 5", points: "1.000" },
+  { minimum: 80, band: "FAIXA 4", points: "800" },
+  { minimum: 70, band: "FAIXA 3", points: "600" },
+  { minimum: 60, band: "FAIXA 2", points: "400" },
+  { minimum: 50, band: "FAIXA 1", points: "200" },
+] as const;
+
 function withCalculatedSummary(summary: CertificationRow, breakdown: CertificationRow[]) {
   const values = Object.fromEntries(
     MONTH_FIELDS.map((field) => {
@@ -414,6 +427,26 @@ function withCalculatedAverage(row: CertificationRow) {
     ? monthValues.reduce((total, value) => total + parseCurrency(value), 0) / monthValues.length
     : 0;
   return { ...row, totalizer: monthValues.length ? formatCurrency(totalizer) : "" };
+}
+
+function withCalculatedQscRow(row: CertificationQscRow) {
+  const monthValues = MONTH_FIELDS.map((field) => row[field])
+    .filter((value) => value.trim() !== "")
+    .map(parseCurrency);
+  const totalizer = monthValues.length
+    ? Math.round(monthValues.reduce((total, value) => total + value, 0) / monthValues.length)
+    : null;
+  const score =
+    totalizer === null
+      ? undefined
+      : QSC_TOTAL_SCORE_RULES.find((rule) => totalizer >= rule.minimum);
+
+  return {
+    ...row,
+    totalizer: totalizer === null ? "" : String(totalizer),
+    points: totalizer === null ? "" : (score?.points ?? "0"),
+    band: totalizer === null ? "" : (score?.band ?? "FAIXA 0"),
+  };
 }
 
 function withCalculatedOneShot(row: CertificationRow) {
@@ -490,6 +523,55 @@ function certificationStone(revenueTelecom: number, totalPoints: number) {
       (stone) => revenueTelecom >= stone.minimumRevenue && totalPoints >= stone.minimumPoints,
     ) ?? CERTIFICATION_STONES[CERTIFICATION_STONES.length - 1]
   );
+}
+
+type CertificationAlert =
+  | {
+      kind: "revenue-gap";
+      stone: (typeof CERTIFICATION_STONES)[number];
+      gap: number;
+    }
+  | {
+      kind: "qsc-gap";
+      stone: (typeof CERTIFICATION_STONES)[number];
+      gap: number;
+      requiredQscPoints: number;
+    };
+
+function certificationAlerts(
+  revenueTelecom: number,
+  totalPoints: number,
+  qscPoints: number,
+  nonQscPoints: number,
+): CertificationAlert[] {
+  const eligibleStones = CERTIFICATION_STONES.filter((stone) => stone.stone !== "NÃO CERTIFICADO");
+  const byPoints = eligibleStones.find((stone) => totalPoints >= stone.minimumPoints);
+  const byRevenue = eligibleStones.find(
+    (stone) => stone.minimumRevenue > 0 && revenueTelecom >= stone.minimumRevenue,
+  );
+  const alerts: CertificationAlert[] = [];
+
+  if (byPoints && revenueTelecom < byPoints.minimumRevenue) {
+    alerts.push({
+      kind: "revenue-gap",
+      stone: byPoints,
+      gap: byPoints.minimumRevenue - revenueTelecom,
+    });
+  }
+
+  if (byRevenue) {
+    const requiredQscPoints = Math.max(0, byRevenue.minimumPoints - nonQscPoints);
+    if (qscPoints < requiredQscPoints) {
+      alerts.push({
+        kind: "qsc-gap",
+        stone: byRevenue,
+        gap: requiredQscPoints - qscPoints,
+        requiredQscPoints,
+      });
+    }
+  }
+
+  return alerts;
 }
 
 type CyclePayload = (typeof INITIAL_CYCLES)["current"];
@@ -726,18 +808,14 @@ export function CertificationPanel() {
 
   const updateQscValue = (rowId: string, field: CertificationQscField, value: string) => {
     if (!editable) return;
+    if (rowId === "qsc-total" || DERIVED_FIELDS.includes(field)) return;
     const cycle = currentCycle;
     commit({
       ...cycle,
-      qsc:
-        rowId === "qsc-total"
-          ? { ...cycle.qsc, totalPoints: value }
-          : {
-              ...cycle.qsc,
-              rows: cycle.qsc.rows.map((row) =>
-                row.id === rowId ? { ...row, [field]: value } : row,
-              ),
-            },
+      qsc: {
+        ...cycle.qsc,
+        rows: cycle.qsc.rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)),
+      },
     });
   };
 
@@ -775,7 +853,8 @@ export function CertificationPanel() {
     const ftthPhysical = withCalculatedFtthPhysical(activeCycle.ftthPhysical);
     const newProductsRevenue = withCalculatedNewProductsRevenue(activeCycle.newProductsRevenue);
     const revenuePerFdv = withCalculatedRevenuePerFdv(activeCycle.revenuePerFdv);
-    const qscRowsWithPoints = activeCycle.qsc.rows.filter((row) => row.points.trim() !== "");
+    const qscRows = activeCycle.qsc.rows.map(withCalculatedQscRow);
+    const qscRowsWithPoints = qscRows.filter((row) => row.points.trim() !== "");
     const qscPoints = qscRowsWithPoints.length
       ? qscRowsWithPoints.reduce((total, row) => total + parseCurrency(row.points), 0)
       : parseCurrency(activeCycle.qsc.totalPoints);
@@ -786,7 +865,10 @@ export function CertificationPanel() {
       (total, row) => total + parseCurrency(row.points),
       qscPoints,
     );
-    const stone = certificationStone(parseCurrency(summary.totalizer), totalPoints);
+    const revenueTelecom = parseCurrency(summary.totalizer);
+    const nonQscPoints = totalPoints - qscPoints;
+    const stone = certificationStone(revenueTelecom, totalPoints);
+    const alerts = certificationAlerts(revenueTelecom, totalPoints, qscPoints, nonQscPoints);
     const monthColumns = MONTH_COLUMNS[cycle].map((column): CertificationColumn => ({
       ...column,
       width: "w-[136px]",
@@ -873,7 +955,7 @@ export function CertificationPanel() {
           {derivedRow(newProductsRevenue)}
           {derivedRow(revenuePerFdv)}
           <CertificationQscHistory
-            rows={activeCycle.qsc.rows}
+            rows={qscRows}
             totalPoints={qscTotalPoints}
             monthLabels={MONTH_COLUMNS[cycle].map((column) => column.label)}
             onChange={updateQscValue}
@@ -923,6 +1005,38 @@ export function CertificationPanel() {
             </div>
           ))}
         </dl>
+
+        {alerts.length > 0 && (
+          <div
+            role="alert"
+            aria-label="Alertas de elegibilidade da certificação"
+            className="space-y-2 border-b border-amber-200 bg-amber-50 px-4 py-3.5 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/25 dark:text-amber-100 md:px-5"
+          >
+            {alerts.map((alert) => (
+              <div key={alert.kind} className="flex items-start gap-2.5 text-sm leading-5">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+                <p>
+                  {alert.kind === "revenue-gap" ? (
+                    <>
+                      <strong>GAP de receita:</strong> a pontuação já alcança a pedra{" "}
+                      <strong>{alert.stone.stone}</strong>, mas faltam {fmtBRL(alert.gap)} para
+                      atingir a elegibilidade de receita. A pedra atual é{" "}
+                      <strong>{stone.stone}</strong>.
+                    </>
+                  ) : (
+                    <>
+                      <strong>GAP de pontuação do QSC:</strong> a receita já é elegível para a pedra{" "}
+                      <strong>{alert.stone.stone}</strong>, mas faltam{" "}
+                      <strong>{fmtInt(alert.gap)} pts de QSC</strong> (necessário:{" "}
+                      {fmtInt(alert.requiredQscPoints)}; atual: {fmtInt(qscPoints)}). A pedra atual
+                      é <strong>{stone.stone}</strong>.
+                    </>
+                  )}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="p-4 md:p-5">
           {loading ? (

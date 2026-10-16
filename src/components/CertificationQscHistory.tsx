@@ -51,9 +51,10 @@ export function CertificationQscHistory({
     rowId: string,
     align: "numeric" | "state",
     className?: string,
+    forceReadOnly = false,
   ) => (
     <TableCell key={key} align={align} className={className}>
-      {readOnly ? (
+      {readOnly || forceReadOnly ? (
         <span className="font-medium text-foreground">{value.trim() === "" ? "—" : value}</span>
       ) : (
         <Input
@@ -103,6 +104,7 @@ export function CertificationQscHistory({
           "qsc-total",
           "numeric",
           "font-semibold",
+          true,
         )}
         <TableCell aria-hidden="true" />
       </TableRow>
