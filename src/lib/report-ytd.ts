@@ -6,8 +6,9 @@
  * relatório impresso. Aqui a ausência é representada explicitamente como `null` e
  * apresentada como "—"; ausência nunca vira zero, porque zero é um resultado real.
  *
- * As regras de cálculo são as mesmas da visão Resultados e não mudam:
- * - um único registro do produto preserva os campos importados;
+ * As regras de cálculo são as mesmas da visão Resultados:
+ * - metas e reais são somados no recorte;
+ * - média/mês é calculada automaticamente como `real / meses decorridos`;
  * - vários registros somam metas/reais/gaps e recalculam
  *   `attainment = real/meta` e `yoy = real/previousReal - 1`, com zero quando o
  *   denominador é zero.
@@ -57,7 +58,11 @@ function sumAvailable(values: Array<number | null>): number | null {
   return available.length ? available.reduce((total, value) => total + value, 0) : null;
 }
 
-export function buildYtdSummary(product: string, records: YtdSourceRecord[]): YtdSummary {
+export function buildYtdSummary(
+  product: string,
+  records: YtdSourceRecord[],
+  monthsElapsed = 1,
+): YtdSummary {
   const matching = records.filter(
     (record) => normalizeProduct(record.product) === normalizeProduct(product),
   );
@@ -82,7 +87,7 @@ export function buildYtdSummary(product: string, records: YtdSourceRecord[]): Yt
           : 0
         : null,
     gap: sumAvailable(collect((record) => record.gap)),
-    average: sumAvailable(collect((record) => record.average)),
+    average: matching.length && monthsElapsed > 0 ? real / monthsElapsed : null,
     yoyGap: sumAvailable(collect((record) => record.yoyGap)),
     yoy: source
       ? finiteOrNull(source.yoy)

@@ -10,8 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState, ErrorState } from "@/components/EmptyState";
 import { useFtth, usePartners } from "@/hooks/useData";
-import { fmtInt, fmtPct } from "@/lib/format";
-import { MapPin, Signal } from "lucide-react";
+import { fmtInt } from "@/lib/format";
+import { Building2, MapPin } from "lucide-react";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 
@@ -124,29 +124,16 @@ function Page() {
                 emphasis
               />
               <KpiCard
-                icon={Signal}
-                title="Penetração na base"
-                value={fmtPct(data?.kpis.penetracaoBase)}
-                description="Base Fixa Básica sobre base mais oportunidade."
+                icon={Building2}
+                title="Posse"
+                value={fmtInt(data?.kpis.posse)}
                 tooltip={
                   <OpportunityFilterTooltip
                     groups={[
                       {
-                        title: "Base Fixa Básica",
                         rules: [
                           ACTIVE_REVENUE_FILTER,
-                          { column: "TP_PRODUTO", selection: 'contém "BASICA"' },
-                        ],
-                      },
-                      {
-                        title: "Oportunidade Fixa Básica",
-                        rules: [
-                          ACTIVE_REVENUE_FILTER,
-                          {
-                            column: "FIXA_BASICA",
-                            selection:
-                              'contém "Aquisição" ou "Adesão" e contém "Capacidade de Pagamento"',
-                          },
+                          { column: "POSSE", selection: 'selecione "Empresas"' },
                         ],
                       },
                     ]}

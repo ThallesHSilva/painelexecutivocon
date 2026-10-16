@@ -176,6 +176,7 @@ export async function fetchMobile(partnerIds: string[]) {
       aparelhosIphone: total((item) => item.opportunities.deviceIphone),
       aparelhosGalaxyPremium: total((item) => item.opportunities.deviceGalaxyPremium),
       aparelhosOutros: total((item) => item.opportunities.deviceOther),
+      posse: total((item) => item.opportunities.posseEmpresasWithoutMobile),
     },
     composicao: mergeMapaRows(selected, (item) => item.breakdowns.mobileComposition, "tipo", [
       "valor",
@@ -200,18 +201,17 @@ export async function fetchFtth(partnerIds: string[]) {
   const ids = scope(partnerIds, snapshot.partners);
   const selected = selectedMapaScopes(snapshot, ids);
   const total = <T>(select: (scope: MapaScope) => T) => sumMapa(selected, select);
-  const baseBasica = total((item) => item.breakdowns.ftth.baseBasica);
   const oportunidades = total((item) => item.breakdowns.ftth.oportunidades);
 
   return {
     kpis: {
       cobertura: total((item) => item.breakdowns.ftth.cobertura),
       oportunidades,
-      penetracaoBase: baseBasica + oportunidades ? baseBasica / (baseBasica + oportunidades) : 0,
       renovacao: total((item) => item.breakdowns.ftth.renovacao),
       semFtthNoParque: total((item) => item.breakdowns.ftth.semFtthNoParque),
       comFtthNoParque: total((item) => item.breakdowns.ftth.comFtthNoParque),
       convergentes: total((item) => item.breakdowns.ftth.convergentes),
+      posse: total((item) => item.opportunities.posseEmpresas),
     },
     composicao: mergeMapaRows(selected, (item) => item.breakdowns.ftth.composicao, "tipo", [
       "valor",
@@ -247,6 +247,7 @@ export async function fetchAdvanced(partnerIds: string[]) {
       acquisitionWinback,
       renewal,
       vivoTech,
+      posse: total((item) => item.opportunities.posseEmpresas),
       percentualBase: totalBase ? acquisitionWinback / totalBase : 0,
       participacaoMix: totalEvents ? acquisitionWinback / totalEvents : 0,
     },

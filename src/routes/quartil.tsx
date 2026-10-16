@@ -31,7 +31,12 @@ import { TableScroll } from "@/components/TableScroll";
 import { EmptyState, ErrorState } from "@/components/EmptyState";
 import { fmtBRL, fmtInt, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { QuartilConsultant, QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
+import {
+  isQuartilAlert,
+  type QuartilConsultant,
+  type QuartilMetric,
+  type QuartilSnapshot,
+} from "@/lib/quartil";
 
 export const Route = createFileRoute("/quartil")({
   head: () => ({ meta: [{ title: "Quartil de Consultores — Mapa Parque" }] }),
@@ -109,13 +114,6 @@ function matchesEvolution(value: number | null, status: EvolutionStatus) {
   if (status === "stable") return value === 0;
   if (status === "up") return value !== null && value > 0;
   return value !== null && value < 0;
-}
-
-function isQuartileAlert(
-  consultant: import("@/lib/quartil").QuartilConsultant,
-  metric: QuartilMetric,
-) {
-  return consultant.tenure === "experienced" && consultant.quartiles[metric] === 5;
 }
 
 function quartilePoints(value: number | null) {
@@ -346,7 +344,7 @@ function QuartilPage() {
     )
     .filter((c) => {
       if (!listFilter) return true;
-      if (listFilter.type === "alert") return isQuartileAlert(c, metric);
+      if (listFilter.type === "alert") return isQuartilAlert(c, metric);
       return matchesEvolution(c.comparisons[listFilter.period].changes[metric], listFilter.status);
     });
   const shown = rows;
@@ -694,7 +692,7 @@ function QuartilPage() {
                       {
                         type: "alert" as const,
                         label: "Alerta",
-                        count: tenureScopedConsultants.filter((c) => isQuartileAlert(c, metric))
+                        count: tenureScopedConsultants.filter((c) => isQuartilAlert(c, metric))
                           .length,
                         color: "text-destructive",
                       },
@@ -733,7 +731,7 @@ function QuartilPage() {
                           <p className="mt-0.5 text-xs text-muted-foreground">{item.label}</p>
                           {"type" in item && (
                             <p className="mt-0.5 text-[11px] text-muted-foreground">
-                              3+ meses no Q5
+                              1 mês no Q5 (novos) · 3 meses (demais)
                             </p>
                           )}
                         </button>
@@ -840,7 +838,7 @@ function QuartilPage() {
                 <span className="text-muted-foreground">Recorte da lista:</span>
                 <span className="font-medium text-foreground">
                   {listFilter?.type === "alert"
-                    ? `Alerta · ${selectedLabel} · 3+ meses no Q5`
+                    ? `Alerta · ${selectedLabel} · 1 mês no Q5 (novos) · 3 meses (demais)`
                     : listFilter?.type === "evolution"
                       ? `${evolutionLabels[listFilter.status]} · ${selectedLabel} · ${listFilter.period} meses`
                       : null}

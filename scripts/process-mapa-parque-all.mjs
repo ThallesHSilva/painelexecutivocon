@@ -145,10 +145,6 @@ opportunities.percentageWithOpportunity = totals.allCnpj
   ? opportunities.uniqueCnpjWithOpportunity / totals.allCnpj
   : 0;
 const ftth = sumObjects(snapshots.map((item) => item.breakdowns.ftth));
-ftth.penetracaoBase =
-  ftth.baseBasica + ftth.oportunidades
-    ? ftth.baseBasica / (ftth.baseBasica + ftth.oportunidades)
-    : 0;
 ftth.composicao = mergeRows(snapshots, (item) => item.breakdowns.ftth.composicao, ["valor"]);
 ftth.oportunidadesPorCidade = mergeRows(
   snapshots,

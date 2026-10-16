@@ -6,6 +6,7 @@ import { usePartnerFilter } from "@/contexts/AppContexts";
 import { useFtth, useMobile, usePartners, useQsc } from "@/hooks/useData";
 import { fmtBRLCompact, fmtDec, fmtInt, fmtPct, fmtQscPct } from "@/lib/format";
 import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
+import { isQuartilAlert } from "@/lib/quartil";
 import type { QscDomain, QscMetricSeries } from "@/lib/qsc";
 import type {
   BestGuessRecord,
@@ -180,8 +181,12 @@ function qscDomainHistory(domain: QscDomain, metrics: QscMetricSeries[], compete
  * A consolidação YTD/YoY vive em `@/lib/report-ytd`, com testes de caracterização
  * para snapshots legados incompletos (a origem dos `NaN` observados no relatório).
  */
-function towerYtdSummary(tower: ServiceTower, records: SourceRecord[]): YtdSummary {
-  return buildYtdSummary(TOWER_PRODUCT_MAP[tower.id] ?? tower.title, records);
+function towerYtdSummary(
+  tower: ServiceTower,
+  records: SourceRecord[],
+  monthsElapsed: number,
+): YtdSummary {
+  return buildYtdSummary(TOWER_PRODUCT_MAP[tower.id] ?? tower.title, records, monthsElapsed);
 }
 
 function ExecutiveReportPage() {
@@ -383,6 +388,7 @@ function ExecutiveReportPage() {
           selectedCompanies={selectedCompanies}
           records={scopedSourceRecords}
           period={results.resultados.source.period}
+          monthsElapsed={results.resultados.source.monthsElapsed}
         />
       ))}
 
@@ -557,13 +563,8 @@ function ExecutiveReportPage() {
         partner={partnerLabel}
         date={reportDate}
       >
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <HeroMetric label="Aquisição fixa básica" value={fmtInt(ftth?.kpis.oportunidades)} />
-          <HeroMetric
-            label="Penetração na base"
-            value={fmtPct(ftth?.kpis.penetracaoBase)}
-            tone="sky"
-          />
         </div>
         <div className="mt-5 grid grid-cols-4 gap-3">
           <MetricCard label="Cobertura" value={fmtInt(ftth?.kpis.cobertura)} />
@@ -796,6 +797,7 @@ function TowerReportPage({
   selectedCompanies,
   records,
   period,
+  monthsElapsed,
 }: {
   tower: ServiceTower;
   page: number;
@@ -805,8 +807,9 @@ function TowerReportPage({
   selectedCompanies: Set<string>;
   records: SourceRecord[];
   period: string;
+  monthsElapsed: number;
 }) {
-  const ytd = towerYtdSummary(tower, records);
+  const ytd = towerYtdSummary(tower, records, monthsElapsed);
   const towerRows = selectedCompanies.size
     ? tower.rows.filter((row) => selectedCompanies.has(normalize(row.partner)))
     : tower.rows;
@@ -1064,10 +1067,8 @@ function QuartilReportPage({
   date: string;
 }) {
   const consultants = quartil?.consultants ?? [];
-  const alertCount = consultants.filter(
-    (consultant) =>
-      consultant.tenure === "experienced" &&
-      QUARTIL_REPORT_METRICS.some(({ id }) => consultant.quartiles[id] === 5),
+  const alertCount = consultants.filter((consultant) =>
+    QUARTIL_REPORT_METRICS.some(({ id }) => isQuartilAlert(consultant, id)),
   ).length;
 
   return (

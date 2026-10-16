@@ -90,10 +90,10 @@ type PortabilitySummaryRow = {
 };
 type PortabilitySummaryTotal = Omit<PortabilitySummaryRow, "month" | "label">;
 
-const calculatePeriod = (input: PeriodInput, average: number): PeriodCalculation => ({
+const calculatePeriod = (input: PeriodInput, monthsElapsed: number): PeriodCalculation => ({
   attainment: input.meta > 0 ? input.real / input.meta : null,
   gap: input.real - input.meta,
-  average,
+  average: monthsElapsed > 0 ? input.real / monthsElapsed : 0,
 });
 
 const INITIAL_CERTIFICATION_ROWS: CertificationRow[] = [
@@ -692,7 +692,6 @@ function ResultadosPage() {
         product: string;
         meta: number;
         real: number;
-        average: number;
         previousMeta: number;
         previousReal: number;
       }
@@ -703,13 +702,11 @@ function ResultadosPage() {
         product: record.product,
         meta: 0,
         real: 0,
-        average: 0,
         previousMeta: 0,
         previousReal: 0,
       };
       current.meta += record.meta;
       current.real += record.real;
-      current.average += record.average ?? 0;
       current.previousMeta += record.previousMeta;
       current.previousReal += record.previousReal;
       byProduct.set(record.product, current);
@@ -756,11 +753,8 @@ function ResultadosPage() {
           product: record.product,
           previousInput,
           currentInput,
-          previous: calculatePeriod(
-            previousInput,
-            previousInput.real / (reportSource?.monthsElapsed ?? 1),
-          ),
-          current: calculatePeriod(currentInput, record.average),
+          previous: calculatePeriod(previousInput, reportSource?.monthsElapsed ?? 1),
+          current: calculatePeriod(currentInput, reportSource?.monthsElapsed ?? 1),
           yoy: previousInput.real > 0 ? currentInput.real / previousInput.real - 1 : null,
           yoyGap: currentInput.real - previousInput.real,
         };
@@ -1126,7 +1120,7 @@ function PeriodPanel({
     (total, row) => {
       const calculation = row[calculationKey];
       return {
-        attainment: total.attainment + calculation.attainment,
+        attainment: (total.attainment ?? 0) + (calculation.attainment ?? 0),
         gap: total.gap + calculation.gap,
         average: total.average + calculation.average,
       };
@@ -1143,7 +1137,7 @@ function PeriodPanel({
     sourcePeriod
       ? `Período importado: ${sourcePeriod}${previousPeriodLabel ? ` · comparação com ${previousPeriodLabel}` : ""}.`
       : null,
-    "Meta e Real são valores fixos importados da planilha. Por produto, %, Gap TT e YoY são recalculados; Média/mês é importada da coluna Média_26 da planilha.",
+    "Meta e Real são valores fixos importados da planilha. Por produto, %, Gap TT, Média/mês (Real ÷ meses decorridos) e YoY são recalculados automaticamente.",
   ]
     .filter(Boolean)
     .join(" ");
@@ -1157,7 +1151,7 @@ function PeriodPanel({
       lead: (
         <MetricValue
           value={fmtPct(calculation.attainment)}
-          positive={calculation.attainment >= 1}
+          positive={(calculation.attainment ?? 0) >= 1}
         />
       ),
       items: [
@@ -1177,7 +1171,7 @@ function PeriodPanel({
     lead: (
       <MetricValue
         value={fmtPct(totalCalculation.attainment)}
-        positive={totalCalculation.attainment >= 1}
+        positive={(totalCalculation.attainment ?? 0) >= 1}
       />
     ),
     items: [
@@ -1256,7 +1250,7 @@ function PeriodPanel({
                       <TableCell align="numeric">
                         <MetricValue
                           value={fmtPct(calculation.attainment)}
-                          positive={calculation.attainment >= 1}
+                          positive={(calculation.attainment ?? 0) >= 1}
                         />
                       </TableCell>
                       <TableCell align="numeric">
@@ -1295,7 +1289,7 @@ function PeriodPanel({
                   <TableCell align="numeric">
                     <MetricValue
                       value={fmtPct(totalCalculation.attainment)}
-                      positive={totalCalculation.attainment >= 1}
+                      positive={(totalCalculation.attainment ?? 0) >= 1}
                     />
                   </TableCell>
                   <TableCell align="numeric">

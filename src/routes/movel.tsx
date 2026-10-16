@@ -11,7 +11,15 @@ import { EmptyState, ErrorState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMobile, usePartners } from "@/hooks/useData";
 import { fmtBRL, fmtBRLCompact, fmtInt, fmtPct } from "@/lib/format";
-import { CircleMinus, CreditCard, Download, RefreshCw, Smartphone, UsersRound } from "lucide-react";
+import {
+  Building2,
+  CircleMinus,
+  CreditCard,
+  Download,
+  RefreshCw,
+  Smartphone,
+  UsersRound,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportOpportunityBase } from "@/lib/export-xlsx";
 import { usePartnerFilter } from "@/contexts/AppContexts";
@@ -97,7 +105,7 @@ function Page() {
             <h2 id="movel-linhas" className="mb-2 text-[13px] font-semibold text-muted-foreground">
               Oportunidade de linha móvel · CNPJs do Mapa Parque no recorte
             </h2>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <KpiCard
                 icon={UsersRound}
                 title="Oportunidade Móvel"
@@ -177,6 +185,28 @@ function Page() {
                           {
                             column: "QT_MOVEL_TERM",
                             selection: "selecione 0 e vazios",
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                }
+                loading={isLoading}
+              />
+              <KpiCard
+                icon={Building2}
+                title="Posse"
+                value={fmtInt(data?.kpis.posse)}
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          { column: "POSSE", selection: 'selecione "Empresas"' },
+                          {
+                            column: "POSSE",
+                            selection: 'exclua valores que iniciam com "MOVEL"',
                           },
                         ],
                       },

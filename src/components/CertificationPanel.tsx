@@ -312,6 +312,7 @@ const BASE_COLUMNS: CertificationColumn[] = [
 ];
 
 const SUM_FIELDS = ["jan", "feb", "mar", "apr", "may", "jun", "totalizer"] as const;
+const MONTH_FIELDS = ["jan", "feb", "mar", "apr", "may", "jun"] as const;
 const SUMMARY_CALCULATED_FIELDS = [...SUM_FIELDS, "points", "band"] as const;
 const REVENUE_SCORE_RULES = [
   { minimum: 80_000, band: "FAIXA 5", points: "6.500" },
@@ -376,7 +377,7 @@ const formatCurrency = (value: number) =>
 
 function withCalculatedSummary(summary: CertificationRow, breakdown: CertificationRow[]) {
   const values = Object.fromEntries(
-    SUM_FIELDS.map((field) => {
+    MONTH_FIELDS.map((field) => {
       const filledValues = breakdown
         .map((row) => row[field])
         .filter((value) => value.trim() !== "");
@@ -387,16 +388,32 @@ function withCalculatedSummary(summary: CertificationRow, breakdown: Certificati
           : "",
       ];
     }),
-  ) as Pick<CertificationRow, (typeof SUM_FIELDS)[number]>;
-  const totalizer = values.totalizer ? parseCurrency(values.totalizer) : 0;
+  ) as Pick<CertificationRow, (typeof MONTH_FIELDS)[number]>;
+  const monthlyTotals = MONTH_FIELDS.map((field) => values[field])
+    .filter((value) => value.trim() !== "")
+    .map(parseCurrency);
+  const totalizer = monthlyTotals.length
+    ? monthlyTotals.reduce((total, value) => total + value, 0) / monthlyTotals.length
+    : 0;
   const score = REVENUE_SCORE_RULES.find((rule) => totalizer >= rule.minimum);
 
   return {
     ...summary,
     ...values,
+    totalizer: monthlyTotals.length ? formatCurrency(totalizer) : "",
     points: score?.points ?? "0",
     band: score?.band ?? "FAIXA 0",
   };
+}
+
+function withCalculatedAverage(row: CertificationRow) {
+  const monthValues = MONTH_FIELDS.map((field) => row[field]).filter(
+    (value) => value.trim() !== "",
+  );
+  const totalizer = monthValues.length
+    ? monthValues.reduce((total, value) => total + parseCurrency(value), 0) / monthValues.length
+    : 0;
+  return { ...row, totalizer: monthValues.length ? formatCurrency(totalizer) : "" };
 }
 
 function withCalculatedOneShot(row: CertificationRow) {
@@ -758,7 +775,13 @@ export function CertificationPanel() {
     const ftthPhysical = withCalculatedFtthPhysical(activeCycle.ftthPhysical);
     const newProductsRevenue = withCalculatedNewProductsRevenue(activeCycle.newProductsRevenue);
     const revenuePerFdv = withCalculatedRevenuePerFdv(activeCycle.revenuePerFdv);
-    const qscPoints = parseCurrency(activeCycle.qsc.totalPoints);
+    const qscRowsWithPoints = activeCycle.qsc.rows.filter((row) => row.points.trim() !== "");
+    const qscPoints = qscRowsWithPoints.length
+      ? qscRowsWithPoints.reduce((total, row) => total + parseCurrency(row.points), 0)
+      : parseCurrency(activeCycle.qsc.totalPoints);
+    const qscTotalPoints = qscRowsWithPoints.length
+      ? formatCurrency(qscPoints)
+      : activeCycle.qsc.totalPoints;
     const totalPoints = [summary, oneShot, ftthPhysical, newProductsRevenue, revenuePerFdv].reduce(
       (total, row) => total + parseCurrency(row.points),
       qscPoints,
@@ -827,27 +850,31 @@ export function CertificationPanel() {
             {columns.map((column) => readOnlyCell(summary, column))}
           </TableRow>
           {expanded[cycle] &&
-            activeCycle.breakdown.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className={cn(STICKY_ID_CLASS, "bg-card pl-8 text-foreground")}>
-                  {row.indicator}
-                </TableCell>
-                {columns.map((column) => {
-                  // A composição não usa Pts nem Faixa: a pontuação é do consolidado.
-                  if (column.field === "points" || column.field === "band") {
-                    return <TableCell key={column.field} aria-hidden="true" />;
-                  }
-                  return cycleEditable ? editableCell(row, column) : readOnlyCell(row, column);
-                })}
-              </TableRow>
-            ))}
+            activeCycle.breakdown.map((rawRow) => {
+              const row = withCalculatedAverage(rawRow);
+              return (
+                <TableRow key={row.id}>
+                  <TableCell className={cn(STICKY_ID_CLASS, "bg-card pl-8 text-foreground")}>
+                    {row.indicator}
+                  </TableCell>
+                  {columns.map((column) => {
+                    // A composição não usa Pts nem Faixa: a pontuação é do consolidado.
+                    if (column.field === "totalizer") return readOnlyCell(row, column);
+                    if (column.field === "points" || column.field === "band") {
+                      return <TableCell key={column.field} aria-hidden="true" />;
+                    }
+                    return cycleEditable ? editableCell(row, column) : readOnlyCell(row, column);
+                  })}
+                </TableRow>
+              );
+            })}
           {derivedRow(oneShot)}
           {derivedRow(ftthPhysical)}
           {derivedRow(newProductsRevenue)}
           {derivedRow(revenuePerFdv)}
           <CertificationQscHistory
             rows={activeCycle.qsc.rows}
-            totalPoints={activeCycle.qsc.totalPoints}
+            totalPoints={qscTotalPoints}
             monthLabels={MONTH_COLUMNS[cycle].map((column) => column.label)}
             onChange={updateQscValue}
             readOnly={!cycleEditable}

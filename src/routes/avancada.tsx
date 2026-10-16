@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, type ReactNode } from "react";
-import { Cpu, Percent, RefreshCw, Rocket } from "lucide-react";
+import { Building2, Cpu, Percent, RefreshCw, Rocket } from "lucide-react";
 import { ChartCard } from "@/components/ChartCard";
 import { EmptyState, ErrorState } from "@/components/EmptyState";
 import { KpiCard } from "@/components/KpiCard";
@@ -76,7 +76,7 @@ function Page() {
             >
               Portfólio especialista · CNPJs do Mapa Parque no recorte
             </h2>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <KpiCard
                 icon={Rocket}
                 title="Oportunidade Avançada"
@@ -154,6 +154,24 @@ function Page() {
                             column: "VIVO_TECH",
                             selection: 'contém "Capacidade de Pagamento"',
                           },
+                        ],
+                      },
+                    ]}
+                  />
+                }
+                loading={isLoading}
+              />
+              <KpiCard
+                icon={Building2}
+                title="Posse"
+                value={fmtInt(data?.kpis.posse)}
+                tooltip={
+                  <OpportunityFilterTooltip
+                    groups={[
+                      {
+                        rules: [
+                          ACTIVE_REVENUE_FILTER,
+                          { column: "POSSE", selection: 'selecione "Empresas"' },
                         ],
                       },
                     ]}

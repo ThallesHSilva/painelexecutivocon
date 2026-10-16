@@ -9,97 +9,37 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
-import { Route as AvancadaRouteImport } from './routes/avancada'
-import { Route as CertificacaoRouteImport } from './routes/certificacao'
-import { Route as FtthRouteImport } from './routes/ftth'
-import { Route as LicencasRouteImport } from './routes/licencas'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as MovelRouteImport } from './routes/movel'
-import { Route as PbiRouteImport } from './routes/pbi'
-import { Route as QscRouteImport } from './routes/qsc'
-import { Route as QuartilRouteImport } from './routes/quartil'
-import { Route as RelatorioExecutivoRouteImport } from './routes/relatorio-executivo'
-import { Route as ResultadosRouteImport } from './routes/resultados'
-import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as UsuariosRouteImport } from './routes/usuarios'
-import { Route as ApiQscRouteImport } from './routes/api.qsc'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as ResultadosRouteImport } from './routes/resultados'
+import { Route as RelatorioExecutivoRouteImport } from './routes/relatorio-executivo'
+import { Route as QuartilRouteImport } from './routes/quartil'
+import { Route as QscRouteImport } from './routes/qsc'
+import { Route as PbiRouteImport } from './routes/pbi'
+import { Route as MovelRouteImport } from './routes/movel'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as LicencasRouteImport } from './routes/licencas'
+import { Route as FtthRouteImport } from './routes/ftth'
+import { Route as CertificacaoRouteImport } from './routes/certificacao'
+import { Route as AvancadaRouteImport } from './routes/avancada'
+import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiQuartilRouteImport } from './routes/api.quartil'
-import { Route as ApiAdminUsersRouteImport } from './routes/api.admin.users'
-import { Route as ApiAuthLoginRouteImport } from './routes/api.auth.login'
-import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
-import { Route as ApiAuthRegisterRouteImport } from './routes/api.auth.register'
-import { Route as ApiAuthSessionRouteImport } from './routes/api.auth.session'
-import { Route as ApiCertificacaoPreviaRouteImport } from './routes/api.certificacao.previa'
-import { Route as ApiDataMapaRouteImport } from './routes/api.data.mapa'
-import { Route as ApiDataResultadosRouteImport } from './routes/api.data.resultados'
-import { Route as ApiDataUploadRouteImport } from './routes/api.data.upload'
+import { Route as ApiQscRouteImport } from './routes/api.qsc'
 import { Route as ApiDirectorAccessRouteImport } from './routes/api.director.access'
+import { Route as ApiDataUploadRouteImport } from './routes/api.data.upload'
+import { Route as ApiDataResultadosRouteImport } from './routes/api.data.resultados'
+import { Route as ApiDataMapaRouteImport } from './routes/api.data.mapa'
+import { Route as ApiCertificacaoPreviaRouteImport } from './routes/api.certificacao.previa'
+import { Route as ApiAuthSessionRouteImport } from './routes/api.auth.session'
+import { Route as ApiAuthRegisterRouteImport } from './routes/api.auth.register'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api.auth.logout'
+import { Route as ApiAuthLoginRouteImport } from './routes/api.auth.login'
+import { Route as ApiAdminUsersRouteImport } from './routes/api.admin.users'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AlimentacaoRoute = AlimentacaoRouteImport.update({
-  id: '/alimentacao',
-  path: '/alimentacao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AvancadaRoute = AvancadaRouteImport.update({
-  id: '/avancada',
-  path: '/avancada',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CertificacaoRoute = CertificacaoRouteImport.update({
-  id: '/certificacao',
-  path: '/certificacao',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FtthRoute = FtthRouteImport.update({
-  id: '/ftth',
-  path: '/ftth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LicencasRoute = LicencasRouteImport.update({
-  id: '/licencas',
-  path: '/licencas',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MovelRoute = MovelRouteImport.update({
-  id: '/movel',
-  path: '/movel',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PbiRoute = PbiRouteImport.update({
-  id: '/pbi',
-  path: '/pbi',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QscRoute = QscRouteImport.update({
-  id: '/qsc',
-  path: '/qsc',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const QuartilRoute = QuartilRouteImport.update({
-  id: '/quartil',
-  path: '/quartil',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RelatorioExecutivoRoute = RelatorioExecutivoRouteImport.update({
-  id: '/relatorio-executivo',
-  path: '/relatorio-executivo',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResultadosRoute = ResultadosRouteImport.update({
-  id: '/resultados',
-  path: '/resultados',
+const UsuariosRoute = UsuariosRouteImport.update({
+  id: '/usuarios',
+  path: '/usuarios',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -107,14 +47,69 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
-const UsuariosRoute = UsuariosRouteImport.update({
-  id: '/usuarios',
-  path: '/usuarios',
+const ResultadosRoute = ResultadosRouteImport.update({
+  id: '/resultados',
+  path: '/resultados',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiQscRoute = ApiQscRouteImport.update({
-  id: '/api/qsc',
-  path: '/api/qsc',
+const RelatorioExecutivoRoute = RelatorioExecutivoRouteImport.update({
+  id: '/relatorio-executivo',
+  path: '/relatorio-executivo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QuartilRoute = QuartilRouteImport.update({
+  id: '/quartil',
+  path: '/quartil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const QscRoute = QscRouteImport.update({
+  id: '/qsc',
+  path: '/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PbiRoute = PbiRouteImport.update({
+  id: '/pbi',
+  path: '/pbi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MovelRoute = MovelRouteImport.update({
+  id: '/movel',
+  path: '/movel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LicencasRoute = LicencasRouteImport.update({
+  id: '/licencas',
+  path: '/licencas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FtthRoute = FtthRouteImport.update({
+  id: '/ftth',
+  path: '/ftth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CertificacaoRoute = CertificacaoRouteImport.update({
+  id: '/certificacao',
+  path: '/certificacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AvancadaRoute = AvancadaRouteImport.update({
+  id: '/avancada',
+  path: '/avancada',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AlimentacaoRoute = AlimentacaoRouteImport.update({
+  id: '/alimentacao',
+  path: '/alimentacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiQuartilRoute = ApiQuartilRouteImport.update({
@@ -122,44 +117,14 @@ const ApiQuartilRoute = ApiQuartilRouteImport.update({
   path: '/api/quartil',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
-  id: '/api/admin/users',
-  path: '/api/admin/users',
+const ApiQscRoute = ApiQscRouteImport.update({
+  id: '/api/qsc',
+  path: '/api/qsc',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
-  id: '/api/auth/login',
-  path: '/api/auth/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
-  id: '/api/auth/logout',
-  path: '/api/auth/logout',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
-  id: '/api/auth/register',
-  path: '/api/auth/register',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
-  id: '/api/auth/session',
-  path: '/api/auth/session',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCertificacaoPreviaRoute = ApiCertificacaoPreviaRouteImport.update({
-  id: '/api/certificacao/previa',
-  path: '/api/certificacao/previa',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDataMapaRoute = ApiDataMapaRouteImport.update({
-  id: '/api/data/mapa',
-  path: '/api/data/mapa',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiDataResultadosRoute = ApiDataResultadosRouteImport.update({
-  id: '/api/data/resultados',
-  path: '/api/data/resultados',
+const ApiDirectorAccessRoute = ApiDirectorAccessRouteImport.update({
+  id: '/api/director/access',
+  path: '/api/director/access',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDataUploadRoute = ApiDataUploadRouteImport.update({
@@ -167,9 +132,44 @@ const ApiDataUploadRoute = ApiDataUploadRouteImport.update({
   path: '/api/data/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiDirectorAccessRoute = ApiDirectorAccessRouteImport.update({
-  id: '/api/director/access',
-  path: '/api/director/access',
+const ApiDataResultadosRoute = ApiDataResultadosRouteImport.update({
+  id: '/api/data/resultados',
+  path: '/api/data/resultados',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDataMapaRoute = ApiDataMapaRouteImport.update({
+  id: '/api/data/mapa',
+  path: '/api/data/mapa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiCertificacaoPreviaRoute = ApiCertificacaoPreviaRouteImport.update({
+  id: '/api/certificacao/previa',
+  path: '/api/certificacao/previa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSessionRoute = ApiAuthSessionRouteImport.update({
+  id: '/api/auth/session',
+  path: '/api/auth/session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
+  id: '/api/auth/register',
+  path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLoginRoute = ApiAuthLoginRouteImport.update({
+  id: '/api/auth/login',
+  path: '/api/auth/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAdminUsersRoute = ApiAdminUsersRouteImport.update({
+  id: '/api/admin/users',
+  path: '/api/admin/users',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -383,95 +383,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/alimentacao': {
-      id: '/alimentacao'
-      path: '/alimentacao'
-      fullPath: '/alimentacao'
-      preLoaderRoute: typeof AlimentacaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/avancada': {
-      id: '/avancada'
-      path: '/avancada'
-      fullPath: '/avancada'
-      preLoaderRoute: typeof AvancadaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/certificacao': {
-      id: '/certificacao'
-      path: '/certificacao'
-      fullPath: '/certificacao'
-      preLoaderRoute: typeof CertificacaoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/ftth': {
-      id: '/ftth'
-      path: '/ftth'
-      fullPath: '/ftth'
-      preLoaderRoute: typeof FtthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/licencas': {
-      id: '/licencas'
-      path: '/licencas'
-      fullPath: '/licencas'
-      preLoaderRoute: typeof LicencasRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/movel': {
-      id: '/movel'
-      path: '/movel'
-      fullPath: '/movel'
-      preLoaderRoute: typeof MovelRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/pbi': {
-      id: '/pbi'
-      path: '/pbi'
-      fullPath: '/pbi'
-      preLoaderRoute: typeof PbiRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/qsc': {
-      id: '/qsc'
-      path: '/qsc'
-      fullPath: '/qsc'
-      preLoaderRoute: typeof QscRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/quartil': {
-      id: '/quartil'
-      path: '/quartil'
-      fullPath: '/quartil'
-      preLoaderRoute: typeof QuartilRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/relatorio-executivo': {
-      id: '/relatorio-executivo'
-      path: '/relatorio-executivo'
-      fullPath: '/relatorio-executivo'
-      preLoaderRoute: typeof RelatorioExecutivoRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/resultados': {
-      id: '/resultados'
-      path: '/resultados'
-      fullPath: '/resultados'
-      preLoaderRoute: typeof ResultadosRouteImport
+    '/usuarios': {
+      id: '/usuarios'
+      path: '/usuarios'
+      fullPath: '/usuarios'
+      preLoaderRoute: typeof UsuariosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -481,18 +397,95 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/usuarios': {
-      id: '/usuarios'
-      path: '/usuarios'
-      fullPath: '/usuarios'
-      preLoaderRoute: typeof UsuariosRouteImport
+    '/resultados': {
+      id: '/resultados'
+      path: '/resultados'
+      fullPath: '/resultados'
+      preLoaderRoute: typeof ResultadosRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/qsc': {
-      id: '/api/qsc'
-      path: '/api/qsc'
-      fullPath: '/api/qsc'
-      preLoaderRoute: typeof ApiQscRouteImport
+    '/relatorio-executivo': {
+      id: '/relatorio-executivo'
+      path: '/relatorio-executivo'
+      fullPath: '/relatorio-executivo'
+      preLoaderRoute: typeof RelatorioExecutivoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/quartil': {
+      id: '/quartil'
+      path: '/quartil'
+      fullPath: '/quartil'
+      preLoaderRoute: typeof QuartilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/qsc': {
+      id: '/qsc'
+      path: '/qsc'
+      fullPath: '/qsc'
+      preLoaderRoute: typeof QscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pbi': {
+      id: '/pbi'
+      path: '/pbi'
+      fullPath: '/pbi'
+      preLoaderRoute: typeof PbiRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/movel': {
+      id: '/movel'
+      path: '/movel'
+      fullPath: '/movel'
+      preLoaderRoute: typeof MovelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/licencas': {
+      id: '/licencas'
+      path: '/licencas'
+      fullPath: '/licencas'
+      preLoaderRoute: typeof LicencasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ftth': {
+      id: '/ftth'
+      path: '/ftth'
+      fullPath: '/ftth'
+      preLoaderRoute: typeof FtthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/certificacao': {
+      id: '/certificacao'
+      path: '/certificacao'
+      fullPath: '/certificacao'
+      preLoaderRoute: typeof CertificacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/avancada': {
+      id: '/avancada'
+      path: '/avancada'
+      fullPath: '/avancada'
+      preLoaderRoute: typeof AvancadaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/alimentacao': {
+      id: '/alimentacao'
+      path: '/alimentacao'
+      fullPath: '/alimentacao'
+      preLoaderRoute: typeof AlimentacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/quartil': {
@@ -502,60 +495,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiQuartilRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/admin/users': {
-      id: '/api/admin/users'
-      path: '/api/admin/users'
-      fullPath: '/api/admin/users'
-      preLoaderRoute: typeof ApiAdminUsersRouteImport
+    '/api/qsc': {
+      id: '/api/qsc'
+      path: '/api/qsc'
+      fullPath: '/api/qsc'
+      preLoaderRoute: typeof ApiQscRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/auth/login': {
-      id: '/api/auth/login'
-      path: '/api/auth/login'
-      fullPath: '/api/auth/login'
-      preLoaderRoute: typeof ApiAuthLoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/logout': {
-      id: '/api/auth/logout'
-      path: '/api/auth/logout'
-      fullPath: '/api/auth/logout'
-      preLoaderRoute: typeof ApiAuthLogoutRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/register': {
-      id: '/api/auth/register'
-      path: '/api/auth/register'
-      fullPath: '/api/auth/register'
-      preLoaderRoute: typeof ApiAuthRegisterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/auth/session': {
-      id: '/api/auth/session'
-      path: '/api/auth/session'
-      fullPath: '/api/auth/session'
-      preLoaderRoute: typeof ApiAuthSessionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/certificacao/previa': {
-      id: '/api/certificacao/previa'
-      path: '/api/certificacao/previa'
-      fullPath: '/api/certificacao/previa'
-      preLoaderRoute: typeof ApiCertificacaoPreviaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/data/mapa': {
-      id: '/api/data/mapa'
-      path: '/api/data/mapa'
-      fullPath: '/api/data/mapa'
-      preLoaderRoute: typeof ApiDataMapaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/data/resultados': {
-      id: '/api/data/resultados'
-      path: '/api/data/resultados'
-      fullPath: '/api/data/resultados'
-      preLoaderRoute: typeof ApiDataResultadosRouteImport
+    '/api/director/access': {
+      id: '/api/director/access'
+      path: '/api/director/access'
+      fullPath: '/api/director/access'
+      preLoaderRoute: typeof ApiDirectorAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/data/upload': {
@@ -565,11 +516,60 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiDataUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/director/access': {
-      id: '/api/director/access'
-      path: '/api/director/access'
-      fullPath: '/api/director/access'
-      preLoaderRoute: typeof ApiDirectorAccessRouteImport
+    '/api/data/resultados': {
+      id: '/api/data/resultados'
+      path: '/api/data/resultados'
+      fullPath: '/api/data/resultados'
+      preLoaderRoute: typeof ApiDataResultadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/data/mapa': {
+      id: '/api/data/mapa'
+      path: '/api/data/mapa'
+      fullPath: '/api/data/mapa'
+      preLoaderRoute: typeof ApiDataMapaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/certificacao/previa': {
+      id: '/api/certificacao/previa'
+      path: '/api/certificacao/previa'
+      fullPath: '/api/certificacao/previa'
+      preLoaderRoute: typeof ApiCertificacaoPreviaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/session': {
+      id: '/api/auth/session'
+      path: '/api/auth/session'
+      fullPath: '/api/auth/session'
+      preLoaderRoute: typeof ApiAuthSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/register': {
+      id: '/api/auth/register'
+      path: '/api/auth/register'
+      fullPath: '/api/auth/register'
+      preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/login': {
+      id: '/api/auth/login'
+      path: '/api/auth/login'
+      fullPath: '/api/auth/login'
+      preLoaderRoute: typeof ApiAuthLoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/admin/users': {
+      id: '/api/admin/users'
+      path: '/api/admin/users'
+      fullPath: '/api/admin/users'
+      preLoaderRoute: typeof ApiAdminUsersRouteImport
       parentRoute: typeof rootRouteImport
     }
   }

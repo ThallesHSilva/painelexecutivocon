@@ -267,6 +267,8 @@ const advancedAcquisitionWinbackCnpj = new Set();
 const advancedRenewalCnpj = new Set();
 const vivoTechOpportunityCnpj = new Set();
 const deviceOpportunityCnpj = new Set();
+const posseEmpresasCnpj = new Set();
+const posseEmpresasWithoutMobileCnpj = new Set();
 const deviceProfileByCnpj = new Map();
 const rawCnpjMobilePark = new Map();
 const cityStats = new Map();
@@ -356,6 +358,7 @@ for (const row of rows) {
   const recMovel = valueAt(row, "REC_MOVEL");
   const mobileType = recMovel ? mobileCategory(recMovel) : null;
   const mobileOfferKey = normalizeBusinessText(valueAt(row, "MOVEL"));
+  const posseKey = normalizeBusinessText(valueAt(row, "POSSE"));
   const mobileParkQuantity = parseNumber(valueAt(row, "QT_MOVEL_TERM"));
   const hasMobileAcquisition = mobileOfferKey.includes("AQUISICAO DE MOVEL");
   const hasMobileFtthRenewalTotalization =
@@ -378,6 +381,8 @@ for (const row of rows) {
   const hasAdvanced = hasAdvancedAcquisitionOrWinback || hasAdvancedRenewal;
   const vivoTechOfferKey = normalizeBusinessText(valueAt(row, "VIVO_TECH"));
   const hasVivoTech = vivoTechOfferKey.includes("CAPACIDADE DE PAGAMENTO");
+  const hasPosseEmpresas = posseKey.includes("EMPRESAS");
+  const hasPosseEmpresasWithoutMobile = hasPosseEmpresas && !posseKey.startsWith("MOVEL");
   const devices = valueAt(row, "APARELHOS");
   const hasDevices = normalizeBusinessText(devices).includes("CAPACIDADE DE PAGAMENTO");
   const deviceCredit = parseDeviceCredit(devices);
@@ -396,6 +401,8 @@ for (const row of rows) {
   if (cnpj && hasAdvancedAcquisitionOrWinback) advancedAcquisitionWinbackCnpj.add(cnpj);
   if (cnpj && hasAdvancedRenewal) advancedRenewalCnpj.add(cnpj);
   if (cnpj && hasVivoTech) vivoTechOpportunityCnpj.add(cnpj);
+  if (cnpj && hasPosseEmpresas) posseEmpresasCnpj.add(cnpj);
+  if (cnpj && hasPosseEmpresasWithoutMobile) posseEmpresasWithoutMobileCnpj.add(cnpj);
   if (cnpj && hasDevices) {
     deviceOpportunityCnpj.add(cnpj);
     const profile = deviceProfile(devices);
@@ -675,7 +682,6 @@ const snapshot = {
     mobileRenewalWithDevice: "REC_MOVEL contém Renovação e APARELHOS preenchido",
     devicesWithoutMobileRenewal: "APARELHOS preenchido sem REC_MOVEL de Renovação para o CNPJ",
     ftth: "FIXA_BASICA contém Aquisição ou Adesão e Capacidade de Pagamento; SITUACAO_RECEITA ativa ou vazia",
-    ftthPenetrationBase: "TP_PRODUTO contém BASICA",
     ftthOpportunities:
       "SITUACAO_RECEITA em branco, ATIVO, ATIVA ou 2 - ATIVA; FLG_COBERTURA = 1; FIXA_BASICA nos grupos de aquisição/adesão de banda larga; TP_PRODUTO não contém BASICA; sem filtro de FLG_MEI",
     ftthRenewal:
@@ -725,6 +731,8 @@ const snapshot = {
     advancedAcquisitionWinback: advancedAcquisitionWinbackCnpj.size,
     advancedRenewal: advancedRenewalCnpj.size,
     vivoTech,
+    posseEmpresas: posseEmpresasCnpj.size,
+    posseEmpresasWithoutMobile: posseEmpresasWithoutMobileCnpj.size,
     devices: aparelhos,
     deviceIphone: deviceProfiles.iPhone ?? 0,
     deviceGalaxyPremium: deviceProfiles["Galaxy S25/S26/Fold"] ?? 0,
@@ -770,10 +778,6 @@ const snapshot = {
       cobertura: ftthCoverage,
       oportunidades: ftthOpportunities,
       baseBasica: ftthBasicBase,
-      penetracaoBase:
-        ftthBasicBase + ftthOpportunities === 0
-          ? 0
-          : ftthBasicBase / (ftthBasicBase + ftthOpportunities),
       renovacao: ftthRenewal,
       semFtthNoParque: ftthWithoutPark,
       comFtthNoParque: ftthWithPark,
