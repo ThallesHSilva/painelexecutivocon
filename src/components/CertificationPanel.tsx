@@ -148,6 +148,13 @@ const QSC_ROWS: CertificationQscRow[] = [
   },
 ];
 
+/**
+ * A locação já esteve em duas linhas ("receita-locacao", zerada, e esta). A linha que
+ * guarda os valores é esta; prévias salvas com a duplicata são unificadas ao carregar.
+ */
+const LOCATION_ROW_ID = "receita-locacao-mensal";
+const LEGACY_LOCATION_ROW_ID = "receita-locacao";
+
 const BREAKDOWN_ROWS: CertificationRow[] = [
   {
     id: "receita-movel",
@@ -202,21 +209,8 @@ const BREAKDOWN_ROWS: CertificationRow[] = [
     band: "",
   },
   {
-    id: "receita-locacao",
+    id: LOCATION_ROW_ID,
     indicator: "Receita - Loc de Equipamentos",
-    jan: "0,00",
-    feb: "0,00",
-    mar: "0,00",
-    apr: "0,00",
-    may: "0,00",
-    jun: "0,00",
-    totalizer: "0,00",
-    points: "",
-    band: "",
-  },
-  {
-    id: "receita-locacao-mensal",
-    indicator: "RECEITA LOC DE EQUIPAMENTOS",
     jan: "0,00",
     feb: "0,00",
     mar: "0,00",
@@ -529,7 +523,12 @@ type CertificationAlert =
   | {
       kind: "revenue-gap";
       stone: (typeof CERTIFICATION_STONES)[number];
+      /** Quanto falta na média mensal de receita. */
       gap: number;
+      /** Quanto falta na receita total do ciclo para a média exigida (meses do ciclo × mínimo). */
+      totalGap: number;
+      requiredTotal: number;
+      accumulated: number;
     }
   | {
       kind: "qsc-gap";
@@ -543,6 +542,8 @@ function certificationAlerts(
   totalPoints: number,
   qscPoints: number,
   nonQscPoints: number,
+  accumulatedRevenue: number,
+  cycleMonths: number,
 ): CertificationAlert[] {
   const eligibleStones = CERTIFICATION_STONES.filter((stone) => stone.stone !== "NÃO CERTIFICADO");
   const byPoints = eligibleStones.find((stone) => totalPoints >= stone.minimumPoints);
@@ -552,10 +553,14 @@ function certificationAlerts(
   const alerts: CertificationAlert[] = [];
 
   if (byPoints && revenueTelecom < byPoints.minimumRevenue) {
+    const requiredTotal = byPoints.minimumRevenue * cycleMonths;
     alerts.push({
       kind: "revenue-gap",
       stone: byPoints,
       gap: byPoints.minimumRevenue - revenueTelecom,
+      totalGap: Math.max(0, requiredTotal - accumulatedRevenue),
+      requiredTotal,
+      accumulated: accumulatedRevenue,
     });
   }
 
@@ -575,6 +580,39 @@ function certificationAlerts(
 }
 
 type CyclePayload = (typeof INITIAL_CYCLES)["current"];
+
+/**
+ * Prévias salvas antes da correção trazem a locação em duas linhas. Unifica na linha
+ * canônica somando os meses preenchidos, o que preserva o total da receita.
+ */
+function withoutDuplicateLocationRow(payload: CyclePayload): CyclePayload {
+  const rows = Array.isArray(payload.breakdown) ? payload.breakdown : [];
+  const canonicalLabel = BREAKDOWN_ROWS.find((row) => row.id === LOCATION_ROW_ID)!.indicator;
+  const legacy = rows.find((row) => row.id === LEGACY_LOCATION_ROW_ID);
+  if (!legacy)
+    return {
+      ...payload,
+      breakdown: rows.map((row) =>
+        row.id === LOCATION_ROW_ID ? { ...row, indicator: canonicalLabel } : row,
+      ),
+    };
+  const kept = rows.filter((row) => row.id !== LEGACY_LOCATION_ROW_ID);
+  const current = kept.find((row) => row.id === LOCATION_ROW_ID);
+  const merged: CertificationRow = { ...(current ?? legacy), id: LOCATION_ROW_ID };
+  for (const field of MONTH_FIELDS) {
+    const values = [current?.[field] ?? "", legacy[field]].filter((value) => value.trim() !== "");
+    merged[field] = values.length
+      ? formatCurrency(values.reduce((total, value) => total + parseCurrency(value), 0))
+      : "";
+  }
+  merged.indicator = canonicalLabel;
+  return {
+    ...payload,
+    breakdown: current
+      ? kept.map((row) => (row.id === LOCATION_ROW_ID ? merged : row))
+      : [...kept, merged],
+  };
+}
 
 const CYCLE_META: Record<CycleId, { tab: string; title: string; period: string; note: string }> = {
   previous: {
@@ -693,7 +731,9 @@ export function CertificationPanel() {
           "qsc" in preview;
         setCycles((current) => ({
           ...current,
-          current: hasExpectedShape ? (preview as CyclePayload) : INITIAL_CYCLES.current,
+          current: hasExpectedShape
+            ? withoutDuplicateLocationRow(preview as CyclePayload)
+            : INITIAL_CYCLES.current,
         }));
       })
       .catch((error: Error) => {
@@ -868,7 +908,17 @@ export function CertificationPanel() {
     const revenueTelecom = parseCurrency(summary.totalizer);
     const nonQscPoints = totalPoints - qscPoints;
     const stone = certificationStone(revenueTelecom, totalPoints);
-    const alerts = certificationAlerts(revenueTelecom, totalPoints, qscPoints, nonQscPoints);
+    const accumulatedRevenue = MONTH_FIELDS.map((field) => summary[field])
+      .filter((value) => value.trim() !== "")
+      .reduce((total, value) => total + parseCurrency(value), 0);
+    const alerts = certificationAlerts(
+      revenueTelecom,
+      totalPoints,
+      qscPoints,
+      nonQscPoints,
+      accumulatedRevenue,
+      MONTH_COLUMNS[cycle].length,
+    );
     const monthColumns = MONTH_COLUMNS[cycle].map((column): CertificationColumn => ({
       ...column,
       width: "w-[136px]",
@@ -1019,9 +1069,11 @@ export function CertificationPanel() {
                   {alert.kind === "revenue-gap" ? (
                     <>
                       <strong>GAP de receita:</strong> a pontuação já alcança a pedra{" "}
-                      <strong>{alert.stone.stone}</strong>, mas faltam {fmtBRL(alert.gap)} para
-                      atingir a elegibilidade de receita. A pedra atual é{" "}
-                      <strong>{stone.stone}</strong>.
+                      <strong>{alert.stone.stone}</strong>, mas faltam{" "}
+                      <strong>{fmtBRL(alert.totalGap)}</strong> de receita total para atingir a
+                      média de elegibilidade de {fmtBRL(alert.stone.minimumRevenue)} (acumulado:{" "}
+                      {fmtBRL(alert.accumulated)} de {fmtBRL(alert.requiredTotal)}; faltam{" "}
+                      {fmtBRL(alert.gap)} na média). A pedra atual é <strong>{stone.stone}</strong>.
                     </>
                   ) : (
                     <>
