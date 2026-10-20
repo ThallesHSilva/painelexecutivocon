@@ -19,6 +19,7 @@ import { promisify, TextDecoder } from "node:util";
 import { isSameOriginRequest, readAuthUser } from "@/lib/auth.server";
 import {
   listDataImports,
+  readDataSnapshot,
   recordDataImportError,
   recordDataImportSuccess,
   saveDataSnapshot,
@@ -31,6 +32,7 @@ const MAX_CHUNK_SIZE = 20 * 1024 * 1024;
 const QSC_KINDS = ["QSC Carteira", "QSC Fixa", "QSC Móvel"] as const;
 const DIRECTOR_KINDS = [
   "Quartil",
+  "Invasão de carteira",
   "Mapa Parque",
   "Resultados YoY",
   "Best Guess",
@@ -512,6 +514,44 @@ export const Route = createFileRoute("/api/data/upload")({
               processed: true,
               result: JSON.parse(stdout),
             });
+          }
+
+          if (kind === "Invasão de carteira") {
+            // A carga substitui só os parceiros e meses enviados; o restante é preservado.
+            const stamp = Date.now();
+            const snapshotPath = path.join(snapshotDirectory, `${stamp}-invasao.snapshot.json`);
+            const previousPath = path.join(snapshotDirectory, `${stamp}-invasao.previous.json`);
+            const processorArgs = [
+              path.resolve("scripts", "process-invasao-carteira.mjs"),
+              uploadedPath,
+              snapshotPath,
+            ];
+            try {
+              const previous = readDataSnapshot<unknown>("invasao-carteira");
+              if (previous) {
+                await writeFile(previousPath, JSON.stringify(previous), "utf8");
+                processorArgs.push(previousPath);
+              }
+              const { stdout } = await execFileAsync(process.execPath, processorArgs, {
+                maxBuffer: 10 * 1024 * 1024,
+                timeout: 30 * 60 * 1000,
+              });
+              await persistSnapshot({
+                kind: "invasao-carteira",
+                snapshotPath,
+                sourceName: originalName,
+                uploadedBy: user?.email,
+                sizeBytes: declaredFileSize || contentLength,
+              });
+              return importedResponse({
+                imported: true,
+                processed: true,
+                result: JSON.parse(stdout),
+              });
+            } finally {
+              await rm(snapshotPath, { force: true });
+              await rm(previousPath, { force: true });
+            }
           }
 
           if (kind === "Best Guess") {

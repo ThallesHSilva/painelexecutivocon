@@ -19,6 +19,7 @@ import { Route as PbiRouteImport } from './routes/pbi'
 import { Route as MovelRouteImport } from './routes/movel'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LicencasRouteImport } from './routes/licencas'
+import { Route as InvasaoRouteImport } from './routes/invasao'
 import { Route as FtthRouteImport } from './routes/ftth'
 import { Route as CertificacaoRouteImport } from './routes/certificacao'
 import { Route as AvancadaRouteImport } from './routes/avancada'
@@ -26,6 +27,7 @@ import { Route as AlimentacaoRouteImport } from './routes/alimentacao'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiQuartilRouteImport } from './routes/api.quartil'
 import { Route as ApiQscRouteImport } from './routes/api.qsc'
+import { Route as ApiInvasaoRouteImport } from './routes/api.invasao'
 import { Route as ApiDirectorAccessRouteImport } from './routes/api.director.access'
 import { Route as ApiDataUploadRouteImport } from './routes/api.data.upload'
 import { Route as ApiDataResultadosRouteImport } from './routes/api.data.resultados'
@@ -87,6 +89,11 @@ const LicencasRoute = LicencasRouteImport.update({
   path: '/licencas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvasaoRoute = InvasaoRouteImport.update({
+  id: '/invasao',
+  path: '/invasao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FtthRoute = FtthRouteImport.update({
   id: '/ftth',
   path: '/ftth',
@@ -120,6 +127,11 @@ const ApiQuartilRoute = ApiQuartilRouteImport.update({
 const ApiQscRoute = ApiQscRouteImport.update({
   id: '/api/qsc',
   path: '/api/qsc',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiInvasaoRoute = ApiInvasaoRouteImport.update({
+  id: '/api/invasao',
+  path: '/api/invasao',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiDirectorAccessRoute = ApiDirectorAccessRouteImport.update({
@@ -179,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
   '/ftth': typeof FtthRoute
+  '/invasao': typeof InvasaoRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
@@ -189,6 +202,7 @@ export interface FileRoutesByFullPath {
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
+  '/api/invasao': typeof ApiInvasaoRoute
   '/api/qsc': typeof ApiQscRoute
   '/api/quartil': typeof ApiQuartilRoute
   '/api/admin/users': typeof ApiAdminUsersRoute
@@ -208,6 +222,7 @@ export interface FileRoutesByTo {
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
   '/ftth': typeof FtthRoute
+  '/invasao': typeof InvasaoRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
@@ -218,6 +233,7 @@ export interface FileRoutesByTo {
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
+  '/api/invasao': typeof ApiInvasaoRoute
   '/api/qsc': typeof ApiQscRoute
   '/api/quartil': typeof ApiQuartilRoute
   '/api/admin/users': typeof ApiAdminUsersRoute
@@ -238,6 +254,7 @@ export interface FileRoutesById {
   '/avancada': typeof AvancadaRoute
   '/certificacao': typeof CertificacaoRoute
   '/ftth': typeof FtthRoute
+  '/invasao': typeof InvasaoRoute
   '/licencas': typeof LicencasRoute
   '/login': typeof LoginRoute
   '/movel': typeof MovelRoute
@@ -248,6 +265,7 @@ export interface FileRoutesById {
   '/resultados': typeof ResultadosRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/usuarios': typeof UsuariosRoute
+  '/api/invasao': typeof ApiInvasaoRoute
   '/api/qsc': typeof ApiQscRoute
   '/api/quartil': typeof ApiQuartilRoute
   '/api/admin/users': typeof ApiAdminUsersRoute
@@ -269,6 +287,7 @@ export interface FileRouteTypes {
     | '/avancada'
     | '/certificacao'
     | '/ftth'
+    | '/invasao'
     | '/licencas'
     | '/login'
     | '/movel'
@@ -279,6 +298,7 @@ export interface FileRouteTypes {
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
+    | '/api/invasao'
     | '/api/qsc'
     | '/api/quartil'
     | '/api/admin/users'
@@ -298,6 +318,7 @@ export interface FileRouteTypes {
     | '/avancada'
     | '/certificacao'
     | '/ftth'
+    | '/invasao'
     | '/licencas'
     | '/login'
     | '/movel'
@@ -308,6 +329,7 @@ export interface FileRouteTypes {
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
+    | '/api/invasao'
     | '/api/qsc'
     | '/api/quartil'
     | '/api/admin/users'
@@ -327,6 +349,7 @@ export interface FileRouteTypes {
     | '/avancada'
     | '/certificacao'
     | '/ftth'
+    | '/invasao'
     | '/licencas'
     | '/login'
     | '/movel'
@@ -337,6 +360,7 @@ export interface FileRouteTypes {
     | '/resultados'
     | '/sitemap.xml'
     | '/usuarios'
+    | '/api/invasao'
     | '/api/qsc'
     | '/api/quartil'
     | '/api/admin/users'
@@ -357,6 +381,7 @@ export interface RootRouteChildren {
   AvancadaRoute: typeof AvancadaRoute
   CertificacaoRoute: typeof CertificacaoRoute
   FtthRoute: typeof FtthRoute
+  InvasaoRoute: typeof InvasaoRoute
   LicencasRoute: typeof LicencasRoute
   LoginRoute: typeof LoginRoute
   MovelRoute: typeof MovelRoute
@@ -367,6 +392,7 @@ export interface RootRouteChildren {
   ResultadosRoute: typeof ResultadosRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   UsuariosRoute: typeof UsuariosRoute
+  ApiInvasaoRoute: typeof ApiInvasaoRoute
   ApiQscRoute: typeof ApiQscRoute
   ApiQuartilRoute: typeof ApiQuartilRoute
   ApiAdminUsersRoute: typeof ApiAdminUsersRoute
@@ -453,6 +479,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LicencasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/invasao': {
+      id: '/invasao'
+      path: '/invasao'
+      fullPath: '/invasao'
+      preLoaderRoute: typeof InvasaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ftth': {
       id: '/ftth'
       path: '/ftth'
@@ -500,6 +533,13 @@ declare module '@tanstack/react-router' {
       path: '/api/qsc'
       fullPath: '/api/qsc'
       preLoaderRoute: typeof ApiQscRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/invasao': {
+      id: '/api/invasao'
+      path: '/api/invasao'
+      fullPath: '/api/invasao'
+      preLoaderRoute: typeof ApiInvasaoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/director/access': {
@@ -581,6 +621,7 @@ const rootRouteChildren: RootRouteChildren = {
   AvancadaRoute: AvancadaRoute,
   CertificacaoRoute: CertificacaoRoute,
   FtthRoute: FtthRoute,
+  InvasaoRoute: InvasaoRoute,
   LicencasRoute: LicencasRoute,
   LoginRoute: LoginRoute,
   MovelRoute: MovelRoute,
@@ -591,6 +632,7 @@ const rootRouteChildren: RootRouteChildren = {
   ResultadosRoute: ResultadosRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   UsuariosRoute: UsuariosRoute,
+  ApiInvasaoRoute: ApiInvasaoRoute,
   ApiQscRoute: ApiQscRoute,
   ApiQuartilRoute: ApiQuartilRoute,
   ApiAdminUsersRoute: ApiAdminUsersRoute,

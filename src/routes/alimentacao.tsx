@@ -28,6 +28,7 @@ type FileKind =
   | "Portabilidade analítica"
   | "Best Guess"
   | "Torres de serviço"
+  | "Invasão de carteira"
   | "Base não reconhecida";
 
 type SelectedFile = {
@@ -118,6 +119,11 @@ const EXPECTED_BASES = [
     title: "Quartil",
     description: "Consultores por parceiro, abas mensais e evolução de Receita, Móvel e FTTH",
   },
+  {
+    number: "10",
+    title: "Invasão de carteira",
+    description: "Altas Móvel e FTTH de invasão por parceiro, mês e Diretoria Habilitador",
+  },
 ] as const;
 
 const formatFileSize = (bytes: number) =>
@@ -179,6 +185,7 @@ function hasHeaders(headers: Set<string>, required: string[]) {
 function identifyByFileName(fileName: string): Exclude<FileKind, "Base não reconhecida"> | null {
   const name = normalizeHeader(fileName.replace(/\.[^.]+$/, ""));
   if (name.includes("QUARTIL")) return "Quartil";
+  if (name.includes("INVASAO")) return "Invasão de carteira";
   if (name.includes("MAPAPARQUE")) return "Mapa Parque";
   if (name.includes("RESULTADO") && name.includes("YOY")) return "Resultados YoY";
   if (name.includes("BESTGUESS")) return "Best Guess";
@@ -259,6 +266,16 @@ async function identifySpreadsheet(file: File): Promise<FileKind> {
   const sampleMatching = (required: string[]) => hasHeaders(combinedHeaders, required);
   const matches = (required: string[]) => firstMatching(required) || sampleMatching(required);
   if (matches(["CONSULTOR", "RECEITATELECOMTT", "FISICOSMOVEL", "FISICOSFTTH"])) return "Quartil";
+  if (
+    matches([
+      "ANOMES",
+      "GRUPOREDETERMOCARTEIRA",
+      "VENDANACARTEIRA",
+      "DIRETORIAHABILITADOR",
+      "QTDEATIVACAO",
+    ])
+  )
+    return "Invasão de carteira";
 
   if (
     matches(["NRCNPJ", "TPPRODUTO"]) ||
@@ -385,6 +402,7 @@ const UPLOAD_KIND_LABELS: Record<string, string> = {
   "resultados-yoy": "Resultados YoY",
   "best-guess": "Best Guess",
   quartil: "Quartil",
+  "invasao-carteira": "Invasão de carteira",
   "portabilidade-analitica": "Portabilidade analítica",
   "torres-servico": "Torres de serviço",
   qsc: "QSC consolidado",
@@ -442,6 +460,7 @@ function AlimentacaoPage() {
                 "Portabilidade analítica",
                 "Torres de serviço",
                 "Quartil",
+                "Invasão de carteira",
                 "QSC Carteira",
                 "QSC Fixa",
                 "QSC Móvel",

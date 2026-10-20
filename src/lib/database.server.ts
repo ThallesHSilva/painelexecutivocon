@@ -8,6 +8,7 @@ export type UserRole = "gn" | "director";
 
 export type DataSnapshotKind =
   | "quartil"
+  | "invasao-carteira"
   | "mapa-parque"
   | "resultados-yoy"
   | "best-guess"

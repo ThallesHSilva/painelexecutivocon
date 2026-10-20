@@ -6,6 +6,7 @@ import {
   Wifi,
   Boxes,
   Rocket,
+  ShieldAlert,
   ClipboardCheck,
   Award,
   Menu,
@@ -35,6 +36,7 @@ const OPPORTUNITY_NAV = [
   { to: "/ftth", label: "Oportunidades FTTH", icon: Wifi },
   { to: "/licencas", label: "Licenças e Serviços Digitais", icon: Boxes },
   { to: "/avancada", label: "Oportunidade Avançada", icon: Rocket },
+  { to: "/invasao", label: "Invasão de Carteira", icon: ShieldAlert },
 ] as const;
 
 const SECONDARY_NAV = [
