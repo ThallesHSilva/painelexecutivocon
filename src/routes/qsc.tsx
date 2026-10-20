@@ -514,59 +514,71 @@ function DomainPanel({
                               </div>
                             </TableCell>
                           </TableRow>
-                          <TableRow className="border-y border-primary/20 bg-muted/60">
-                            <TableCell
-                              colSpan={6}
-                              className="!whitespace-normal px-4 py-2.5 md:px-5"
-                            >
-                              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-                                <div className="flex items-center gap-2">
-                                  <span
-                                    className="size-1.5 rounded-full bg-primary"
-                                    aria-hidden="true"
-                                  />
-                                  <span className="text-xs font-semibold text-foreground">
-                                    Histórico recente
+                          <TableRow className="bg-card hover:bg-card">
+                            <TableCell colSpan={6} className="!whitespace-normal !p-0">
+                              <section
+                                aria-label={`Histórico de ${metric.label}`}
+                                className="m-3 rounded-lg border border-primary/30 border-l-4 bg-selection md:m-4"
+                              >
+                                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-primary/20 px-4 py-3">
+                                  <h3 className="text-sm font-semibold text-primary">
+                                    Histórico recente · {metric.label}
+                                  </h3>
+                                  <span className="text-xs font-medium text-muted-foreground">
+                                    {history.length > 0
+                                      ? `${history.length} ${history.length === 1 ? "competência" : "competências"}`
+                                      : "sem competências"}
                                   </span>
                                 </div>
-                                <span className="text-[11px] font-medium text-muted-foreground">
-                                  {history.length > 0
-                                    ? `${history.length} ${history.length === 1 ? "competência" : "competências"}`
-                                    : "sem competências"}
-                                </span>
-                              </div>
+                                {history.length === 0 ? (
+                                  <p className="px-4 py-4 text-xs text-muted-foreground">
+                                    Sem histórico disponível para {metric.label}.
+                                  </p>
+                                ) : (
+                                  <table
+                                    aria-label={`Competências históricas de ${metric.label}`}
+                                    className="w-full table-fixed text-sm"
+                                  >
+                                    <colgroup>
+                                      <col className="w-[30%]" />
+                                      <col className="w-[14%]" />
+                                      <col className="w-[14%]" />
+                                      <col className="w-[14%]" />
+                                      <col className="w-[13%]" />
+                                      <col className="w-[15%]" />
+                                    </colgroup>
+                                    <TableHeader className="bg-primary/5 [&_th]:h-auto [&_th]:py-2 [&_th]:text-xs [&_th]:font-semibold [&_th]:normal-case [&_th]:tracking-normal">
+                                      <TableRow>
+                                        <TableHead className={cn(STICKY_ID_CLASS, "bg-selection")}>
+                                          Competência
+                                        </TableHead>
+                                        <TableHead align="numeric">KPI1</TableHead>
+                                        <TableHead align="numeric">KPI2</TableHead>
+                                        <TableHead align="numeric">%</TableHead>
+                                        <TableHead align="numeric">Nota / máx.</TableHead>
+                                        <TableHead align="state">Faixa do indicador</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {history.map((point) => (
+                                        <TableRow key={`${metric.id}-${point.competence}`}>
+                                          <TableCell
+                                            className={cn(
+                                              STICKY_ID_CLASS,
+                                              "bg-selection text-xs font-medium text-foreground",
+                                            )}
+                                          >
+                                            {formatCompetence(point.competence)}
+                                          </TableCell>
+                                          <MetricCells point={point} maximumScore={maximumScore} />
+                                        </TableRow>
+                                      ))}
+                                    </TableBody>
+                                  </table>
+                                )}
+                              </section>
                             </TableCell>
                           </TableRow>
-                          {history.length === 0 ? (
-                            <TableRow className="border-b-2 border-border/70 bg-muted/25">
-                              <TableCell
-                                colSpan={6}
-                                className="!whitespace-normal border-l-2 border-primary/20 pl-9 text-xs text-muted-foreground"
-                              >
-                                Sem histórico disponível para {metric.label}.
-                              </TableCell>
-                            </TableRow>
-                          ) : (
-                            history.map((point, index) => (
-                              <TableRow
-                                key={`${metric.id}-${point.competence}`}
-                                className={cn(
-                                  "bg-muted/25",
-                                  index === history.length - 1 && "border-b-2 border-border/70",
-                                )}
-                              >
-                                <TableCell
-                                  className={cn(
-                                    STICKY_ID_CLASS,
-                                    "border-l-2 border-primary/20 bg-muted/40 pl-9 text-xs font-medium text-muted-foreground",
-                                  )}
-                                >
-                                  Histórico · {formatCompetence(point.competence)}
-                                </TableCell>
-                                <MetricCells point={point} maximumScore={maximumScore} />
-                              </TableRow>
-                            ))
-                          )}
                         </>
                       )}
                     </Fragment>

@@ -80,6 +80,53 @@ test("coorte atual, parceiros separados, 3/6 meses, nomes normalizados e dedupli
     /valores diferentes/,
   );
 });
+test("duplicado com linha zerada mantém a preenchida, em qualquer ordem", () => {
+  const blank = ["Ana", "A7", "ACIMA DE M3", 0, 0, 0];
+  for (const rows of [
+    [row("Ana", "A7", 2000), blank],
+    [blank, row("Ana", "A7", 2000)],
+  ]) {
+    const data = buildQuartilSnapshot([{ name: "Ago_26", rows: [headers, ...rows] }], "m.xlsx");
+    assert.equal(data.consultants.length, 1);
+    assert.equal(data.consultants[0].values.receita, 2000);
+    assert.equal(data.consultants[0].quartiles.receita, 1);
+  }
+});
+test("parceiro sem o mês corrente continua com o último mês que enviou", () => {
+  const data = buildQuartilSnapshot(
+    [
+      { name: "Set_26", rows: [headers, row("Ana", "A7", 2000)] },
+      {
+        name: "Ago_26",
+        rows: [
+          headers,
+          row("Ana", "A7", 1500),
+          row("Caio", "Atrasado", 1000),
+          row("Dani", "Atrasado", 500),
+        ],
+      },
+      {
+        name: "Jul_26",
+        rows: [headers, row("Caio", "Atrasado", 500), row("Saiu", "Atrasado", 500)],
+      },
+    ],
+    "modelo.xlsx",
+  );
+  assert.equal(data.latestMonth, "2026-09");
+  assert.equal(data.partners.length, 2);
+  const caio = data.consultants.find((c) => c.name === "Caio");
+  const ana = data.consultants.find((c) => c.name === "Ana");
+  assert.equal(ana.month, "2026-09");
+  assert.equal(caio.month, "2026-08");
+  assert.equal(caio.history.length, 2);
+  // A janela parte do mês do próprio parceiro: Ago_26 contra Jun_26 (ausente) e Mar_26.
+  assert.equal(caio.comparisons[3].month, "2026-06");
+  assert.equal(caio.comparisons[6].month, "2026-03");
+  assert.equal(ana.comparisons[3].month, "2026-07");
+  // Quem saiu antes do último mês do parceiro continua fora.
+  assert.ok(!data.consultants.some((c) => c.name === "Saiu"));
+  assert.ok(data.consultants.some((c) => c.name === "Dani" && c.month === "2026-08"));
+});
 test("calendário, histórico faltante e coluna Praceiro do modelo", () => {
   assert.equal(monthOffset("2026-02", -6), "2025-08");
   assert.equal(parseMonth("Abr_26 "), "2026-04");

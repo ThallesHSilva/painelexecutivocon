@@ -113,14 +113,7 @@ export function buildQuartilSnapshot(sheets, sourceName) {
         }),
       );
       const signature = JSON.stringify({ tenure, values });
-      if (seen.has(key)) {
-        if (seen.get(key) === signature) continue;
-        throw new Error(`Aba ${sheet.name}: consultor duplicado com valores diferentes: ${name}.`);
-      }
-      seen.set(key, signature);
-      if (tenure === null || Object.values(values).includes(null))
-        warnings.push(`${sheet.name}, linha ${index + 1}: dados insuficientes para algum quartil.`);
-      records.push({
+      const record = {
         id,
         name,
         partnerId,
@@ -129,7 +122,26 @@ export function buildQuartilSnapshot(sheets, sourceName) {
         tenure,
         values,
         quartiles: quartil(values, tenure) ?? { receita: null, movel: null, ftth: null },
-      });
+      };
+      // Linha totalmente zerada: sobra de duplicidade na planilha, não um resultado real.
+      const blank = Object.values(values).every((value) => value === null || value === 0);
+      const previous = seen.get(key);
+      if (previous) {
+        if (previous.signature === signature) continue;
+        // Duplicado com uma linha zerada: vale a linha preenchida.
+        if (blank) continue;
+        if (!previous.blank)
+          throw new Error(
+            `Aba ${sheet.name}: consultor duplicado com valores diferentes: ${name}.`,
+          );
+        records[previous.index] = record;
+        seen.set(key, { signature, blank, index: previous.index });
+        continue;
+      }
+      seen.set(key, { signature, blank, index: records.length });
+      if (tenure === null || Object.values(values).includes(null))
+        warnings.push(`${sheet.name}, linha ${index + 1}: dados insuficientes para algum quartil.`);
+      records.push(record);
       count++;
     }
     if (count) months.add(month);
@@ -139,20 +151,27 @@ export function buildQuartilSnapshot(sheets, sourceName) {
   if (!latestMonth)
     throw new Error("Nenhuma aba mensal válida com consultores encontrada (ex.: Ago_26).");
   const recordMap = new Map(records.map((row) => [`${row.id}:${row.month}`, row]));
+  // Cada parceiro é lido na sua competência mais recente: quem ainda não enviou o mês
+  // corrente continua visível com o último mês que tem na planilha, em vez de sumir.
+  const partnerLatestMonth = new Map();
+  for (const row of records)
+    if (row.month > (partnerLatestMonth.get(row.partnerId) ?? ""))
+      partnerLatestMonth.set(row.partnerId, row.month);
   const consultants = records
-    .filter((row) => row.month === latestMonth)
+    .filter((row) => row.month === partnerLatestMonth.get(row.partnerId))
     .map((current) => {
       const history = orderedMonths
         .map((month) => recordMap.get(`${current.id}:${month}`))
         .filter(Boolean);
       const comparisons = Object.fromEntries(
         // O mês corrente faz parte da janela: 3 meses = atual + 2 anteriores;
-        // 6 meses = atual + 5 anteriores.
+        // 6 meses = atual + 5 anteriores. A janela parte da competência do próprio
+        // parceiro, para que a evolução compare o mesmo intervalo de meses.
         [
           [3, -2],
           [6, -5],
         ].map(([period, offset]) => {
-          const month = monthOffset(latestMonth, offset);
+          const month = monthOffset(current.month, offset);
           const previous = recordMap.get(`${current.id}:${month}`);
           return [
             period,

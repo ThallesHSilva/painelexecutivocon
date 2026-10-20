@@ -153,6 +153,7 @@ function distributionFor(consultants: QuartilConsultant[], metric: QuartilMetric
       return {
         id,
         name: rows[0].partnerName,
+        month: rows[0].month,
         count: rows.length,
         bands: Array.from(
           { length: 5 },
@@ -278,6 +279,11 @@ function QuartilPage() {
       ? `${allowedCount} ${allowedCount === 1 ? "parceiro autorizado" : "parceiros autorizados"}`
       : "Todos os parceiros (consolidado)";
   const distribution = useMemo(() => distributionFor(consultants, metric), [consultants, metric]);
+  /** Parceiros que ainda não enviaram a competência mais recente e aparecem com o último mês deles. */
+  const delayedPartners = useMemo(
+    () => distribution.filter((partner) => data && partner.month < data.latestMonth),
+    [distribution, data],
+  );
   const normalizedSearch = search
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -475,6 +481,26 @@ function QuartilPage() {
             </div>
           </div>
 
+          {delayedPartners.length > 0 && (
+            <p
+              role="status"
+              className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground"
+            >
+              <span className="font-medium text-foreground">
+                Parceiros ainda sem {labelMonth(data.latestMonth)}:
+              </span>{" "}
+              {delayedPartners.map((partner, index) => (
+                <span key={partner.id}>
+                  {index > 0 && "; "}
+                  {partner.name} (exibindo{" "}
+                  <span className="capitalize">{labelMonth(partner.month)}</span>)
+                </span>
+              ))}
+              . Enquanto o mês corrente não chega, cada um aparece com a última competência enviada,
+              e a evolução é calculada a partir dela.
+            </p>
+          )}
+
           <Section
             className="quartil-distribution"
             title={`Distribuição por parceiro · ${selectedLabel}`}
@@ -587,6 +613,11 @@ function QuartilPage() {
                             className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}
                           >
                             {p.name}
+                            {p.month < data.latestMonth && (
+                              <span className="block text-xs font-normal capitalize text-muted-foreground">
+                                {labelMonth(p.month)}
+                              </span>
+                            )}
                           </TableCell>
                           <TableCell align="numeric">{fmtInt(p.count)}</TableCell>
                           <TableCell>
@@ -623,7 +654,11 @@ function QuartilPage() {
               const changes = tenureScopedConsultants.map(
                 (c) => c.comparisons[period].changes[metric],
               );
-              const before = tenureScopedConsultants[0]?.comparisons[period].month;
+              // A janela descrita parte do mês corrente da base, não de um parceiro atrasado.
+              const before = (
+                tenureScopedConsultants.find((c) => c.month === data.latestMonth) ??
+                tenureScopedConsultants[0]
+              )?.comparisons[period].month;
               const beforeInBase = before ? (data.months?.includes(before) ?? false) : false;
               /**
                * Competências reais da base dentro da janela comparada. É leitura, não
@@ -919,6 +954,7 @@ function QuartilPage() {
                             score={consultantScore(c)}
                             metric={metric}
                             months={data.months.slice(-7)}
+                            latestMonth={data.latestMonth}
                             expanded={expanded === c.id}
                             onToggle={() => setExpanded(expanded === c.id ? null : c.id)}
                           />
@@ -994,7 +1030,12 @@ function QuartilPrintReport({
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.id}>
-                      <th>{row.name}</th>
+                      <th>
+                        {row.name}
+                        {latestMonth && row.month < latestMonth
+                          ? ` (${labelMonth(row.month)})`
+                          : ""}
+                      </th>
                       <td>{fmtInt(row.count)}</td>
                       {row.bands.map((count, index) => (
                         <td key={index}>{fmtInt(count)}</td>
@@ -1025,6 +1066,7 @@ function ConsultantRows({
   score,
   metric,
   months,
+  latestMonth,
   expanded,
   onToggle,
 }: {
@@ -1033,6 +1075,7 @@ function ConsultantRows({
   score: number;
   metric: QuartilMetric;
   months: string[];
+  latestMonth: string;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -1100,7 +1143,12 @@ function ConsultantRows({
                 {rank}º
               </span>
               <span className="block font-medium text-foreground">{c.name}</span>
-              <span className="block text-xs text-muted-foreground">{c.partnerName}</span>
+              <span className="block text-xs text-muted-foreground">
+                {c.partnerName}
+                {c.month < latestMonth && (
+                  <span className="capitalize"> · {labelMonth(c.month)}</span>
+                )}
+              </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 {expanded ? "Ocultar análise individual" : "Ver análise individual"}
               </span>

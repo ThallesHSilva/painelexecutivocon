@@ -19,9 +19,9 @@ const POWER_BI_REPORTS = [
     url: "https://app.powerbi.com/groups/me/reports/b46d70d4-b714-4aee-8544-c2939164ab15/a207ac1557d996e2080c?ctid=9744600e-3e04-492e-baa1-25ec245c6f10&openReportSource=ReportInvitation&experience=power-bi",
   },
   {
-    id: "sustentabilidade-ftth",
-    label: "Sustentabilidade FTTH",
-    url: "https://app.powerbi.com/groups/me/apps/dd9cddf1-c0fc-4e43-a036-44d42f20bbda/web-contents/1ff01ed4-35a7-6c8e-0849-832c82ae6628?experience=power-bi",
+    id: "conformacao-agendamento-ftth",
+    label: "Conformação de Agendamento FTTH",
+    url: "https://app.powerbi.com/groups/me/reports/c67fedac-98a0-482b-b67d-01a87591df13/6eec588f6acea31933c3?ctid=9744600e-3e04-492e-baa1-25ec245c6f10&openReportSource=SubscribeOthers&experience=power-bi&clientSideAuth=0",
   },
   {
     id: "ip-aceite",
