@@ -30,6 +30,17 @@ export interface QscMetricSeries {
   history: QscMetricPoint[];
 }
 
+export interface QscDomainHistoryPoint {
+  competence: string;
+  score: number | null;
+  partnerCount: number;
+}
+
+export interface QscDomainHistorySeries {
+  domain: QscDomain;
+  history: QscDomainHistoryPoint[];
+}
+
 export interface QscApiResponse {
   competence: string;
   available: boolean;
@@ -38,4 +49,6 @@ export interface QscApiResponse {
   rows: number;
   partners: Array<{ id: string; name: string; document?: string }>;
   metrics: QscMetricSeries[];
+  domainHistory: QscDomainHistorySeries[];
+  domainHistoryUnavailable: boolean;
 }

@@ -87,6 +87,7 @@ const torres = {
         { key: "forecast", label: "Forecast", format: "number" },
         { key: "bgxpc", label: "BG x PC", format: "percent" },
         { key: "excelDate", label: "46279", format: "number" },
+        { key: "newExcelDate", label: "46300", format: "number" },
       ],
       rows: [
         { partner: "Alpha", values: { forecast: 10, bgxpc: 0.75, excelDate: 1 } },
@@ -122,6 +123,7 @@ test("Diretor preserva todas as linhas e o total global importado das Torres", (
     ["Forecast", "BG x PC"],
   );
   assert.equal(JSON.stringify(payload.torres).includes("46279"), false);
+  assert.equal(JSON.stringify(payload.torres).includes("46300"), false);
 });
 
 test("GN com vínculo recebe somente o parceiro autorizado em todos os datasets", () => {

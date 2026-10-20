@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import type { QscApiResponse, QscMetricSeries } from "@/lib/qsc";
+import { qscDomainHistoryResult } from "@/lib/qsc-domain-history";
 import { readAuthUser } from "@/lib/auth.server";
 import { getDataSnapshot, type SnapshotFor } from "@/lib/snapshots.server";
 
@@ -191,6 +192,12 @@ export const Route = createFileRoute("/api/qsc")({
           rows,
           partners: selectedPartners,
           metrics,
+          ...qscDomainHistoryResult(
+            qscSnapshot.scopes,
+            selectedIds,
+            qscSnapshot.competencies,
+            competence,
+          ),
         };
 
         return Response.json(payload, {

@@ -24,7 +24,7 @@ type ResultsSnapshots = {
 // These Excel serial-date headers are source artifacts, not business metrics.
 // Keep them out of every authorized payload, including snapshots imported before
 // the processor started filtering them.
-const HIDDEN_TOWER_COLUMN_LABELS = new Set(["46259", "46279"]);
+const isExcelDateHeader = (label: string) => /^\d{5}$/.test(label.trim());
 
 export function normalizeCompany(value: string) {
   return value
@@ -63,9 +63,7 @@ function reconcileTowerPartnerNames(
   return {
     ...snapshot,
     towers: snapshot.towers.map((tower) => {
-      const columns = tower.columns.filter(
-        (column) => !HIDDEN_TOWER_COLUMN_LABELS.has(column.label.trim().toUpperCase()),
-      );
+      const columns = tower.columns.filter((column) => !isExcelDateHeader(column.label));
       const visibleValues = (values: Record<string, string | number | null>) =>
         Object.fromEntries(columns.map((column) => [column.key, values[column.key]]));
 
@@ -86,8 +84,8 @@ function reconcileTowerPartnerNames(
 function scopedTowerTotal(tower: ServiceTower): ServiceTower["total"] {
   if (tower.rows.length === 0) return {};
 
-  // Mirrors the importer fallback: totals are the sum of the finite numeric
-  // values available in the rows. This avoids exposing the source's global TT
+  // Scoped totals use only finite numeric values from authorized rows.
+  // This avoids exposing the source's global TT
   // row to a GN whose authorization covers only part of the dataset.
   return Object.fromEntries(
     tower.columns.map((column) => [

@@ -25,7 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fmtInt, fmtQscPct } from "@/lib/format";
-import type { QscDomain, QscMetricPoint, QscMetricSeries } from "@/lib/qsc";
+import type { QscDomain, QscDomainHistorySeries, QscMetricPoint, QscMetricSeries } from "@/lib/qsc";
+import { qscSemesterValues } from "@/lib/qsc-domain-history";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/qsc")({
@@ -608,51 +609,34 @@ function semesterCompetencies(currentCompetence: string, semester: 1 | 2) {
   );
 }
 
-function qscHistoryRow(domain: QscDomain, metrics: QscMetricSeries[], competencies: string[]) {
-  const domainMetrics = metrics.filter((metric) => metric.domain === domain);
-  const values = competencies.map((competence) => {
-    const scores = domainMetrics.flatMap((metric) => {
-      const score = metric.history.find((point) => point.competence === competence)?.score;
-      return score == null ? [] : score;
-    });
-    return scores.length ? scores.reduce((sum, score) => sum + score, 0) : null;
-  });
-  const availableValues = values.filter((value): value is number => value !== null);
-  const totalizer = availableValues.length
-    ? Math.round(availableValues.reduce((sum, value) => sum + value, 0) / availableValues.length)
-    : null;
-
-  return {
-    values,
-    totalizer,
-    availableCount: availableValues.length,
-    rating: qscTotalRatingFromTotal(totalizer),
-  };
-}
-
 function SemesterHistoryPanel({
-  metrics,
+  domainHistory,
+  domainHistoryUnavailable = false,
   currentCompetence,
   updateFrequency = "Mensal",
 }: {
-  metrics: QscMetricSeries[];
+  domainHistory?: QscDomainHistorySeries[];
+  domainHistoryUnavailable?: boolean;
   currentCompetence: string;
   updateFrequency?: string;
 }) {
   const currentMonth = Number(currentCompetence.slice(5, 7)) || new Date().getMonth() + 1;
   const [selectedSemester, setSelectedSemester] = useState<1 | 2>(currentMonth <= 6 ? 1 : 2);
   const competencies = semesterCompetencies(currentCompetence, selectedSemester);
-  const historyRows = SEMESTER_DOMAINS.map(({ domain, label }) => ({
-    domain,
-    label,
-    ...qscHistoryRow(domain, metrics, competencies),
-  }));
+  const historyRows = SEMESTER_DOMAINS.map(({ domain, label }) => {
+    const row = qscSemesterValues(domain, domainHistory, competencies);
+    return { domain, label, ...row, rating: qscTotalRatingFromTotal(row.totalizer) };
+  });
   const year = competencies[0]?.slice(0, 4);
 
   return (
     <Section
       title="Nota consolidada por semestre"
-      description={`Soma mensal das notas de cada grupo no ${selectedSemester}º semestre de ${year}. O totalizador é a média das competências disponíveis; meses sem apuração aparecem como indisponíveis e não entram na média.`}
+      description={
+        domainHistoryUnavailable
+          ? "Histórico semestral indisponível por inconsistência nos dados. Os demais indicadores permanecem disponíveis."
+          : `Média mensal das notas consolidadas dos parceiros no ${selectedSemester}º semestre de ${year}. O totalizador é a média das competências disponíveis; parceiros e meses sem apuração não entram nas respectivas médias.`
+      }
       actions={
         <div
           className="inline-flex rounded-md border border-border p-0.5"
@@ -919,7 +903,8 @@ function QscPage() {
       ) : (
         <div className="space-y-6">
           <SemesterHistoryPanel
-            metrics={metrics}
+            domainHistory={data?.domainHistory}
+            domainHistoryUnavailable={data?.domainHistoryUnavailable}
             currentCompetence={currentCompetence}
             updateFrequency={data?.updateFrequency}
           />
