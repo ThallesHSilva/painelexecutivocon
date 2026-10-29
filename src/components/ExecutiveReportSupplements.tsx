@@ -1,6 +1,7 @@
 import {
   invasaoDirectorateShares,
   invasaoHistoryFinance,
+  invasaoYtdFinance,
   formatInvasaoCents,
   formatInvasaoShare,
   type InvasaoTickets,
@@ -75,6 +76,8 @@ export function invasaoReportPages(
   const shares = invasaoDirectorateShares(summary.directorates);
   // Receita e total são calculados sobre o histórico inteiro e só depois paginados.
   const finance = invasaoHistoryFinance(summary.history, tickets);
+  const ytdYear = summary.latestMonth.slice(0, 4);
+  const ytd = invasaoYtdFinance(finance.rows, summary.latestMonth);
   const directorates = reportChunks(shares.rows, 12);
   const history = reportChunks(finance.rows, 12);
   return [
@@ -90,11 +93,25 @@ export function invasaoReportPages(
             label="Altas Móvel"
             value={fmtInt(summary.monthTotal.altasMovel)}
             accent="violet"
+            details={[
+              { label: `YTD ${ytdYear} · Altas`, value: fmtInt(ytd.altasMovel) },
+              {
+                label: `YTD ${ytdYear} · Receita`,
+                value: formatInvasaoCents(ytd.revenueMovelCents),
+              },
+            ]}
           />
           <MetricCard
             label="Altas FTTH"
             value={fmtInt(summary.monthTotal.altasFtth)}
-            accent="emerald"
+            accent="violet"
+            details={[
+              { label: `YTD ${ytdYear} · Altas`, value: fmtInt(ytd.altasFtth) },
+              {
+                label: `YTD ${ytdYear} · Receita`,
+                value: formatInvasaoCents(ytd.revenueFtthCents),
+              },
+            ]}
           />
         </div>
         <h2 className="mt-5 text-base font-semibold">Diretoria Habilitador</h2>
@@ -121,7 +138,9 @@ export function invasaoReportPages(
           empty="Base importada, sem altas de invasão neste mês."
         />
         <p className="mt-3 text-[10px] leading-4 text-slate-500">
-          A participação usa o total de altas da respectiva modalidade no mês e recorte.
+          A participação usa o total de altas da respectiva modalidade no mês e recorte. YTD soma
+          janeiro até o mês de exercício; a receita é estimada (ticket × altas) e aparece como “—”
+          se algum mês com altas estiver sem ticket.
         </p>
         <p className="mt-4 text-[10px] leading-4 text-slate-500">
           Soma de Qtde. Ativação com Venda na Carteira = Altas Invasão. Móvel: MOVEL / VOZ MOVEL.
@@ -325,42 +344,37 @@ export function certificationReportPages(
     row.points || "—",
     row.band || "—",
   ];
+  // Resumo e composição da receita cabem juntos em uma única folha.
   return [
     <ReportPage
-      key="certification-summary"
+      key="certification"
       {...meta}
       title="Certificação · Simulação salva"
       eyebrow="2º ciclo · Julho a dezembro"
     >
       <div className="grid grid-cols-3 gap-3">
-        <MetricCard label="Pontuação simulada" value={fmtInt(cycle.totalPoints)} />
+        <MetricCard label="Pontuação simulada" value={fmtInt(cycle.totalPoints)} accent="violet" />
         <MetricCard label="Pedra simulada" value={cycle.stone.stone} accent="violet" />
-        <MetricCard label="Bônus simulado" value={cycle.stone.bonus} />
+        <MetricCard label="Bônus simulado" value={cycle.stone.bonus} accent="violet" />
       </div>
-      <CompactTable headers={headers} rows={rows.map(cells)} />
+      <h2 className="mt-4 text-sm font-semibold text-slate-950">Resumo do ciclo</h2>
+      <CompactTable dense headers={headers} rows={rows.map(cells)} />
+      <h2 className="mt-4 text-sm font-semibold text-slate-950">Composição da receita</h2>
+      <CompactTable
+        dense
+        headers={["Indicador", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Média"]}
+        rows={cycle.breakdown.map((row) => [
+          row.indicator,
+          ...MONTH_FIELDS.map((field) => row[field] || "—"),
+          row.totalizer || "—",
+        ])}
+      />
       <p className="mt-3 text-[10px] leading-4 text-slate-500">
         Prévia persistida {updatedAt ? `em ${new Date(updatedAt).toLocaleString("pt-BR")}` : ""}.
         Valores derivados recalculados pelas mesmas regras da tela. Não é certificação oficial nem o
         resultado fechado do 1º ciclo.
       </p>
     </ReportPage>,
-    ...reportChunks(cycle.breakdown, 12).map((part, index, chunks) => (
-      <ReportPage
-        key={`certification-breakdown-${index}`}
-        {...meta}
-        title={`Certificação · Composição da receita${continuation(index, chunks.length)}`}
-        eyebrow="2º ciclo · Simulação salva"
-      >
-        <CompactTable
-          headers={["Indicador", "Jul", "Ago", "Set", "Out", "Nov", "Dez", "Média"]}
-          rows={part.map((row) => [
-            row.indicator,
-            ...MONTH_FIELDS.map((field) => row[field] || "—"),
-            row.totalizer || "—",
-          ])}
-        />
-      </ReportPage>
-    )),
   ];
 }
 

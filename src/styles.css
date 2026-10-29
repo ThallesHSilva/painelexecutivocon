@@ -933,6 +933,18 @@
     font-size: 6.2pt !important;
   }
 
+  /* Slide único de quartis: três blocos (Receita, Móvel, FTTH) têm de caber numa folha. */
+  .quartil-overview-grid {
+    gap: 3mm !important;
+    margin-top: 4mm !important;
+  }
+
+  .quartil-overview-card {
+    padding: 2.5mm !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
   .quartil-executive-card th,
   .quartil-executive-card td {
     padding: 0.8mm 0.6mm !important;

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { reportChunks, invasaoReportSummary } from "./report-data.ts";
+import { reportChunks, invasaoReportSummary, layoutTowerPages } from "./report-data.ts";
 import type { InvasaoSnapshot } from "./invasao.ts";
 
 test("pagination keeps every row, in order, including a final partial sheet", () => {
@@ -59,6 +59,57 @@ test("invasao latest-month cards do not sum history; loaded month without sales 
     ["Inbound", "Consultivo"],
   );
   assert.deepEqual(snapshot.months, ["2026-09", "2026-07", "2026-08"]);
+});
+
+const unit = (id: string, compact = true, beforePortability = false) => ({
+  id,
+  compact,
+  beforePortability,
+});
+const shape = (items: ReturnType<typeof layoutTowerPages<ReturnType<typeof unit>>>) =>
+  items.map((item) =>
+    item.kind === "portability" ? "PORT" : item.units.map((u) => u.id).join("+"),
+  );
+
+test("towers: compact ones pair two per sheet and portability sits before Banda Larga", () => {
+  const items = layoutTowerPages([
+    unit("a"),
+    unit("b"),
+    unit("c"),
+    unit("d"),
+    unit("banda", true, true),
+    unit("e"),
+    unit("f"),
+  ]);
+  // Portability interrupts pairing: c+d stay together, Banda Larga starts a new pair.
+  assert.deepEqual(shape(items), ["a+b", "c+d", "PORT", "banda+e", "f"]);
+});
+
+test("towers: an odd compact tower before portability stays alone, never joins it", () => {
+  assert.deepEqual(
+    shape(layoutTowerPages([unit("a"), unit("b"), unit("c"), unit("banda", true, true)])),
+    ["a+b", "c", "PORT", "banda"],
+  );
+});
+
+test("towers: a large tower takes its own sheet and breaks pairing", () => {
+  assert.deepEqual(shape(layoutTowerPages([unit("a"), unit("big", false), unit("b"), unit("c")])), [
+    "a",
+    "big",
+    "b+c",
+    "PORT",
+  ]);
+});
+
+test("towers: without Banda Larga portability closes the chapter; every tower is kept in order", () => {
+  const units = [unit("a"), unit("b"), unit("c")];
+  const items = layoutTowerPages(units);
+  assert.deepEqual(shape(items), ["a+b", "c", "PORT"]);
+  assert.deepEqual(
+    items.flatMap((item) => (item.kind === "towers" ? item.units.map((u) => u.id) : [])),
+    ["a", "b", "c"],
+  );
+  assert.deepEqual(shape(layoutTowerPages([])), ["PORT"]);
 });
 
 test("empty imported scope is distinct from an observed month with zero altas", () => {

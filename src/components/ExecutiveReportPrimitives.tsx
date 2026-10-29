@@ -71,11 +71,13 @@ export function MetricCard({
   value,
   inverse = false,
   accent = "default",
+  details,
 }: {
   label: string;
   value: string;
   inverse?: boolean;
   accent?: "default" | "violet" | "emerald";
+  details?: { label: string; value: string }[];
 }) {
   const color = inverse
     ? "border-white/15 bg-white/10 text-white"
@@ -92,6 +94,18 @@ export function MetricCard({
         {label}
       </p>
       <strong className="mt-1 block text-lg tabular-nums">{value}</strong>
+      {details?.length ? (
+        <dl className="mt-2 space-y-0.5 border-t border-current/15 pt-2 text-[10px] leading-4">
+          {details.map((detail) => (
+            <div key={detail.label} className="flex items-baseline justify-between gap-2">
+              <dt className="font-semibold uppercase tracking-[0.08em] text-slate-500">
+                {detail.label}
+              </dt>
+              <dd className="font-semibold tabular-nums">{detail.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
     </div>
   );
 }
@@ -151,14 +165,20 @@ export function CompactTable({
   rows,
   total,
   empty = "Nenhum dado disponível.",
+  dense = false,
 }: {
   headers: string[];
   rows: string[][];
   total?: string[];
   empty?: string;
+  /** Menos respiro vertical, para juntar mais de uma tabela na mesma folha. */
+  dense?: boolean;
 }) {
+  const pad = dense ? "py-1.5" : "py-2";
   return (
-    <div className="report-table mt-4 overflow-x-auto rounded-md border border-slate-200">
+    <div
+      className={`report-table ${dense ? "mt-2" : "mt-4"} overflow-x-auto rounded-md border border-slate-200`}
+    >
       <table
         className={`w-full table-fixed border-collapse bg-white text-[10px] ${headers.length > 6 ? "min-w-[760px]" : "min-w-[440px]"}`}
       >
@@ -173,7 +193,7 @@ export function CompactTable({
             {headers.map((header, index) => (
               <th
                 key={`${header}-${index}`}
-                className={`break-words px-2 py-2 font-bold uppercase tracking-[0.08em] ${index ? "text-right" : "text-left"}`}
+                className={`break-words px-2 ${pad} font-bold uppercase tracking-[0.08em] ${index ? "text-right" : "text-left"}`}
               >
                 {header}
               </th>
@@ -187,7 +207,7 @@ export function CompactTable({
                 {headers.map((_, index) => (
                   <td
                     key={index}
-                    className={`break-words px-2 py-2 font-medium tabular-nums text-slate-700 ${index ? "text-right" : "text-left font-semibold text-slate-900"}`}
+                    className={`break-words px-2 ${pad} font-medium tabular-nums text-slate-700 ${index ? "text-right" : "text-left font-semibold text-slate-900"}`}
                   >
                     {row[index] ?? "—"}
                   </td>
@@ -206,7 +226,7 @@ export function CompactTable({
               {headers.map((_, index) => (
                 <td
                   key={index}
-                  className={`break-words px-2 py-2 font-bold tabular-nums text-slate-900 ${index ? "text-right" : "text-left"}`}
+                  className={`break-words px-2 ${pad} font-bold tabular-nums text-slate-900 ${index ? "text-right" : "text-left"}`}
                 >
                   {total[index] ?? "—"}
                 </td>

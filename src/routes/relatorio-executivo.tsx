@@ -1,4 +1,4 @@
-import { useInvasaoTickets } from "@/hooks/useInvasaoTickets";
+﻿import { useInvasaoTickets } from "@/hooks/useInvasaoTickets";
 import {
   invasaoReportPages,
   licensesReportPages,
@@ -8,7 +8,7 @@ import {
 } from "@/components/ExecutiveReportSupplements";
 import { qscSemesterValues } from "@/lib/qsc-domain-history";
 import type { InvasaoSnapshot } from "@/lib/invasao";
-import { reportChunks } from "@/lib/report-data";
+import { layoutTowerPages, reportChunks } from "@/lib/report-data";
 import { ExecutiveReportDocument, useReportPagination } from "@/components/ExecutiveReportDocument";
 import {
   ReportPage,
@@ -19,11 +19,12 @@ import {
   CompactTable,
 } from "@/components/ExecutiveReportPrimitives";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useMemo, type ReactElement } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
   Gauge,
+  MapPin,
   Minus,
   ShieldCheck,
   Smartphone,
@@ -33,9 +34,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 import { useAdvanced, useFtth, useLicenses, useMobile, usePartners, useQsc } from "@/hooks/useData";
-import { fmtBRLCompact, fmtDec, fmtInt, fmtPct, fmtQscPct } from "@/lib/format";
+import { fmtBRL, fmtBRLCompact, fmtDec, fmtInt, fmtPct, fmtQscPct } from "@/lib/format";
+import {
+  FTTH_SIMULATOR_STORAGE_KEY,
+  MOBILE_SIMULATOR_STORAGE_KEY,
+  readSavedConversionParams,
+  simulateConversion,
+} from "@/lib/opportunity-simulation";
 import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
-import { isQuartilAlert } from "@/lib/quartil";
+import { isQuartilAlert, quartilEvolutionCounts } from "@/lib/quartil";
 import type { QscDomain } from "@/lib/qsc";
 import { formatQscDeltaPp, qscVariation, qscWorsened, shortCompetence } from "@/lib/qsc-variation";
 import type {
@@ -45,7 +52,7 @@ import type {
   ResultadosYoySnapshot,
   ServiceTower,
 } from "@/lib/snapshot-types";
-import type { QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
+import type { QuartilConsultant, QuartilMetric, QuartilSnapshot } from "@/lib/quartil";
 
 type SourceRecord = ResultadosYoySnapshot["records"][number];
 type AnalyticalRecord = PortabilidadeSnapshot["records"][number];
@@ -339,6 +346,48 @@ function ExecutiveReportPage() {
     ? portabilityTotal.saldo / portabilityTotal.portIn
     : null;
 
+  const mobileConversionParams = useMemo(
+    () => readSavedConversionParams(MOBILE_SIMULATOR_STORAGE_KEY),
+    [],
+  );
+  const mobileConversion = useMemo(
+    () =>
+      simulateConversion(
+        (mobile?.porParceiro ?? []).map((partner) => ({
+          parceiro: partner.parceiro,
+          oportunidades: partner.baseRecMovel,
+        })),
+        mobileConversionParams,
+      ),
+    [mobile, mobileConversionParams],
+  );
+
+  const ftthConversionParams = useMemo(
+    () => readSavedConversionParams(FTTH_SIMULATOR_STORAGE_KEY),
+    [],
+  );
+  const ftthConversion = useMemo(
+    () =>
+      simulateConversion(
+        (ftth?.porParceiro ?? []).map((partner) => ({
+          parceiro: partner.parceiro,
+          oportunidades: partner.oportunidades,
+        })),
+        ftthConversionParams,
+      ),
+    [ftth, ftthConversionParams],
+  );
+  const ftthCities = useMemo(
+    () =>
+      [...(ftth?.geo ?? [])]
+        .map((city) => ({
+          cidade: String(city.cidade),
+          oportunidades: Number(city.oportunidades) || 0,
+        }))
+        .sort((left, right) => right.oportunidades - left.oportunidades),
+    [ftth],
+  );
+
   const reportDate = new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "long",
@@ -399,25 +448,24 @@ function ExecutiveReportPage() {
         tone="violet"
       />
 
-      {towers.flatMap((tower) =>
-        reportChunks(
-          selectedCompanies.size
-            ? tower.rows.filter((row) => selectedCompanies.has(normalize(row.partner)))
-            : tower.rows,
-          8,
-        ).map((rows, index) => (
-          <TowerReportPage
-            key={`${tower.id}-${index}`}
-            tower={{ ...tower, rows }}
-            partner={partnerLabel}
-            date={reportDate}
-            selectedCompanies={selectedCompanies}
-            records={scopedSourceRecords}
-            period={results.resultados.source.period}
-            monthsElapsed={results.resultados.source.monthsElapsed}
-          />
-        )),
-      )}
+      {towerAndPortabilityPages({
+        towers,
+        selectedCompanies,
+        records: scopedSourceRecords,
+        period: results.resultados.source.period,
+        monthsElapsed: results.resultados.source.monthsElapsed,
+        partner: partnerLabel,
+        date: reportDate,
+        portability: portabilityReportPages({
+          bestGuessRecords,
+          bestGuessTotal,
+          months: portabilityMonths,
+          total: portabilityTotal,
+          conversion: portabilityConversion,
+          partner: partnerLabel,
+          date: reportDate,
+        }),
+      })}
 
       <ChapterCoverPage
         id="capitulo-certificacao"
@@ -437,111 +485,8 @@ function ExecutiveReportPage() {
       )}
 
       <ChapterCoverPage
-        id="capitulo-portabilidade"
-        number="03"
-        eyebrow="Produção e tendência"
-        title="Portabilidade móvel"
-        description="Leitura do movimento de entrada e saída, saldo líquido, conversão e evolução recente do parceiro."
-        partner={partnerLabel}
-        date={reportDate}
-        tone="sky"
-      />
-
-      {reportChunks(bestGuessRecords, 12).map((rows, index, chunks) => (
-        <ReportPage
-          key={`portability-${index}`}
-          title="Portabilidade móvel"
-          eyebrow="Produção e tendência"
-          partner={partnerLabel}
-          date={reportDate}
-        >
-          <section className="rounded-[1.4rem] border border-sky-100 bg-white p-5 shadow-sm">
-            <SectionTitle
-              icon={<Smartphone className="size-4" />}
-              eyebrow="Portabilidade móvel"
-              title="M0 MTD × BG FM por parceiro"
-            />
-            <CompactTable
-              headers={[
-                "Parceiro",
-                "M0 Port-in",
-                "M0 Port-out",
-                "M0 Saldo",
-                "BG Port-in",
-                "BG Port-out",
-                "BG Saldo",
-              ]}
-              rows={rows.map((record) => [
-                record.company,
-                fmtDec(record.m0MtdPortIn),
-                signed(record.m0MtdPortOut),
-                signed(record.m0MtdSaldo),
-                fmtDec(record.bgFmPortIn),
-                signed(record.bgFmPortOut),
-                signed(record.bgFmSaldo),
-              ])}
-              total={
-                index === chunks.length - 1
-                  ? [
-                      "Total",
-                      fmtDec(bestGuessTotal.m0MtdPortIn),
-                      signed(bestGuessTotal.m0MtdPortOut),
-                      signed(bestGuessTotal.m0MtdSaldo),
-                      fmtDec(bestGuessTotal.bgFmPortIn),
-                      signed(bestGuessTotal.bgFmPortOut),
-                      signed(bestGuessTotal.bgFmSaldo),
-                    ]
-                  : undefined
-              }
-            />
-          </section>
-        </ReportPage>
-      ))}
-      <ReportPage
-        title="Evolução de portabilidade"
-        eyebrow="Produção e tendência"
-        partner={partnerLabel}
-        date={reportDate}
-      >
-        <section className="mt-4 rounded-[1.4rem] border border-emerald-100 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={<Gauge className="size-4" />}
-            eyebrow="Resumo analítico"
-            title="Evolução de portabilidade"
-          />
-          <div className="mt-4 grid grid-cols-4 gap-3">
-            <MetricCard label="Port-in acumulado" value={fmtInt(portabilityTotal.portIn)} />
-            <MetricCard label="Port-out acumulado" value={fmtInt(portabilityTotal.portOut)} />
-            <MetricCard
-              label="Saldo líquido"
-              value={signed(portabilityTotal.saldo)}
-              accent="emerald"
-            />
-            <MetricCard label="Conversão" value={fmtPct(portabilityConversion)} accent="emerald" />
-          </div>
-          <CompactTable
-            headers={["Mês", "Port-in", "Port-out", "Saldo líquido", "Conversão"]}
-            rows={portabilityMonths.map((month) => [
-              monthLabel(month.month),
-              fmtInt(month.portIn),
-              fmtInt(month.portOut),
-              signed(month.saldo),
-              fmtPct(month.conversion),
-            ])}
-            total={[
-              "Total acumulado",
-              fmtInt(portabilityTotal.portIn),
-              fmtInt(portabilityTotal.portOut),
-              signed(portabilityTotal.saldo),
-              fmtPct(portabilityConversion),
-            ]}
-          />
-        </section>
-      </ReportPage>
-
-      <ChapterCoverPage
         id="capitulo-oportunidades"
-        number="04"
+        number="03"
         eyebrow="Potencial comercial"
         title="Oportunidades"
         description="Invasão de Carteira, Móvel, FTTH, Licenças e Avançada no mesmo recorte de parceiros."
@@ -604,6 +549,48 @@ function ExecutiveReportPage() {
             tone="sky"
           />
         </div>
+        <section className="mt-5">
+          <SectionTitle
+            icon={<Gauge className="size-4" />}
+            eyebrow="Simulador móvel"
+            title="Conversão por parceiro"
+          />
+          <CompactTable
+            dense
+            headers={[
+              "Parceiro",
+              "Oportunidade Móvel",
+              "Linhas",
+              "Conversão",
+              "PDU",
+              "Receita móvel",
+            ]}
+            rows={mobileConversion.simulation.map((row) => [
+              row.parceiro,
+              fmtInt(row.oportunidades),
+              fmtInt(row.quantity),
+              fmtInt(row.conversions),
+              fmtInt(row.capacity),
+              fmtBRL(row.revenue),
+            ])}
+            total={[
+              "Total",
+              fmtInt(mobileConversion.total.oportunidades),
+              fmtInt(mobileConversion.total.quantity),
+              fmtInt(mobileConversion.total.conversions),
+              fmtInt(mobileConversion.total.capacity),
+              fmtBRL(mobileConversion.total.revenue),
+            ]}
+            empty="Nenhum parceiro no recorte."
+          />
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">
+            Cenário com os parâmetros do simulador móvel salvos neste navegador:{" "}
+            {fmtDec(mobileConversionParams.quantityPerCnpj)} linhas por CNPJ ·{" "}
+            {fmtDec(mobileConversionParams.conversionRate)}% de conversão ·{" "}
+            {fmtInt(mobileConversionParams.capacityPerDay)} dias úteis · ticket médio{" "}
+            {fmtBRL(mobileConversionParams.averageTicket)}.
+          </p>
+        </section>
       </ReportPage>
 
       <ReportPage
@@ -613,19 +600,59 @@ function ExecutiveReportPage() {
         date={reportDate}
       >
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:grid-cols-2">
-          <HeroMetric label="Oportunidade FTTH" value={fmtInt(ftth?.kpis.oportunidades)} />
+          <HeroMetric label="Aquisição Fixa Básica" value={fmtInt(ftth?.kpis.oportunidades)} />
           <HeroMetric label="Posse" value={fmtInt(ftth?.kpis.posse)} tone="sky" />
         </div>
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 print:grid-cols-4">
-          <MetricCard label="Cobertura" value={fmtInt(ftth?.kpis.cobertura)} />
-          <MetricCard label="Renovação" value={fmtInt(ftth?.kpis.renovacao)} />
-          <MetricCard label="Sem FTTH no parque" value={fmtInt(ftth?.kpis.semFtthNoParque)} />
-          <MetricCard
-            label="Convergentes"
-            value={fmtInt(ftth?.kpis.convergentes)}
-            accent="violet"
+        <section className="mt-5">
+          <SectionTitle
+            icon={<Gauge className="size-4" />}
+            eyebrow="Simulador FTTH"
+            title="Conversão por parceiro"
           />
-        </div>
+          <CompactTable
+            dense
+            headers={[
+              "Parceiro",
+              "Aquisição Fixa Básica",
+              "BLs",
+              "Conversão",
+              "PDU",
+              "Receita FTTH",
+            ]}
+            rows={ftthConversion.simulation.map((row) => [
+              row.parceiro,
+              fmtInt(row.oportunidades),
+              fmtInt(row.quantity),
+              fmtInt(row.conversions),
+              fmtInt(row.capacity),
+              fmtBRL(row.revenue),
+            ])}
+            total={[
+              "Total",
+              fmtInt(ftthConversion.total.oportunidades),
+              fmtInt(ftthConversion.total.quantity),
+              fmtInt(ftthConversion.total.conversions),
+              fmtInt(ftthConversion.total.capacity),
+              fmtBRL(ftthConversion.total.revenue),
+            ]}
+            empty="Nenhum parceiro no recorte."
+          />
+          <p className="mt-2 text-[10px] leading-4 text-slate-500">
+            Cenário com os parâmetros do simulador FTTH salvos neste navegador:{" "}
+            {fmtDec(ftthConversionParams.quantityPerCnpj)} BLs por CNPJ ·{" "}
+            {fmtDec(ftthConversionParams.conversionRate)}% de conversão ·{" "}
+            {fmtInt(ftthConversionParams.capacityPerDay)} dias úteis · ticket médio{" "}
+            {fmtBRL(ftthConversionParams.averageTicket)}.
+          </p>
+        </section>
+        <section className="mt-5">
+          <SectionTitle
+            icon={<MapPin className="size-4" />}
+            eyebrow="Distribuição geográfica"
+            title="Oportunidade por cidade"
+          />
+          <CityBars cities={ftthCities} limit={10} />
+        </section>
       </ReportPage>
 
       {licensesReportPages(licensesQuery.data, meta)}
@@ -633,7 +660,7 @@ function ExecutiveReportPage() {
 
       <ChapterCoverPage
         id="capitulo-qsc"
-        number="05"
+        number="04"
         eyebrow="Qualidade e execução"
         title="QSC"
         description="Síntese histórica e indicadores críticos para acompanhar qualidade, execução e pontos de atenção."
@@ -646,7 +673,7 @@ function ExecutiveReportPage() {
 
       <ChapterCoverPage
         id="capitulo-quartil"
-        number="06"
+        number="05"
         eyebrow="Performance comercial"
         title="Quartil de consultores"
         description="Distribuição dos consultores por parceiro e por faixa de desempenho em Receita, Móvel e FTTH."
@@ -656,6 +683,7 @@ function ExecutiveReportPage() {
       />
 
       <QuartilRangesReportPage {...meta} />
+      <QuartilOverviewReportPage quartil={quartil} partner={partnerLabel} date={reportDate} />
       {QUARTIL_REPORT_METRICS.flatMap((metric) =>
         reportChunks(quartilDistribution(quartil, metric.id), 10).map((rows, index) => (
           <QuartilReportPage
@@ -669,6 +697,53 @@ function ExecutiveReportPage() {
         )),
       )}
     </ExecutiveReportDocument>
+  );
+}
+
+/**
+ * Barras em HTML/CSS em vez de gráfico responsivo: na impressão a largura é fixa e
+ * não depende de medição do contêiner, então a folha sai igual à tela.
+ */
+function CityBars({
+  cities,
+  limit,
+}: {
+  cities: Array<{ cidade: string; oportunidades: number }>;
+  limit: number;
+}) {
+  if (!cities.length) {
+    return (
+      <p className="mt-3 rounded-md border border-slate-200 bg-white px-3 py-6 text-center text-[10px] text-slate-500">
+        A base não retornou cidades com oportunidade para este recorte.
+      </p>
+    );
+  }
+  const visible = cities.slice(0, limit);
+  const max = Math.max(...visible.map((city) => city.oportunidades), 1);
+  return (
+    <>
+      <ul className="mt-3 space-y-1.5">
+        {visible.map((city) => (
+          <li key={city.cidade} className="grid grid-cols-[150px_1fr_64px] items-center gap-3">
+            <span className="truncate text-[10px] font-semibold text-slate-800">{city.cidade}</span>
+            <span className="h-3 rounded-sm bg-violet-50">
+              <span
+                className="block h-3 rounded-sm bg-violet-600"
+                style={{ width: `${(city.oportunidades / max) * 100}%` }}
+              />
+            </span>
+            <span className="text-right text-[10px] font-bold tabular-nums text-slate-900">
+              {fmtInt(city.oportunidades)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-[10px] leading-4 text-slate-500">
+        {cities.length > limit
+          ? `${limit} cidades com maior oportunidade, de ${fmtInt(cities.length)}. Valores em CNPJs.`
+          : `${fmtInt(cities.length)} ${cities.length === 1 ? "cidade" : "cidades"} com oportunidade. Valores em CNPJs.`}
+      </p>
+    </>
   );
 }
 
@@ -715,7 +790,6 @@ function CoverReportPage({
             {[
               ["Produção e torres", `${towerCount} torres de serviço`, "#capitulo-producao"],
               ["Certificação", "Simulação salva por PV", "#capitulo-certificacao"],
-              ["Portabilidade", "Produção e tendência", "#capitulo-portabilidade"],
               ["Oportunidades", "Invasão, Móvel, FTTH, TI e Avançada", "#capitulo-oportunidades"],
               ["QSC", "Qualidade e execução", "#capitulo-qsc"],
               ["Quartil", "Faixas, Receita, Móvel e FTTH", "#capitulo-quartil"],
@@ -812,48 +886,52 @@ function ChapterCoverPage({
   );
 }
 
-function TowerReportPage({
-  tower,
-  partner,
-  date,
-  selectedCompanies,
-  records,
-  period,
-  monthsElapsed,
-}: {
-  tower: ServiceTower;
-  partner: string;
-  date: string;
+type TowerPageContext = {
   selectedCompanies: Set<string>;
   records: SourceRecord[];
   period: string;
   monthsElapsed: number;
-}) {
+  partner: string;
+  date: string;
+};
+
+/** Uma torre: cartões, acompanhamento comercial e produção YoY. `dense` junta duas por folha. */
+function TowerSection({
+  tower,
+  dense,
+  records,
+  period,
+  monthsElapsed,
+  selectedCompanies,
+}: {
+  tower: ServiceTower;
+  dense: boolean;
+} & Omit<TowerPageContext, "partner" | "date">) {
   const ytd = towerYtdSummary(tower, records, monthsElapsed);
   const towerRows = selectedCompanies.size
     ? tower.rows.filter((row) => selectedCompanies.has(normalize(row.partner)))
     : tower.rows;
+  const gap = dense ? "mt-3" : "mt-5";
 
   return (
-    <ReportPage
-      title={ytd.product}
-      eyebrow="Produção e torres de serviço"
-      partner={partner}
-      date={date}
-    >
+    <div>
+      {dense && <h2 className="mb-2 text-sm font-semibold text-slate-950">{tower.title}</h2>}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 print:grid-cols-4">
-        <MetricCard label="Real YTD" value={fmtDec(ytd.real)} />
-        <MetricCard label="Atingimento" value={fmtPct(ytd.attainment)} />
-        <MetricCard label="Gap da meta" value={signed(ytd.gap)} />
-        <MetricCard label="YoY" value={fmtPct(ytd.yoy)} />
+        <MetricCard label="Real YTD" value={fmtDec(ytd.real)} accent="violet" />
+        <MetricCard label="Atingimento" value={fmtPct(ytd.attainment)} accent="violet" />
+        <MetricCard label="Gap da meta" value={signed(ytd.gap)} accent="violet" />
+        <MetricCard label="YoY" value={fmtPct(ytd.yoy)} accent="violet" />
       </div>
-      <section className="mt-5">
-        <SectionTitle
-          icon={<BarChart3 className="size-4" />}
-          eyebrow="Acompanhamento comercial"
-          title={tower.title}
-        />
+      <section className={gap}>
+        {!dense && (
+          <SectionTitle
+            icon={<BarChart3 className="size-4" />}
+            eyebrow="Acompanhamento comercial"
+            title={tower.title}
+          />
+        )}
         <CompactTable
+          dense={dense}
           headers={["Parceiro", ...tower.columns.map((column) => column.label)]}
           rows={towerRows.map((row) => [
             row.partner,
@@ -864,9 +942,12 @@ function TowerReportPage({
           empty="Sem dados para o parceiro nesta torre."
         />
       </section>
-      <section className="mt-5">
-        <SectionTitle icon={<Gauge className="size-4" />} eyebrow="Produção YoY" title={period} />
+      <section className={gap}>
+        {!dense && (
+          <SectionTitle icon={<Gauge className="size-4" />} eyebrow="Produção YoY" title={period} />
+        )}
         <CompactTable
+          dense={dense}
           headers={["Produto", "Meta", "Real", "%", "Gap TT", "Média/mês", "YoY R$", "YoY %"]}
           rows={[
             [
@@ -882,8 +963,225 @@ function TowerReportPage({
           ]}
         />
       </section>
+    </div>
+  );
+}
+
+function TowerReportPage({
+  towers,
+  partner,
+  date,
+  ...context
+}: { towers: ServiceTower[] } & TowerPageContext) {
+  const dense = towers.length > 1;
+  const products = towers.map(
+    (tower) => towerYtdSummary(tower, context.records, context.monthsElapsed).product,
+  );
+  return (
+    <ReportPage
+      title={products.join(" · ")}
+      eyebrow="Produção e torres de serviço"
+      partner={partner}
+      date={date}
+    >
+      <div className={dense ? "space-y-5" : ""}>
+        {towers.map((tower) => (
+          <TowerSection key={tower.id} tower={tower} dense={dense} {...context} />
+        ))}
+      </div>
+      {dense && <p className="mt-3 text-[10px] text-slate-500">Período: {context.period}.</p>}
     </ReportPage>
   );
+}
+
+/** Duas torres dividem a folha só se cada uma tem até este número de linhas de parceiro. */
+const TOWER_PAIR_MAX_ROWS = 2;
+
+/**
+ * Torres de serviço, duas por folha quando cabem (poucas linhas em ambas), e a
+ * portabilidade logo antes da torre Banda Larga. A portabilidade interrompe o
+ * emparelhamento: nunca se junta a uma torre.
+ */
+function towerAndPortabilityPages({
+  towers,
+  portability,
+  ...context
+}: {
+  towers: ServiceTower[];
+  portability: ReactElement[];
+} & TowerPageContext) {
+  type Unit = { key: string; tower: ServiceTower; compact: boolean; beforePortability: boolean };
+  const units: Unit[] = towers.flatMap((tower) =>
+    reportChunks(
+      context.selectedCompanies.size
+        ? tower.rows.filter((row) => context.selectedCompanies.has(normalize(row.partner)))
+        : tower.rows,
+      8,
+    ).map((rows, index, chunks) => ({
+      key: `${tower.id}-${index}`,
+      tower: { ...tower, rows },
+      compact: chunks.length === 1 && rows.length <= TOWER_PAIR_MAX_ROWS,
+      beforePortability: tower.id === "banda-larga" && index === 0,
+    })),
+  );
+  return layoutTowerPages(units).flatMap((item) =>
+    item.kind === "portability"
+      ? portability
+      : [
+          <TowerReportPage
+            key={item.units.map((unit) => unit.key).join("+")}
+            towers={item.units.map((unit) => unit.tower)}
+            {...context}
+          />,
+        ],
+  );
+}
+
+/**
+ * Portabilidade em uma única folha: M0 MTD × BG FM por parceiro e a evolução recente.
+ * Com muitos parceiros a tabela M0 × BG não cabe ao lado da evolução e, só nesse caso,
+ * continua em folhas próprias antes da folha de evolução.
+ */
+const PORTABILITY_SINGLE_SHEET_MAX_ROWS = 5;
+
+function portabilityReportPages({
+  bestGuessRecords,
+  bestGuessTotal,
+  months,
+  total,
+  conversion,
+  partner,
+  date,
+}: {
+  bestGuessRecords: BestGuessRecord[];
+  bestGuessTotal: BestGuessTotal;
+  months: Array<{
+    month: number;
+    portIn: number;
+    portOut: number;
+    saldo: number;
+    conversion: number | null;
+  }>;
+  total: { portIn: number; portOut: number; saldo: number };
+  conversion: number | null;
+  partner: string;
+  date: string;
+}): ReactElement[] {
+  const single = bestGuessRecords.length <= PORTABILITY_SINGLE_SHEET_MAX_ROWS;
+  const bestGuessTable = (rows: BestGuessRecord[], withTotal: boolean) => (
+    <section className="rounded-[1.4rem] border border-sky-100 bg-white p-5 shadow-sm">
+      <SectionTitle
+        icon={<Smartphone className="size-4" />}
+        eyebrow="Portabilidade móvel"
+        title="M0 MTD × BG FM por parceiro"
+      />
+      <CompactTable
+        dense={single}
+        headers={[
+          "Parceiro",
+          "M0 Port-in",
+          "M0 Port-out",
+          "M0 Saldo",
+          "BG Port-in",
+          "BG Port-out",
+          "BG Saldo",
+        ]}
+        rows={rows.map((record) => [
+          record.company,
+          fmtDec(record.m0MtdPortIn),
+          signed(record.m0MtdPortOut),
+          signed(record.m0MtdSaldo),
+          fmtDec(record.bgFmPortIn),
+          signed(record.bgFmPortOut),
+          signed(record.bgFmSaldo),
+        ])}
+        total={
+          withTotal
+            ? [
+                "Total",
+                fmtDec(bestGuessTotal.m0MtdPortIn),
+                signed(bestGuessTotal.m0MtdPortOut),
+                signed(bestGuessTotal.m0MtdSaldo),
+                fmtDec(bestGuessTotal.bgFmPortIn),
+                signed(bestGuessTotal.bgFmPortOut),
+                signed(bestGuessTotal.bgFmSaldo),
+              ]
+            : undefined
+        }
+      />
+    </section>
+  );
+  const evolution = (
+    <section
+      className={`${single ? "mt-4" : ""} rounded-[1.4rem] border border-emerald-100 bg-white p-5 shadow-sm`}
+    >
+      <SectionTitle
+        icon={<Gauge className="size-4" />}
+        eyebrow="Resumo analítico"
+        title="Evolução de portabilidade"
+      />
+      <div className="mt-3 grid grid-cols-4 gap-3">
+        <MetricCard label="Port-in acumulado" value={fmtInt(total.portIn)} accent="violet" />
+        <MetricCard label="Port-out acumulado" value={fmtInt(total.portOut)} accent="violet" />
+        <MetricCard label="Saldo líquido" value={signed(total.saldo)} accent="emerald" />
+        <MetricCard label="Conversão" value={fmtPct(conversion)} accent="emerald" />
+      </div>
+      <CompactTable
+        dense
+        headers={["Mês", "Port-in", "Port-out", "Saldo líquido", "Conversão"]}
+        rows={months.map((month) => [
+          monthLabel(month.month),
+          fmtInt(month.portIn),
+          fmtInt(month.portOut),
+          signed(month.saldo),
+          fmtPct(month.conversion),
+        ])}
+        total={[
+          "Total acumulado",
+          fmtInt(total.portIn),
+          fmtInt(total.portOut),
+          signed(total.saldo),
+          fmtPct(conversion),
+        ]}
+      />
+    </section>
+  );
+  if (single)
+    return [
+      <ReportPage
+        key="portability"
+        title="Portabilidade móvel"
+        eyebrow="Produção e tendência"
+        partner={partner}
+        date={date}
+      >
+        {bestGuessTable(bestGuessRecords, true)}
+        {evolution}
+      </ReportPage>,
+    ];
+  const chunks = reportChunks(bestGuessRecords, 12);
+  return [
+    ...chunks.map((rows, index) => (
+      <ReportPage
+        key={`portability-${index}`}
+        title="Portabilidade móvel"
+        eyebrow="Produção e tendência"
+        partner={partner}
+        date={date}
+      >
+        {bestGuessTable(rows, index === chunks.length - 1)}
+      </ReportPage>
+    )),
+    <ReportPage
+      key="portability-evolution"
+      title="Evolução de portabilidade"
+      eyebrow="Produção e tendência"
+      partner={partner}
+      date={date}
+    >
+      {evolution}
+    </ReportPage>,
+  ];
 }
 
 /**
@@ -1283,6 +1581,149 @@ function QuartilReportPage({
           <p className="mt-3 text-[9px] text-slate-500">
             Competência mais recente: {quartil.latestMonth || "—"}. C = consultores; S/Q = sem
             quartil.
+          </p>
+        </>
+      )}
+    </ReportPage>
+  );
+}
+
+function QuartilEvolutionCard({
+  consultants,
+  metric,
+  period,
+  latestMonth,
+}: {
+  consultants: QuartilConsultant[];
+  metric: (typeof QUARTIL_REPORT_METRICS)[number];
+  period: "3" | "6";
+  latestMonth: string;
+}) {
+  const counts = quartilEvolutionCounts(consultants, metric.id, period);
+  // A janela parte do mês corrente da base, não de um parceiro com competência atrasada.
+  const reference = consultants.find((item) => item.month === latestMonth) ?? consultants[0];
+  const before = reference?.comparisons[period].month;
+  const tiles = [
+    { label: "Evoluiu", value: counts.up, color: "text-emerald-700" },
+    { label: "Regrediu", value: counts.down, color: "text-red-600" },
+    { label: "Neutro", value: counts.stable, color: "text-slate-900" },
+    { label: "Alerta", value: counts.alert, color: "text-red-600" },
+  ];
+  return (
+    <div className="quartil-overview-evolution rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+      <p className="mb-1.5 text-[10px] font-semibold text-slate-800">
+        Evolução em {period} meses · {metric.label}
+      </p>
+      <div className="grid grid-cols-4 gap-1.5">
+        {tiles.map((tile) => (
+          <div
+            key={tile.label}
+            className="rounded-lg border border-violet-100 bg-violet-50/70 px-2 py-1.5"
+          >
+            <p className={`text-lg font-semibold leading-6 tabular-nums ${tile.color}`}>
+              {fmtInt(tile.value)}
+            </p>
+            <p className="text-[9px] text-slate-500">{tile.label}</p>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[8px] text-slate-400">
+        {before ? `${competenceLabel(before)} → ${competenceLabel(latestMonth)}` : "Sem histórico"}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Visão consolidada num único slide: distribuição Q1–Q5 e cards de evolução (3 e 6
+ * meses) de Receita, Móvel e FTTH. O detalhe por parceiro segue nas páginas seguintes.
+ */
+function QuartilOverviewReportPage({
+  quartil,
+  partner,
+  date,
+}: {
+  quartil: QuartilSnapshot | null;
+  partner: string;
+  date: string;
+}) {
+  const consultants = quartil?.consultants ?? [];
+  const alertCount = consultants.filter((consultant) =>
+    QUARTIL_REPORT_METRICS.some(({ id }) => isQuartilAlert(consultant, id)),
+  ).length;
+
+  return (
+    <ReportPage
+      title="Quartil de consultores · Distribuição e evolução"
+      eyebrow="Performance comercial"
+      partner={partner}
+      date={date}
+    >
+      {!quartil ? (
+        <div className="grid min-h-[520px] place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
+          Dados de Quartil indisponíveis para este recorte.
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            <MetricCard label="Consultores no recorte" value={fmtInt(consultants.length)} />
+            <MetricCard label="Parceiros com consultores" value={fmtInt(quartil.partners.length)} />
+            <MetricCard label="Alertas em Q5" value={fmtInt(alertCount)} accent="violet" />
+          </div>
+
+          <div className="quartil-overview-grid mt-4 grid grid-cols-1 gap-3">
+            {QUARTIL_REPORT_METRICS.map((metric) => {
+              const total = quartilDistribution(quartil, metric.id).reduce(
+                (summary, row) => ({
+                  consultants: summary.consultants + row.consultants,
+                  quartiles: summary.quartiles.map(
+                    (value, index) => value + row.quartiles[index],
+                  ) as [number, number, number, number, number],
+                  missing: summary.missing + row.missing,
+                }),
+                {
+                  consultants: 0,
+                  quartiles: [0, 0, 0, 0, 0] as [number, number, number, number, number],
+                  missing: 0,
+                },
+              );
+              return (
+                <section
+                  key={metric.id}
+                  className="quartil-overview-card grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 rounded-2xl border border-slate-200 bg-white p-3"
+                >
+                  <div>
+                    <h2 className="mb-2 text-sm font-semibold text-slate-950">
+                      Distribuição · {metric.label}
+                    </h2>
+                    <QuartilDistributionBar
+                      bands={total.quartiles}
+                      total={total.consultants}
+                      missing={total.missing}
+                    />
+                    <QuartilDistributionLegend
+                      bands={total.quartiles}
+                      missing={total.missing}
+                      total={total.consultants}
+                    />
+                  </div>
+                  {(["3", "6"] as const).map((period) => (
+                    <QuartilEvolutionCard
+                      key={period}
+                      consultants={consultants}
+                      metric={metric}
+                      period={period}
+                      latestMonth={quartil.latestMonth}
+                    />
+                  ))}
+                </section>
+              );
+            })}
+          </div>
+          <p className="mt-3 text-[9px] text-slate-500">
+            Competência mais recente: {quartil.latestMonth || "—"}. Evoluiu/Regrediu/Neutro comparam
+            o quartil do mês corrente com o de 3 e 6 meses atrás; consultores sem histórico ficam
+            fora. Alerta: 1 mês no Q5 (novos) · 3 meses (demais).
           </p>
         </>
       )}

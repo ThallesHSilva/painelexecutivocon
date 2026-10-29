@@ -84,3 +84,27 @@ export function isQuartilAlert(consultant: QuartilConsultant, metric: QuartilMet
   const minimumMonths = consultant.tenure === "new" ? 1 : 3;
   return quartilQ5Streak(consultant, metric) >= minimumMonths;
 }
+
+/**
+ * Contagem dos cards "Evolução em 3/6 meses": evoluiu (subiu faixa), regrediu (caiu),
+ * neutro (variação 0) e alerta. Consultor sem histórico comparável fica fora dos três
+ * primeiros, mas ainda pode estar em alerta.
+ */
+export function quartilEvolutionCounts(
+  consultants: QuartilConsultant[],
+  metric: QuartilMetric,
+  period: "3" | "6",
+) {
+  let up = 0;
+  let down = 0;
+  let stable = 0;
+  for (const consultant of consultants) {
+    const change = consultant.comparisons[period].changes[metric];
+    if (change === null) continue;
+    if (change > 0) up += 1;
+    else if (change < 0) down += 1;
+    else stable += 1;
+  }
+  const alert = consultants.filter((consultant) => isQuartilAlert(consultant, metric)).length;
+  return { up, down, stable, alert };
+}

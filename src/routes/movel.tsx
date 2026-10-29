@@ -22,10 +22,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportOpportunityBase } from "@/lib/export-xlsx";
+import { MOBILE_SIMULATOR_STORAGE_KEY } from "@/lib/opportunity-simulation";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 
 /** Mesma chave e mesmo escopo de antes: os parâmetros já salvos continuam válidos. */
-const SIMULATOR_STORAGE_KEY = "mapa-parque.mobile-simulators.v1";
+const SIMULATOR_STORAGE_KEY = MOBILE_SIMULATOR_STORAGE_KEY;
 
 export const Route = createFileRoute("/movel")({
   head: () => ({ meta: [{ title: "Oportunidades Móvel — Mapa Parque" }] }),

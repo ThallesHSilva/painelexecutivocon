@@ -13,6 +13,7 @@ import { useFtth, usePartners } from "@/hooks/useData";
 import { fmtInt } from "@/lib/format";
 import { Building2, MapPin } from "lucide-react";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
+import { FTTH_SIMULATOR_STORAGE_KEY } from "@/lib/opportunity-simulation";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 
 export const Route = createFileRoute("/ftth")({
@@ -149,7 +150,7 @@ function Page() {
               parceiro: partner.parceiro,
               oportunidades: partner.oportunidades,
             }))}
-            storageKey="mapa-parque.ftth-simulators.v1"
+            storageKey={FTTH_SIMULATOR_STORAGE_KEY}
             simulatorLabel="Simulador FTTH"
             opportunityLabel="Aquisição Fixa Básica"
             quantityLabel="BLs"

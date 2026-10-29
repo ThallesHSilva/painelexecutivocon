@@ -15,6 +15,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fmtBRL, fmtInt } from "@/lib/format";
+import {
+  simulateConversion,
+  type OpportunityRow,
+  type SimulationEntry,
+} from "@/lib/opportunity-simulation";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,11 +33,6 @@ import { cn } from "@/lib/utils";
  * Fórmulas, arredondamentos, rótulos comerciais, props, `storageKey` e a persistência
  * em `localStorage` permanecem exatamente como estavam: a mudança é de apresentação.
  */
-
-type OpportunityRow = {
-  parceiro: string;
-  oportunidades: number;
-};
 
 type SimulatorSettings = {
   quantityPerCnpj: number;
@@ -65,13 +65,6 @@ type OpportunitySimulatorProps = {
   onConversionRateChange?: (value: number) => void;
   /** Base ainda em carregamento: projeções em skeleton, nunca linha de zeros. */
   loading?: boolean;
-};
-
-type SimulationEntry = OpportunityRow & {
-  quantity: number;
-  conversions: number;
-  capacity: number;
-  revenue: number;
 };
 
 type QualifiedEntry = {
@@ -164,23 +157,12 @@ export function OpportunitySimulator({
     storageKey,
   ]);
 
-  const simulation = rows.map((partner) => {
-    const quantity = partner.oportunidades * quantityPerCnpj;
-    const conversions = quantity * (conversionRate / 100);
-    const capacity = capacityPerDay > 0 ? Math.ceil(conversions / capacityPerDay) : 0;
-    const revenue = conversions * averageTicket;
-    return { ...partner, quantity, conversions, capacity, revenue };
+  const { simulation, total } = simulateConversion(rows, {
+    quantityPerCnpj,
+    conversionRate,
+    capacityPerDay,
+    averageTicket,
   });
-  const total = simulation.reduce(
-    (result, partner) => ({
-      oportunidades: result.oportunidades + partner.oportunidades,
-      quantity: result.quantity + partner.quantity,
-      conversions: result.conversions + partner.conversions,
-      capacity: result.capacity + partner.capacity,
-      revenue: result.revenue + partner.revenue,
-    }),
-    { oportunidades: 0, quantity: 0, conversions: 0, capacity: 0, revenue: 0 },
-  );
   const qualified = simulation.map((partner) => ({
     ...partner,
     cttMonth: partner.conversions / 2,

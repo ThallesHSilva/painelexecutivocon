@@ -90,6 +90,12 @@ export function invasaoTicketStorageKey(identity: string) {
   return `mapa-parque.invasao-tickets.v2:${JSON.stringify([identity])}`;
 }
 
+function sumRevenue(values: (number | null)[]) {
+  if (values.some((value) => value === null)) return null;
+  const total = values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
+  return Number.isSafeInteger(total) ? total : null;
+}
+
 function revenue(altas: number, cents: number | null) {
   if (!Number.isSafeInteger(altas)) return null;
   if (altas === 0) return 0;
@@ -122,6 +128,20 @@ export function invasaoDirectorateShares(rows: InvasaoDirectorateRow[]) {
  * total pendentes (`null`), sem total parcial. One calculation source for the editable
  * page and the read-only executive report.
  */
+export function invasaoYtdFinance(
+  rows: ReturnType<typeof invasaoHistoryFinance>["rows"],
+  latestMonth: string,
+) {
+  const year = latestMonth.slice(0, 4);
+  const ytd = rows.filter((row) => row.month.startsWith(`${year}-`) && row.month <= latestMonth);
+  return {
+    altasMovel: ytd.reduce((sum, row) => sum + row.altasMovel, 0),
+    altasFtth: ytd.reduce((sum, row) => sum + row.altasFtth, 0),
+    revenueMovelCents: sumRevenue(ytd.map((row) => row.revenueMovelCents)),
+    revenueFtthCents: sumRevenue(ytd.map((row) => row.revenueFtthCents)),
+  };
+}
+
 export function invasaoHistoryFinance(history: InvasaoMonthRow[], tickets: InvasaoTickets) {
   const rows = history.map((row) => {
     const ticketMovelCents = validCents(tickets[row.month]?.movel);
@@ -134,11 +154,6 @@ export function invasaoHistoryFinance(history: InvasaoMonthRow[], tickets: Invas
       revenueFtthCents: revenue(row.altasFtth, ticketFtthCents),
     };
   });
-  const sumRevenue = (values: (number | null)[]) => {
-    if (values.some((value) => value === null)) return null;
-    const total = values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
-    return Number.isSafeInteger(total) ? total : null;
-  };
   return {
     rows,
     totalMovel: rows.reduce((sum, row) => sum + row.altasMovel, 0),
