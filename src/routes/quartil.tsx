@@ -33,6 +33,7 @@ import { fmtBRL, fmtInt, fmtPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   isQuartilAlert,
+  quartilRangeLabel,
   type QuartilConsultant,
   type QuartilMetric,
   type QuartilSnapshot,
@@ -440,6 +441,7 @@ function QuartilPage() {
         />
       ) : (
         <div className="quartil-screen-only quartil-page space-y-6">
+          <QuartilRangesTable />
           {/*
             Escopo do indicador. A seleção é a fonte única do produto exibido no ranking:
             distribuição, evolução, valores e Ranking Produto acompanham este filtro.
@@ -975,6 +977,66 @@ function QuartilPage() {
         </div>
       )}
     </DashboardLayout>
+  );
+}
+
+/**
+ * Faixas de cada quartil por indicador e tempo de casa. Minimizada por padrão: é
+ * referência de consulta, não o foco da página. `details` abre por clique, toque e
+ * teclado sem estado adicional.
+ */
+function QuartilRangesTable() {
+  const groups = [
+    { tenure: "experienced" as const, label: "Acima de 3 meses" },
+    { tenure: "new" as const, label: "Até 3 meses" },
+  ];
+  return (
+    <details className="quartil-ranges group rounded-lg border border-border bg-card print:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-[15px] font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:px-5 [&::-webkit-details-marker]:hidden">
+        <span>Faixas de cada quartil</span>
+        <ChevronDown
+          aria-hidden
+          className="size-4 text-muted-foreground transition-transform duration-150 group-open:rotate-180"
+        />
+      </summary>
+      <div className="space-y-4 border-t border-border px-4 py-4 md:px-5">
+        <p className="text-xs text-muted-foreground">
+          Q1 é o melhor desempenho e Q5 o maior espaço para evolução. Os limites são inclusivos e
+          mudam conforme o tempo de casa do consultor.
+        </p>
+        {groups.map((group) => (
+          <div key={group.tenure}>
+            <h3 className="mb-2 text-xs font-semibold text-foreground">{group.label}</h3>
+            <TableScroll>
+              <Table className="quartil-table min-w-[640px]">
+                <TableHeader className={TABLE_HEADER_CLASS}>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Quartil</TableHead>
+                    {metrics.map((m) => (
+                      <TableHead key={m.id}>{m.label}</TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody className={TABLE_BODY_CLASS}>
+                  {[1, 2, 3, 4, 5].map((quartile) => (
+                    <TableRow key={quartile}>
+                      <TableCell>
+                        <Quartile value={quartile} />
+                      </TableCell>
+                      {metrics.map((m) => (
+                        <TableCell key={m.id} className="tabular-nums text-foreground">
+                          {quartilRangeLabel(m.id, group.tenure, quartile)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableScroll>
+          </div>
+        ))}
+      </div>
+    </details>
   );
 }
 

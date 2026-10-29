@@ -22,6 +22,42 @@ export type QuartilSnapshot = {
   warnings: string[];
 };
 
+/**
+ * Limites mínimos (inclusivos) de Q1 a Q4; abaixo do último limite é Q5.
+ * Espelha QUARTIL_RULES de scripts/quartil.mjs, que calcula as faixas na importação —
+ * o teste scripts/quartil.test.mjs garante que os dois não divergem.
+ * Em "new", receita Q4 começa em qualquer valor acima de zero.
+ */
+export const QUARTIL_BOUNDS = {
+  experienced: { receita: [2000, 1500, 1000, 500], movel: [21, 16, 11, 6], ftth: [15, 10, 6, 3] },
+  new: { receita: [500, 251, 100, 0.01], movel: [16, 11, 6, 1], ftth: [10, 6, 3, 1] },
+} as const;
+
+/** Texto da faixa de um quartil (1 a 5) a partir dos limites do indicador. */
+export function quartilRangeLabel(
+  metric: QuartilMetric,
+  tenure: "experienced" | "new",
+  quartile: number,
+) {
+  const bounds = QUARTIL_BOUNDS[tenure][metric];
+  const money = metric === "receita";
+  const format = (value: number) =>
+    money
+      ? value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
+      : value.toLocaleString("pt-BR");
+  const below = (value: number) =>
+    format(money ? Math.round((value - 0.01) * 100) / 100 : value - 1);
+  if (quartile === 1) return `${format(bounds[0])} ou mais`;
+  if (quartile === 5) {
+    const limit = bounds[3];
+    return limit <= 0.01 && money ? format(0) : `até ${below(limit)}`;
+  }
+  const lower = bounds[quartile - 1];
+  const upper = bounds[quartile - 2];
+  const from = money && lower <= 0.01 ? "acima de R$ 0,00" : format(lower);
+  return money && lower <= 0.01 ? `${from} até ${below(upper)}` : `${from} a ${below(upper)}`;
+}
+
 function previousMonth(month: string) {
   const [year, monthNumber] = month.split("-").map(Number);
   if (!year || !monthNumber) return null;

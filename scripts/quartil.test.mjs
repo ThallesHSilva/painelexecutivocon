@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildQuartilSnapshot, quartil, monthOffset, parseMonth } from "./quartil.mjs";
+import {
+  buildQuartilSnapshot,
+  quartil,
+  monthOffset,
+  parseMonth,
+  QUARTIL_RULES,
+} from "./quartil.mjs";
 
 test("quartis independentes, limites inclusivos e zeros", () => {
   assert.deepEqual(quartil({ receita: 2000, movel: 21, ftth: 15 }, "experienced"), {
@@ -126,6 +132,25 @@ test("parceiro sem o mês corrente continua com o último mês que enviou", () =
   // Quem saiu antes do último mês do parceiro continua fora.
   assert.ok(!data.consultants.some((c) => c.name === "Saiu"));
   assert.ok(data.consultants.some((c) => c.name === "Dani" && c.month === "2026-08"));
+});
+test("faixas exibidas na página espelham as regras do cálculo", async () => {
+  const { QUARTIL_BOUNDS, quartilRangeLabel } = await import("../src/lib/quartil.ts");
+  for (const tenure of ["experienced", "new"]) {
+    for (const metric of ["receita", "movel", "ftth"]) {
+      const shown = QUARTIL_BOUNDS[tenure][metric];
+      const real = QUARTIL_RULES[tenure][metric];
+      // Mesmo quartil para cada limite e para o valor logo abaixo dele.
+      shown.forEach((bound, index) => {
+        assert.equal(quartil({ [metric]: bound }, tenure)[metric], index + 1);
+        assert.equal(quartil({ [metric]: real[index] }, tenure)[metric], index + 1);
+      });
+      assert.equal(real.length, shown.length);
+    }
+  }
+  assert.equal(quartilRangeLabel("movel", "experienced", 2), "16 a 20");
+  assert.equal(quartilRangeLabel("movel", "experienced", 5), "até 5");
+  assert.match(quartilRangeLabel("receita", "experienced", 1), /2\.000,00 ou mais/);
+  assert.match(quartilRangeLabel("receita", "new", 4), /acima de R\$\s0,00 até R\$\s99,99/);
 });
 test("calendário, histórico faltante e coluna Praceiro do modelo", () => {
   assert.equal(monthOffset("2026-02", -6), "2025-08");
