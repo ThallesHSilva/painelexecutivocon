@@ -1,4 +1,12 @@
-import { useMemo, useState } from "react";
+import { useInvasaoTickets } from "@/hooks/useInvasaoTickets";
+import { InvasaoTicketInput } from "@/components/InvasaoTicketInput";
+import {
+  invasaoDirectorateShares,
+  invasaoHistoryFinance,
+  formatInvasaoCents,
+  formatInvasaoShare,
+} from "@/lib/invasao-finance";
+import { Fragment, useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Smartphone, Wifi } from "lucide-react";
@@ -77,8 +85,10 @@ function Page() {
   );
   const rows = useMemo(() => summarizeByDirectorate(records), [records]);
   const history = useMemo(() => summarizeByMonth(data?.records ?? [], data?.months ?? []), [data]);
-  const totalMovel = rows.reduce((total, row) => total + row.altasMovel, 0);
-  const totalFtth = rows.reduce((total, row) => total + row.altasFtth, 0);
+  const ticketState = useInvasaoTickets(!!data?.months.length);
+  const shares = invasaoDirectorateShares(rows);
+  const historyFinance = invasaoHistoryFinance(history, ticketState.tickets);
+  const { totalMovel, totalFtth } = shares;
   const partnersInMonth = new Set(
     (data?.periods ?? []).filter((period) => period.month === month).map((p) => p.partnerId),
   ).size;
@@ -228,7 +238,8 @@ function Page() {
                 Altas por Diretoria Habilitador
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Altas Móvel e Altas FTTH de invasão, separadas pela diretoria que habilitou a venda.
+                Altas de invasão do mês escolhido e quanto cada diretoria representa do total de
+                cada modalidade no recorte.
               </p>
             </div>
             <div className="px-4 py-4 md:px-5">
@@ -241,22 +252,28 @@ function Page() {
                 />
               ) : (
                 <TableScroll>
-                  <Table className="min-w-[480px]">
+                  <Table className="min-w-[560px]">
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
                         <TableHead>Diretoria Habilitador</TableHead>
                         <TableHead align="numeric">Altas Móvel</TableHead>
+                        <TableHead align="numeric">% Móvel</TableHead>
                         <TableHead align="numeric">Altas FTTH</TableHead>
+                        <TableHead align="numeric">% FTTH</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {rows.map((row) => (
+                      {shares.rows.map((row) => (
                         <TableRow key={row.directorate}>
                           <TableCell className="font-medium text-foreground">
                             {row.directorate}
                           </TableCell>
                           <TableCell align="numeric">{fmtInt(row.altasMovel)}</TableCell>
+                          <TableCell align="numeric">
+                            {formatInvasaoShare(row.shareMovel)}
+                          </TableCell>
                           <TableCell align="numeric">{fmtInt(row.altasFtth)}</TableCell>
+                          <TableCell align="numeric">{formatInvasaoShare(row.shareFtth)}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -267,7 +284,13 @@ function Page() {
                           {fmtInt(totalMovel)}
                         </TableCell>
                         <TableCell align="numeric" className="font-semibold text-foreground">
+                          {formatInvasaoShare(totalMovel ? 1 : null)}
+                        </TableCell>
+                        <TableCell align="numeric" className="font-semibold text-foreground">
                           {fmtInt(totalFtth)}
+                        </TableCell>
+                        <TableCell align="numeric" className="font-semibold text-foreground">
+                          {formatInvasaoShare(totalFtth ? 1 : null)}
                         </TableCell>
                       </TableRow>
                     </TableFooter>
@@ -286,8 +309,9 @@ function Page() {
                 Histórico de altas por mês
               </h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Todos os meses da base no recorte, independente do mês escolhido acima. Só altas de
-                invasão de Móvel e FTTH.
+                Todos os meses da base no recorte, independente do mês escolhido acima. Altas de
+                invasão de Móvel e FTTH, com a receita estimada a partir do ticket informado em cada
+                mês.
               </p>
             </div>
             {isPending ? (
@@ -319,42 +343,119 @@ function Page() {
                   </ChartCard>
                 </div>
                 <Card className="overflow-hidden">
-                  <div className="px-4 py-4 md:px-5">
+                  <div className="space-y-3 px-4 py-4 md:px-5">
+                    <p className="text-xs text-muted-foreground">
+                      Tickets salvos neste navegador por usuário e mês, valem para qualquer recorte
+                      de parceiros. Receita estimada = ticket × altas, não é receita realizada. Mês
+                      sem ticket fica pendente (“—”), não zerado.
+                    </p>
+                    {ticketState.warning && (
+                      <p role="alert" className="text-sm text-destructive">
+                        {ticketState.warning}
+                      </p>
+                    )}
                     <TableScroll>
-                      <Table className="min-w-[480px]">
+                      <Table className="min-w-[960px] table-fixed">
+                        <colgroup>
+                          <col className="w-32 sm:w-40" />
+                          {Array.from({ length: 6 }, (_, index) => (
+                            <col key={index} />
+                          ))}
+                        </colgroup>
                         <TableHeader>
                           <TableRow className="hover:bg-transparent">
-                            <TableHead>Mês</TableHead>
-                            <TableHead align="numeric">Altas Móvel</TableHead>
-                            <TableHead align="numeric">Altas FTTH</TableHead>
+                            <TableHead
+                              rowSpan={2}
+                              className="sticky left-0 z-[1] bg-muted align-bottom"
+                            >
+                              Mês
+                            </TableHead>
+                            <TableHead colSpan={3} align="state">
+                              Móvel
+                            </TableHead>
+                            <TableHead colSpan={3} align="state">
+                              FTTH
+                            </TableHead>
+                          </TableRow>
+                          <TableRow className="hover:bg-transparent">
+                            {["movel", "ftth"].map((modality) => (
+                              <Fragment key={modality}>
+                                <TableHead align="numeric">Altas</TableHead>
+                                <TableHead align="numeric">Ticket (R$)</TableHead>
+                                <TableHead align="numeric">Receita (R$)</TableHead>
+                              </Fragment>
+                            ))}
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {[...history].reverse().map((item) => (
+                          {[...historyFinance.rows].reverse().map((item) => (
                             <TableRow key={item.month}>
-                              <TableCell className="font-medium capitalize text-foreground">
+                              <TableCell className="sticky left-0 z-[1] bg-card font-medium capitalize text-foreground">
                                 {labelMonth(item.month)}
                               </TableCell>
                               <TableCell align="numeric">{fmtInt(item.altasMovel)}</TableCell>
+                              <TableCell align="numeric">
+                                <InvasaoTicketInput
+                                  key={`${ticketState.storageKey}-${item.month}-movel`}
+                                  label={`Ticket Móvel de ${labelMonth(item.month)}`}
+                                  cents={item.ticketMovelCents}
+                                  disabled={!ticketState.isReady || !ticketState.storageKey}
+                                  onChange={(cents) =>
+                                    ticketState.setTicket(item.month, "movel", cents)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell align="numeric">
+                                {formatInvasaoCents(item.revenueMovelCents)}
+                              </TableCell>
                               <TableCell align="numeric">{fmtInt(item.altasFtth)}</TableCell>
+                              <TableCell align="numeric">
+                                <InvasaoTicketInput
+                                  key={`${ticketState.storageKey}-${item.month}-ftth`}
+                                  label={`Ticket FTTH de ${labelMonth(item.month)}`}
+                                  cents={item.ticketFtthCents}
+                                  disabled={!ticketState.isReady || !ticketState.storageKey}
+                                  onChange={(cents) =>
+                                    ticketState.setTicket(item.month, "ftth", cents)
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell align="numeric">
+                                {formatInvasaoCents(item.revenueFtthCents)}
+                              </TableCell>
                             </TableRow>
                           ))}
                         </TableBody>
                         <TableFooter>
                           <TableRow>
-                            <TableCell className="font-semibold text-foreground">
+                            <TableCell className="sticky left-0 z-[1] bg-muted font-semibold text-foreground">
                               Total no período
                             </TableCell>
                             <TableCell align="numeric" className="font-semibold text-foreground">
-                              {fmtInt(history.reduce((total, item) => total + item.altasMovel, 0))}
+                              {fmtInt(historyFinance.totalMovel)}
+                            </TableCell>
+                            <TableCell align="numeric">—</TableCell>
+                            <TableCell align="numeric" className="font-semibold text-foreground">
+                              {formatInvasaoCents(historyFinance.totalRevenueMovelCents)}
                             </TableCell>
                             <TableCell align="numeric" className="font-semibold text-foreground">
-                              {fmtInt(history.reduce((total, item) => total + item.altasFtth, 0))}
+                              {fmtInt(historyFinance.totalFtth)}
+                            </TableCell>
+                            <TableCell align="numeric">—</TableCell>
+                            <TableCell align="numeric" className="font-semibold text-foreground">
+                              {formatInvasaoCents(historyFinance.totalRevenueFtthCents)}
                             </TableCell>
                           </TableRow>
                         </TableFooter>
                       </Table>
                     </TableScroll>
+                    {(historyFinance.totalRevenueMovelCents === null ||
+                      historyFinance.totalRevenueFtthCents === null) && (
+                      <p className="text-xs text-muted-foreground">
+                        Preencha o ticket dos meses com altas para totalizar a receita de cada
+                        modalidade. Valores fora do limite de cálculo também aparecem como “—”.
+                      </p>
+                    )}
                   </div>
                 </Card>
               </>

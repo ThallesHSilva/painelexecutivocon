@@ -897,6 +897,7 @@
   .executive-report-page table {
     break-inside: auto;
     page-break-inside: auto;
+    min-width: 0 !important;
   }
 
   .executive-report-page thead {

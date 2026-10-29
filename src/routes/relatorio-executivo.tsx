@@ -1,13 +1,43 @@
+import { useInvasaoTickets } from "@/hooks/useInvasaoTickets";
+import {
+  invasaoReportPages,
+  licensesReportPages,
+  advancedReportPages,
+  certificationReportPages,
+  QuartilRangesReportPage,
+} from "@/components/ExecutiveReportSupplements";
+import { qscSemesterValues } from "@/lib/qsc-domain-history";
+import type { InvasaoSnapshot } from "@/lib/invasao";
+import { reportChunks } from "@/lib/report-data";
+import { ExecutiveReportDocument, useReportPagination } from "@/components/ExecutiveReportDocument";
+import {
+  ReportPage,
+  SectionTitle,
+  MetricCard,
+  HeroMetric,
+  LargeSummary,
+  CompactTable,
+} from "@/components/ExecutiveReportPrimitives";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, BarChart3, Gauge, Printer, ShieldCheck, Smartphone, Wifi } from "lucide-react";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  BarChart3,
+  Gauge,
+  Minus,
+  ShieldCheck,
+  Smartphone,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { usePartnerFilter } from "@/contexts/AppContexts";
-import { useFtth, useMobile, usePartners, useQsc } from "@/hooks/useData";
+import { useAdvanced, useFtth, useLicenses, useMobile, usePartners, useQsc } from "@/hooks/useData";
 import { fmtBRLCompact, fmtDec, fmtInt, fmtPct, fmtQscPct } from "@/lib/format";
 import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
 import { isQuartilAlert } from "@/lib/quartil";
-import type { QscDomain, QscMetricSeries } from "@/lib/qsc";
+import type { QscDomain } from "@/lib/qsc";
+import { formatQscDeltaPp, qscVariation, qscWorsened, shortCompetence } from "@/lib/qsc-variation";
 import type {
   BestGuessRecord,
   BestGuessTotal,
@@ -161,22 +191,6 @@ function qscRating(total: number | null) {
   return { band: "Sem faixa", points: 0 };
 }
 
-function qscDomainHistory(domain: QscDomain, metrics: QscMetricSeries[], competencies: string[]) {
-  const domainMetrics = metrics.filter((metric) => metric.domain === domain);
-  const values = competencies.map((competence) => {
-    const scores = domainMetrics.flatMap((metric) => {
-      const score = metric.history.find((point) => point.competence === competence)?.score;
-      return score == null ? [] : [score];
-    });
-    return scores.length ? scores.reduce((total, score) => total + score, 0) : null;
-  });
-  const available = values.filter((value): value is number => value != null);
-  const totalizer = available.length
-    ? Math.round(available.reduce((total, value) => total + value, 0) / available.length)
-    : null;
-  return { values, totalizer, ...qscRating(totalizer) };
-}
-
 /**
  * A consolidação YTD/YoY vive em `@/lib/report-ytd`, com testes de caracterização
  * para snapshots legados incompletos (a origem dos `NaN` observados no relatório).
@@ -190,57 +204,82 @@ function towerYtdSummary(
 }
 
 function ExecutiveReportPage() {
-  const { effectiveSelected } = usePartnerFilter();
-  const { data: partners = [] } = usePartners();
+  const { effectiveSelected, role } = usePartnerFilter();
+  const { data: partners = [], isPending: partnersLoading } = usePartners();
   const { data: mobile, isLoading: mobileLoading } = useMobile();
   const { data: ftth, isLoading: ftthLoading } = useFtth();
   const { data: qsc, isLoading: qscLoading } = useQsc();
-  const [results, setResults] = useState<RuntimeResults | null>(null);
-  const [quartil, setQuartil] = useState<QuartilSnapshot | null>(null);
-  const [loadError, setLoadError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    void fetch("/api/data/resultados", { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Não foi possível carregar os dados do relatório.");
-        return response.json() as Promise<RuntimeResults>;
-      })
-      .then((payload) => {
-        if (active) setResults(payload);
-      })
-      .catch((error) => {
-        if (active) {
-          setLoadError(error instanceof Error ? error.message : "Falha ao carregar o relatório.");
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams();
-    for (const partnerId of effectiveSelected) params.append("partner", partnerId);
-    void fetch(`/api/quartil?${params.toString()}`, { cache: "no-store" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Quartil indisponível");
-        return response.json() as Promise<QuartilSnapshot>;
-      })
-      .then(setQuartil)
-      .catch(() => setQuartil(null));
-  }, [effectiveSelected]);
+  const licensesQuery = useLicenses();
+  const advancedQuery = useAdvanced();
+  const scopeQuery = new URLSearchParams();
+  effectiveSelected.forEach((partner) => scopeQuery.append("partner", partner));
+  const ready = role === "director" || role === "gn";
+  const resultsQuery = useQuery({
+    queryKey: ["report-results", role],
+    enabled: ready,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const response = await fetch("/api/data/resultados", { cache: "no-store", signal });
+      if (!response.ok) throw new Error("Não foi possível carregar os dados do relatório.");
+      return response.json() as Promise<RuntimeResults>;
+    },
+  });
+  const quartilQuery = useQuery({
+    queryKey: ["report-quartil", effectiveSelected],
+    enabled: ready,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/quartil?${scopeQuery}`, { cache: "no-store", signal });
+      if (!response.ok) throw new Error("Quartil indisponível.");
+      return response.json() as Promise<QuartilSnapshot>;
+    },
+  });
+  const invasaoQuery = useQuery({
+    queryKey: ["invasao", effectiveSelected],
+    enabled: ready,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(`/api/invasao?${scopeQuery}`, { cache: "no-store", signal });
+      if (!response.ok) throw new Error("Invasão de Carteira indisponível.");
+      return response.json() as Promise<InvasaoSnapshot>;
+    },
+  });
+  const invasaoTickets = useInvasaoTickets(!!invasaoQuery.data?.months.length);
+  const activePartner =
+    effectiveSelected.length === 1
+      ? partners.find((partner) => partner.id === effectiveSelected[0])
+      : undefined;
+  const certificationQuery = useQuery({
+    queryKey: ["certification-preview", activePartner?.id],
+    enabled: ready && !!activePartner,
+    retry: false,
+    queryFn: async ({ signal }) => {
+      const response = await fetch(
+        `/api/certificacao/previa?partnerId=${encodeURIComponent(activePartner!.id)}`,
+        { cache: "no-store", signal },
+      );
+      if (!response.ok) throw new Error("Simulação de Certificação indisponível.");
+      return response.json() as Promise<{
+        preview: { payload: unknown; updatedAt: string } | null;
+      }>;
+    },
+  });
+  const results = resultsQuery.data;
+  const quartil = quartilQuery.data ?? null;
+  const loadError = resultsQuery.error?.message;
 
   const selectedNames = useMemo(
     () => effectiveSelected.map((id) => partners.find((partner) => partner.id === id)?.name ?? id),
     [effectiveSelected, partners],
   );
   const selectedCompanies = useMemo(() => new Set(selectedNames.map(normalize)), [selectedNames]);
-  const partnerLabel = selectedNames.length
-    ? selectedNames.length === 1
-      ? selectedNames[0]
-      : `${selectedNames.length} parceiros selecionados`
-    : "Todos os parceiros";
+  const partnerLabel = effectiveSelected.includes("__no_partner_access__")
+    ? "Sem parceiros autorizados"
+    : selectedNames.length
+      ? selectedNames.length === 1
+        ? selectedNames[0]
+        : `${selectedNames.length} parceiros selecionados`
+      : "Todos os parceiros";
 
   const towers = results?.torres.towers ?? [];
 
@@ -305,8 +344,20 @@ function ExecutiveReportPage() {
     month: "long",
     year: "numeric",
   }).format(new Date());
-  const isLoading = !results || mobileLoading || ftthLoading || qscLoading;
-  const totalPages = towers.length + 11;
+  const isLoading =
+    !ready ||
+    partnersLoading ||
+    !results ||
+    mobileLoading ||
+    ftthLoading ||
+    qscLoading ||
+    licensesQuery.isPending ||
+    advancedQuery.isPending ||
+    quartilQuery.isPending ||
+    invasaoQuery.isPending ||
+    !invasaoTickets.isReady ||
+    (!!activePartner && certificationQuery.isPending);
+  const meta = { partner: partnerLabel, date: reportDate };
 
   if (loadError) {
     return (
@@ -334,40 +385,11 @@ function ExecutiveReportPage() {
   }
 
   return (
-    <main className="executive-report min-h-screen bg-slate-100 px-4 py-6 text-slate-950 sm:px-6">
-      <div className="no-print sticky top-3 z-50 mx-auto mb-5 flex max-w-[1120px] items-center justify-between gap-3 rounded-2xl border border-white/80 bg-white/90 p-3 shadow-xl backdrop-blur">
-        <Button asChild variant="outline" className="rounded-xl">
-          <Link to="/resultados">
-            <ArrowLeft className="size-4" />
-            Voltar
-          </Link>
-        </Button>
-        <div className="hidden text-center sm:block">
-          <p className="text-xs font-semibold text-slate-900">
-            Relatório executivo · {partnerLabel}
-          </p>
-          <p className="text-[11px] text-slate-500">A4 horizontal · {totalPages} páginas</p>
-        </div>
-        <Button
-          onClick={() => window.print()}
-          className="rounded-xl bg-violet-700 hover:bg-violet-800"
-        >
-          <Printer className="size-4" />
-          Gerar PDF
-        </Button>
-      </div>
-
-      <CoverReportPage
-        partner={partnerLabel}
-        date={reportDate}
-        towerCount={towers.length}
-        totalPages={totalPages}
-      />
+    <ExecutiveReportDocument partner={partnerLabel}>
+      <CoverReportPage partner={partnerLabel} date={reportDate} towerCount={towers.length} />
 
       <ChapterCoverPage
         id="capitulo-producao"
-        page={2}
-        totalPages={totalPages}
         number="01"
         eyebrow="Resultado comercial"
         title="Produção e torres de serviço"
@@ -377,26 +399,46 @@ function ExecutiveReportPage() {
         tone="violet"
       />
 
-      {towers.map((tower, index) => (
-        <TowerReportPage
-          key={tower.id}
-          tower={tower}
-          page={index + 3}
-          totalPages={totalPages}
-          partner={partnerLabel}
-          date={reportDate}
-          selectedCompanies={selectedCompanies}
-          records={scopedSourceRecords}
-          period={results.resultados.source.period}
-          monthsElapsed={results.resultados.source.monthsElapsed}
-        />
-      ))}
+      {towers.flatMap((tower) =>
+        reportChunks(
+          selectedCompanies.size
+            ? tower.rows.filter((row) => selectedCompanies.has(normalize(row.partner)))
+            : tower.rows,
+          8,
+        ).map((rows, index) => (
+          <TowerReportPage
+            key={`${tower.id}-${index}`}
+            tower={{ ...tower, rows }}
+            partner={partnerLabel}
+            date={reportDate}
+            selectedCompanies={selectedCompanies}
+            records={scopedSourceRecords}
+            period={results.resultados.source.period}
+            monthsElapsed={results.resultados.source.monthsElapsed}
+          />
+        )),
+      )}
+
+      <ChapterCoverPage
+        id="capitulo-certificacao"
+        number="02"
+        eyebrow="Certificação por PV"
+        title="Certificação"
+        description="Simulação salva do ciclo atual, sem consolidação entre parceiros."
+        partner={partnerLabel}
+        date={reportDate}
+        tone="violet"
+      />
+      {certificationReportPages(
+        certificationQuery.data?.preview?.payload,
+        certificationQuery.data?.preview?.updatedAt,
+        !activePartner ? "selection" : certificationQuery.isError ? "error" : "individual",
+        meta,
+      )}
 
       <ChapterCoverPage
         id="capitulo-portabilidade"
-        page={towers.length + 3}
-        totalPages={totalPages}
-        number="02"
+        number="03"
         eyebrow="Produção e tendência"
         title="Portabilidade móvel"
         description="Leitura do movimento de entrada e saída, saldo líquido, conversão e evolução recente do parceiro."
@@ -405,51 +447,62 @@ function ExecutiveReportPage() {
         tone="sky"
       />
 
+      {reportChunks(bestGuessRecords, 12).map((rows, index, chunks) => (
+        <ReportPage
+          key={`portability-${index}`}
+          title="Portabilidade móvel"
+          eyebrow="Produção e tendência"
+          partner={partnerLabel}
+          date={reportDate}
+        >
+          <section className="rounded-[1.4rem] border border-sky-100 bg-white p-5 shadow-sm">
+            <SectionTitle
+              icon={<Smartphone className="size-4" />}
+              eyebrow="Portabilidade móvel"
+              title="M0 MTD × BG FM por parceiro"
+            />
+            <CompactTable
+              headers={[
+                "Parceiro",
+                "M0 Port-in",
+                "M0 Port-out",
+                "M0 Saldo",
+                "BG Port-in",
+                "BG Port-out",
+                "BG Saldo",
+              ]}
+              rows={rows.map((record) => [
+                record.company,
+                fmtDec(record.m0MtdPortIn),
+                signed(record.m0MtdPortOut),
+                signed(record.m0MtdSaldo),
+                fmtDec(record.bgFmPortIn),
+                signed(record.bgFmPortOut),
+                signed(record.bgFmSaldo),
+              ])}
+              total={
+                index === chunks.length - 1
+                  ? [
+                      "Total",
+                      fmtDec(bestGuessTotal.m0MtdPortIn),
+                      signed(bestGuessTotal.m0MtdPortOut),
+                      signed(bestGuessTotal.m0MtdSaldo),
+                      fmtDec(bestGuessTotal.bgFmPortIn),
+                      signed(bestGuessTotal.bgFmPortOut),
+                      signed(bestGuessTotal.bgFmSaldo),
+                    ]
+                  : undefined
+              }
+            />
+          </section>
+        </ReportPage>
+      ))}
       <ReportPage
-        page={towers.length + 4}
-        totalPages={totalPages}
-        title="Portabilidade móvel"
+        title="Evolução de portabilidade"
         eyebrow="Produção e tendência"
         partner={partnerLabel}
         date={reportDate}
       >
-        <section className="rounded-[1.4rem] border border-sky-100 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={<Smartphone className="size-4" />}
-            eyebrow="Portabilidade móvel"
-            title="M0 MTD × BG FM por parceiro"
-          />
-          <CompactTable
-            headers={[
-              "Parceiro",
-              "M0 Port-in",
-              "M0 Port-out",
-              "M0 Saldo",
-              "BG Port-in",
-              "BG Port-out",
-              "BG Saldo",
-            ]}
-            rows={bestGuessRecords.map((record) => [
-              record.company,
-              fmtDec(record.m0MtdPortIn),
-              signed(record.m0MtdPortOut),
-              signed(record.m0MtdSaldo),
-              fmtDec(record.bgFmPortIn),
-              signed(record.bgFmPortOut),
-              signed(record.bgFmSaldo),
-            ])}
-            total={[
-              "Total",
-              fmtDec(bestGuessTotal.m0MtdPortIn),
-              signed(bestGuessTotal.m0MtdPortOut),
-              signed(bestGuessTotal.m0MtdSaldo),
-              fmtDec(bestGuessTotal.bgFmPortIn),
-              signed(bestGuessTotal.bgFmPortOut),
-              signed(bestGuessTotal.bgFmSaldo),
-            ]}
-          />
-        </section>
-
         <section className="mt-4 rounded-[1.4rem] border border-emerald-100 bg-white p-5 shadow-sm">
           <SectionTitle
             icon={<Gauge className="size-4" />}
@@ -488,26 +541,23 @@ function ExecutiveReportPage() {
 
       <ChapterCoverPage
         id="capitulo-oportunidades"
-        page={towers.length + 5}
-        totalPages={totalPages}
-        number="03"
+        number="04"
         eyebrow="Potencial comercial"
         title="Oportunidades"
-        description="Oportunidades móveis, aparelhos, renovação e cobertura FTTH reunidas para orientar a atuação comercial."
+        description="Invasão de Carteira, Móvel, FTTH, Licenças e Avançada no mesmo recorte de parceiros."
         partner={partnerLabel}
         date={reportDate}
         tone="fuchsia"
       />
 
+      {invasaoReportPages(invasaoQuery.data, meta, invasaoTickets.tickets, invasaoTickets.warning)}
       <ReportPage
-        page={towers.length + 6}
-        totalPages={totalPages}
-        title="Oportunidades móveis em foco"
+        title="Oportunidades Móvel"
         eyebrow="Portfólio móvel"
         partner={partnerLabel}
         date={reportDate}
       >
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4 print:grid-cols-4">
           <HeroMetric label="Oportunidade móvel" value={fmtInt(mobile?.kpis.baseRecMovel)} />
           <HeroMetric
             label="Aquisição móvel"
@@ -519,6 +569,7 @@ function ExecutiveReportPage() {
             value={fmtInt(mobile?.kpis.renovacaoFtthTotalizacao)}
             tone="violet"
           />
+          <HeroMetric label="Posse" value={fmtInt(mobile?.kpis.posse)} tone="sky" />
         </div>
         <section className="mt-5">
           <SectionTitle
@@ -556,17 +607,16 @@ function ExecutiveReportPage() {
       </ReportPage>
 
       <ReportPage
-        page={towers.length + 7}
-        totalPages={totalPages}
-        title="Cobertura e renovação em foco"
+        title="Oportunidades FTTH"
         eyebrow="Conectividade FTTH"
         partner={partnerLabel}
         date={reportDate}
       >
-        <div className="grid grid-cols-1 gap-4">
-          <HeroMetric label="Aquisição fixa básica" value={fmtInt(ftth?.kpis.oportunidades)} />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 print:grid-cols-2">
+          <HeroMetric label="Oportunidade FTTH" value={fmtInt(ftth?.kpis.oportunidades)} />
+          <HeroMetric label="Posse" value={fmtInt(ftth?.kpis.posse)} tone="sky" />
         </div>
-        <div className="mt-5 grid grid-cols-4 gap-3">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4 print:grid-cols-4">
           <MetricCard label="Cobertura" value={fmtInt(ftth?.kpis.cobertura)} />
           <MetricCard label="Renovação" value={fmtInt(ftth?.kpis.renovacao)} />
           <MetricCard label="Sem FTTH no parque" value={fmtInt(ftth?.kpis.semFtthNoParque)} />
@@ -576,37 +626,14 @@ function ExecutiveReportPage() {
             accent="violet"
           />
         </div>
-        <section className="mt-5 rounded-[1.4rem] border border-violet-100 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={<Wifi className="size-4" />}
-            eyebrow="Potencial por parceiro"
-            title="Aquisição fixa básica"
-          />
-          <CompactTable
-            headers={["Parceiro", "Oportunidades", "Participação no total"]}
-            rows={(ftth?.porParceiro ?? []).map((row) => [
-              row.parceiro,
-              fmtInt(row.oportunidades),
-              fmtPct(
-                (ftth?.kpis.oportunidades ?? 0)
-                  ? row.oportunidades / (ftth?.kpis.oportunidades ?? 1)
-                  : null,
-              ),
-            ])}
-            total={[
-              "Total",
-              fmtInt(ftth?.kpis.oportunidades),
-              fmtPct(ftth?.kpis.oportunidades ? 1 : null),
-            ]}
-          />
-        </section>
       </ReportPage>
+
+      {licensesReportPages(licensesQuery.data, meta)}
+      {advancedReportPages(advancedQuery.data, meta)}
 
       <ChapterCoverPage
         id="capitulo-qsc"
-        page={towers.length + 8}
-        totalPages={totalPages}
-        number="04"
+        number="05"
         eyebrow="Qualidade e execução"
         title="QSC"
         description="Síntese histórica e indicadores críticos para acompanhar qualidade, execução e pontos de atenção."
@@ -615,19 +642,11 @@ function ExecutiveReportPage() {
         tone="emerald"
       />
 
-      <QscReportPage
-        qsc={qsc}
-        page={towers.length + 9}
-        totalPages={totalPages}
-        partner={partnerLabel}
-        date={reportDate}
-      />
+      {qscReportPages({ qsc, partner: partnerLabel, date: reportDate })}
 
       <ChapterCoverPage
         id="capitulo-quartil"
-        page={towers.length + 10}
-        totalPages={totalPages}
-        number="05"
+        number="06"
         eyebrow="Performance comercial"
         title="Quartil de consultores"
         description="Distribuição dos consultores por parceiro e por faixa de desempenho em Receita, Móvel e FTTH."
@@ -636,14 +655,20 @@ function ExecutiveReportPage() {
         tone="violet"
       />
 
-      <QuartilReportPage
-        quartil={quartil}
-        page={towers.length + 11}
-        totalPages={totalPages}
-        partner={partnerLabel}
-        date={reportDate}
-      />
-    </main>
+      <QuartilRangesReportPage {...meta} />
+      {QUARTIL_REPORT_METRICS.flatMap((metric) =>
+        reportChunks(quartilDistribution(quartil, metric.id), 10).map((rows, index) => (
+          <QuartilReportPage
+            key={`${metric.id}-${index}`}
+            quartil={quartil}
+            metric={metric}
+            rows={rows}
+            partner={partnerLabel}
+            date={reportDate}
+          />
+        )),
+      )}
+    </ExecutiveReportDocument>
   );
 }
 
@@ -651,13 +676,12 @@ function CoverReportPage({
   partner,
   date,
   towerCount,
-  totalPages,
 }: {
   partner: string;
   date: string;
   towerCount: number;
-  totalPages: number;
 }) {
+  const { page, totalPages } = useReportPagination();
   return (
     <article
       id="inicio-relatorio"
@@ -676,7 +700,7 @@ function CoverReportPage({
           <p className="text-xs font-bold uppercase tracking-[0.28em] text-sky-200">
             Resumo do parceiro
           </p>
-          <h1 className="mt-5 text-6xl font-semibold leading-[0.98] tracking-[-0.05em]">
+          <h1 className="mt-5 text-3xl font-semibold sm:text-6xl print:text-6xl leading-[0.98] tracking-[-0.05em]">
             Relatório
             <br />
             executivo
@@ -687,13 +711,14 @@ function CoverReportPage({
             para apoiar a tomada de decisão.
           </p>
 
-          <div className="mt-9 grid max-w-2xl grid-cols-2 gap-3">
+          <div className="mt-9 grid max-w-2xl grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-3">
             {[
               ["Produção e torres", `${towerCount} torres de serviço`, "#capitulo-producao"],
+              ["Certificação", "Simulação salva por PV", "#capitulo-certificacao"],
               ["Portabilidade", "Produção e tendência", "#capitulo-portabilidade"],
-              ["Oportunidades", "Móvel, aparelhos e FTTH", "#capitulo-oportunidades"],
+              ["Oportunidades", "Invasão, Móvel, FTTH, TI e Avançada", "#capitulo-oportunidades"],
               ["QSC", "Qualidade e execução", "#capitulo-qsc"],
-              ["Quartil", "Receita, Móvel e FTTH", "#capitulo-quartil"],
+              ["Quartil", "Faixas, Receita, Móvel e FTTH", "#capitulo-quartil"],
             ].map(([title, subtitle, href], index) => (
               <a
                 key={title}
@@ -715,7 +740,9 @@ function CoverReportPage({
 
       <footer className="relative flex items-center justify-between border-t border-white/15 pt-4 text-[10px] text-white/60">
         <span>Material confidencial · uso executivo</span>
-        <span>Página 1 de {totalPages} · 2026</span>
+        <span>
+          Página {page} de {totalPages}
+        </span>
       </footer>
     </article>
   );
@@ -723,8 +750,6 @@ function CoverReportPage({
 
 function ChapterCoverPage({
   id,
-  page,
-  totalPages,
   number,
   eyebrow,
   title,
@@ -733,8 +758,6 @@ function ChapterCoverPage({
   tone,
 }: {
   id: string;
-  page: number;
-  totalPages: number;
   number: string;
   eyebrow: string;
   title: string;
@@ -750,6 +773,7 @@ function ChapterCoverPage({
     emerald: "from-[#06251f] via-[#0b4d3e] to-[#08765c] text-emerald-100",
   } as const;
 
+  const { page, totalPages } = useReportPagination();
   return (
     <article
       id={id}
@@ -770,7 +794,7 @@ function ChapterCoverPage({
             </span>
             <p className="text-xs font-bold uppercase tracking-[0.28em]">{eyebrow}</p>
           </div>
-          <h1 className="max-w-4xl text-6xl font-semibold leading-[0.98] tracking-[-0.05em]">
+          <h1 className="max-w-4xl text-3xl font-semibold sm:text-6xl print:text-6xl leading-[0.98] tracking-[-0.05em]">
             {title}
           </h1>
         </div>
@@ -790,8 +814,6 @@ function ChapterCoverPage({
 
 function TowerReportPage({
   tower,
-  page,
-  totalPages,
   partner,
   date,
   selectedCompanies,
@@ -800,8 +822,6 @@ function TowerReportPage({
   monthsElapsed,
 }: {
   tower: ServiceTower;
-  page: number;
-  totalPages: number;
   partner: string;
   date: string;
   selectedCompanies: Set<string>;
@@ -816,58 +836,36 @@ function TowerReportPage({
 
   return (
     <ReportPage
-      page={page}
-      totalPages={totalPages}
-      title="Produção e acompanhamento comercial"
-      eyebrow="Resultado atual"
+      title={ytd.product}
+      eyebrow="Produção e torres de serviço"
       partner={partner}
       date={date}
     >
-      <div className="grid grid-cols-[1.05fr_1.95fr] gap-4">
-        <section className="rounded-[1.4rem] bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-5 text-white shadow-lg">
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-violet-100">
-            Produto em foco
-          </p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-tight">{ytd.product}</h2>
-          <p className="mt-2 max-w-sm text-xs leading-5 text-violet-100">
-            O resultado YTD/YoY abaixo corresponde à mesma torre exibida no acompanhamento
-            comercial.
-          </p>
-          <div className="mt-6 grid grid-cols-2 gap-3">
-            <MetricCard label="Real YTD" value={fmtDec(ytd.real)} inverse />
-            <MetricCard label="Atingimento" value={fmtPct(ytd.attainment)} inverse />
-            <MetricCard label="Gap da meta" value={signed(ytd.gap)} inverse />
-            <MetricCard label="YoY" value={fmtPct(ytd.yoy)} inverse />
-          </div>
-        </section>
-
-        <section className="rounded-[1.4rem] border border-violet-100 bg-white p-5 shadow-sm">
-          <SectionTitle
-            icon={<BarChart3 className="size-4" />}
-            eyebrow="Acompanhamento comercial"
-            title="Torres de serviço"
-          />
-          <p className="mt-1 text-xs text-slate-500">{tower.title}</p>
-          <CompactTable
-            headers={["Parceiro", ...tower.columns.slice(0, 6).map((column) => column.label)]}
-            rows={towerRows.map((row) => [
-              row.partner,
-              ...tower.columns
-                .slice(0, 6)
-                .map((column) => formatTowerValue(row.values[column.key], column.format)),
-            ])}
-            empty="Sem dados para o parceiro nesta torre."
-          />
-        </section>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 print:grid-cols-4">
+        <MetricCard label="Real YTD" value={fmtDec(ytd.real)} />
+        <MetricCard label="Atingimento" value={fmtPct(ytd.attainment)} />
+        <MetricCard label="Gap da meta" value={signed(ytd.gap)} />
+        <MetricCard label="YoY" value={fmtPct(ytd.yoy)} />
       </div>
-
-      <section className="mt-4 rounded-[1.4rem] border border-violet-100 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-end justify-between gap-4">
-          <SectionTitle icon={<Gauge className="size-4" />} eyebrow="Produção YoY" title={period} />
-          <span className="rounded-full bg-violet-50 px-3 py-1 text-[10px] font-semibold text-violet-700">
-            Somente {ytd.product}
-          </span>
-        </div>
+      <section className="mt-5">
+        <SectionTitle
+          icon={<BarChart3 className="size-4" />}
+          eyebrow="Acompanhamento comercial"
+          title={tower.title}
+        />
+        <CompactTable
+          headers={["Parceiro", ...tower.columns.map((column) => column.label)]}
+          rows={towerRows.map((row) => [
+            row.partner,
+            ...tower.columns.map((column) =>
+              formatTowerValue(row.values[column.key], column.format),
+            ),
+          ])}
+          empty="Sem dados para o parceiro nesta torre."
+        />
+      </section>
+      <section className="mt-5">
+        <SectionTitle icon={<Gauge className="size-4" />} eyebrow="Produção YoY" title={period} />
         <CompactTable
           headers={["Produto", "Meta", "Real", "%", "Gap TT", "Média/mês", "YoY R$", "YoY %"]}
           rows={[
@@ -888,16 +886,16 @@ function TowerReportPage({
   );
 }
 
-function QscReportPage({
+/**
+ * Páginas do capítulo QSC. Devolve uma lista (e não um componente) para que o relatório
+ * conte cada folha de continuação na numeração e no total de páginas.
+ */
+function qscReportPages({
   qsc,
-  page,
-  totalPages,
   partner,
   date,
 }: {
   qsc: ReturnType<typeof useQsc>["data"];
-  page: number;
-  totalPages: number;
   partner: string;
   date: string;
 }) {
@@ -906,17 +904,26 @@ function QscReportPage({
   const competencies = semesterCompetencies(competence);
   const rows = DOMAIN_LABELS.map((item) => ({
     ...item,
-    ...qscDomainHistory(item.domain, metrics, competencies),
+    ...qscSemesterValues(
+      item.domain,
+      qsc?.domainHistoryUnavailable ? undefined : qsc?.domainHistory,
+      competencies,
+    ),
   }));
   const pulse = PULSE_METRICS.flatMap((item) => {
     const metric = metrics.find((candidate) => candidate.id === item.id);
     return metric ? [{ ...item, metric }] : [];
   });
+  // Mês fechado de cada indicador (competência mais recente com apuração) contra o mês
+  // imediatamente anterior a ele.
+  const worsened = qscWorsened(metrics);
+  const comparable = metrics.filter((metric) => qscVariation(metric).status !== "unavailable");
+  const notComparable = metrics.length - comparable.length;
+  const dropPages = reportChunks(worsened, 12);
 
-  return (
+  return [
     <ReportPage
-      page={page}
-      totalPages={totalPages}
+      key="qsc-main"
       title="Qualidade e execução"
       eyebrow="QSC"
       partner={partner}
@@ -927,12 +934,22 @@ function QscReportPage({
           <SectionTitle
             icon={<ShieldCheck className="size-4" />}
             eyebrow="Histórico consolidado"
-            title="Visão histórica por semestre"
+            title="Nota consolidada por semestre"
           />
           <span className="rounded-full bg-violet-50 px-3 py-1 text-[10px] font-semibold capitalize text-violet-700">
             {competenceLabel(competence)}
           </span>
         </div>
+        {(!qsc || qsc.domainHistoryUnavailable || !qsc.domainHistory) && (
+          <p className="mt-3 text-xs text-slate-600">
+            Histórico semestral indisponível. Nenhuma soma antiga de indicadores foi usada como
+            substituição.
+          </p>
+        )}
+        <p className="mt-2 text-[10px] text-slate-500">
+          Média das notas consolidadas por parceiro em cada mês; totalizador pela média dos meses
+          com apuração.
+        </p>
         <CompactTable
           headers={[
             "Indicador",
@@ -945,8 +962,8 @@ function QscReportPage({
             row.label,
             ...row.values.map(fmtInt),
             fmtInt(row.totalizer),
-            fmtInt(row.points),
-            row.band,
+            fmtInt(qscRating(row.totalizer).points),
+            qscRating(row.totalizer).band,
           ])}
         />
       </section>
@@ -958,34 +975,109 @@ function QscReportPage({
           title="Pulso do mês"
         />
         <div className="mt-3 grid grid-cols-5 gap-3">
-          {pulse.map(({ id, label, metric }) => (
-            <div
-              key={id}
-              className="rounded-[1.25rem] border border-slate-200 bg-white p-4 shadow-sm"
-            >
-              <p className="min-h-7 text-[9px] font-bold uppercase leading-3 tracking-[0.12em] text-slate-500">
-                {label}
-              </p>
-              <div className="mt-2 flex items-end justify-between gap-2">
-                <strong className="text-xl tabular-nums text-slate-950">
-                  {fmtQscPct(metric.latest?.value)}
-                </strong>
-                <span className="rounded-full bg-violet-100 px-2 py-1 text-[9px] font-bold text-violet-700">
-                  F{metric.latest?.scoreBand ?? "—"}
-                </span>
+          {pulse.map(({ id, label, metric }) => {
+            const variation = qscVariation(metric);
+            const worse = variation.status === "worse";
+            return (
+              <div
+                key={id}
+                className={`rounded-[1.25rem] border bg-white p-4 shadow-sm ${worse ? "border-rose-300 ring-1 ring-rose-200" : "border-slate-200"}`}
+              >
+                <p className="min-h-7 text-[9px] font-bold uppercase leading-3 tracking-[0.12em] text-slate-500">
+                  {label}
+                </p>
+                <div className="mt-2 flex items-end justify-between gap-2">
+                  <strong className="text-xl tabular-nums text-slate-950">
+                    {fmtQscPct(metric.latest?.value)}
+                  </strong>
+                  <span className="rounded-full bg-violet-100 px-2 py-1 text-[9px] font-bold text-violet-700">
+                    F{metric.latest?.scoreBand ?? "—"}
+                  </span>
+                </div>
+                <div className="mt-3 flex justify-between border-t border-slate-100 pt-2 text-[9px] text-slate-500">
+                  <span>Nota {metric.latest?.score ?? "—"}</span>
+                  <span>
+                    {fmtInt(metric.latest?.numerator)} / {fmtInt(metric.latest?.denominator)}
+                  </span>
+                </div>
+                <p
+                  className={`mt-2 flex items-center gap-1 text-[9px] font-bold ${worse ? "text-rose-700" : "text-slate-500"}`}
+                >
+                  {variation.status === "worse" ? (
+                    <TrendingDown className="size-3" aria-hidden />
+                  ) : variation.status === "better" ? (
+                    <TrendingUp className="size-3" aria-hidden />
+                  ) : (
+                    <Minus className="size-3" aria-hidden />
+                  )}
+                  {variation.status === "unavailable" || !variation.current || !variation.previous
+                    ? "Sem mês anterior para comparar"
+                    : `${
+                        variation.status === "worse"
+                          ? "Piorou"
+                          : variation.status === "better"
+                            ? "Melhorou"
+                            : "Estável"
+                      } ${formatQscDeltaPp(variation.deltaPp)} · ${shortCompetence(variation.current.competence)} vs ${shortCompetence(variation.previous.competence)}`}
+                </p>
               </div>
-              <div className="mt-3 flex justify-between border-t border-slate-100 pt-2 text-[9px] text-slate-500">
-                <span>Nota {metric.latest?.score ?? "—"}</span>
-                <span>
-                  {fmtInt(metric.latest?.numerator)} / {fmtInt(metric.latest?.denominator)}
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
-    </ReportPage>
-  );
+    </ReportPage>,
+    ...dropPages.map((rows, index) => (
+      <ReportPage
+        key={`qsc-drops-${index}`}
+        title={`Indicadores em queda${dropPages.length > 1 ? ` · ${index + 1}/${dropPages.length}` : ""}`}
+        eyebrow="QSC · Mês fechado × mês anterior"
+        partner={partner}
+        date={date}
+      >
+        <p className="text-xs text-slate-600">
+          Cada indicador no seu mês fechado (a competência mais recente com apuração) contra o mês
+          imediatamente anterior. Competência mais recente da base:{" "}
+          <span className="capitalize">{competenceLabel(competence)}</span>.
+        </p>
+        <p className="mt-1 text-[10px] leading-4 text-slate-500">
+          Queda é a piora do indicador: valor menor quando subir é favorável, valor maior quando
+          descer é favorável (ex.: churn). Variação em pontos percentuais, do maior recuo para o
+          menor.
+        </p>
+        <CompactTable
+          headers={[
+            "Indicador",
+            "Sentido favorável",
+            "Competência",
+            "Mês anterior",
+            "Mês fechado",
+            "Variação",
+            "Faixa",
+          ]}
+          rows={rows.map(({ metric, variation }) => [
+            metric.label,
+            metric.favorableDirection === "up" ? "Maior é melhor" : "Menor é melhor",
+            `${shortCompetence(variation.current?.competence ?? "")} × ${shortCompetence(variation.previous?.competence ?? "")}`,
+            fmtQscPct(variation.previous?.value),
+            fmtQscPct(variation.current?.value),
+            formatQscDeltaPp(variation.deltaPp),
+            `F${variation.previous?.scoreBand ?? "—"} → F${variation.current?.scoreBand ?? "—"}`,
+          ])}
+          empty={
+            comparable.length
+              ? "Nenhum indicador piorou em relação ao mês anterior."
+              : "Sem mês anterior apurado na base para comparar os indicadores."
+          }
+        />
+        {index === dropPages.length - 1 && notComparable > 0 && (
+          <p className="mt-3 text-[10px] leading-4 text-slate-500">
+            {notComparable} {notComparable === 1 ? "indicador" : "indicadores"} sem o mês anterior
+            apurado ficaram fora da comparação; ausência de dado não é queda.
+          </p>
+        )}
+      </ReportPage>
+    )),
+  ];
 }
 
 function QuartilDistributionBar({
@@ -1055,14 +1147,14 @@ function QuartilDistributionLegend({
 
 function QuartilReportPage({
   quartil,
-  page,
-  totalPages,
+  metric,
+  rows,
   partner,
   date,
 }: {
   quartil: QuartilSnapshot | null;
-  page: number;
-  totalPages: number;
+  metric: (typeof QUARTIL_REPORT_METRICS)[number];
+  rows: QuartilPartnerDistribution[];
   partner: string;
   date: string;
 }) {
@@ -1073,9 +1165,7 @@ function QuartilReportPage({
 
   return (
     <ReportPage
-      page={page}
-      totalPages={totalPages}
-      title="Quartil de consultores"
+      title={`Quartil de consultores · ${metric.label}`}
       eyebrow="Performance comercial"
       partner={partner}
       date={date}
@@ -1093,9 +1183,9 @@ function QuartilReportPage({
           </div>
 
           <div className="quartil-executive-grid mt-4 grid grid-cols-1 gap-4">
-            {QUARTIL_REPORT_METRICS.map((metric) => {
-              const rows = quartilDistribution(quartil, metric.id);
-              const total = rows.reduce(
+            {[metric].map((metric) => {
+              const allRows = quartilDistribution(quartil, metric.id);
+              const total = allRows.reduce(
                 (summary, row) => ({
                   consultants: summary.consultants + row.consultants,
                   quartiles: summary.quartiles.map(
@@ -1197,219 +1287,6 @@ function QuartilReportPage({
         </>
       )}
     </ReportPage>
-  );
-}
-
-function ReportPage({
-  page,
-  totalPages,
-  title,
-  eyebrow,
-  partner,
-  date,
-  children,
-}: {
-  page: number;
-  totalPages: number;
-  title: string;
-  eyebrow: string;
-  partner: string;
-  date: string;
-  children: ReactNode;
-}) {
-  return (
-    <article className="executive-report-page relative mx-auto mb-6 flex min-h-[790px] max-w-[1120px] flex-col overflow-hidden rounded-[2rem] border border-violet-100 bg-[#fbf9ff] p-8 shadow-2xl">
-      <div className="absolute -right-24 -top-24 size-72 rounded-full bg-sky-200/35 blur-3xl" />
-      <div className="absolute -left-24 top-20 size-64 rounded-full bg-fuchsia-200/25 blur-3xl" />
-      <header className="relative mb-5 flex items-start justify-between border-b border-violet-100 pb-4">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-violet-700">
-            {eyebrow}
-          </p>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">{title}</h1>
-        </div>
-        <div className="text-right">
-          <p className="text-xs font-semibold text-slate-800">{partner}</p>
-          <p className="mt-1 text-[10px] text-slate-500">Relatório executivo · {date}</p>
-        </div>
-      </header>
-      <div className="relative flex-1">{children}</div>
-      <footer className="relative mt-4 flex items-center justify-between border-t border-violet-100 pt-3 text-[9px] text-slate-400">
-        <span>Visão Carteira · resumo para tomada de decisão</span>
-        <span>
-          Página {page} de {totalPages}
-        </span>
-      </footer>
-    </article>
-  );
-}
-
-function SectionTitle({
-  icon,
-  eyebrow,
-  title,
-}: {
-  icon: ReactNode;
-  eyebrow: string;
-  title: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="grid size-9 place-items-center rounded-xl bg-violet-100 text-violet-700">
-        {icon}
-      </span>
-      <div>
-        <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-violet-700">
-          {eyebrow}
-        </p>
-        <h2 className="text-base font-semibold text-slate-950">{title}</h2>
-      </div>
-    </div>
-  );
-}
-
-function MetricCard({
-  label,
-  value,
-  inverse = false,
-  accent = "default",
-}: {
-  label: string;
-  value: string;
-  inverse?: boolean;
-  accent?: "default" | "violet" | "emerald";
-}) {
-  const color = inverse
-    ? "border-white/15 bg-white/10 text-white"
-    : accent === "emerald"
-      ? "border-emerald-100 bg-emerald-50 text-emerald-800"
-      : accent === "violet"
-        ? "border-violet-100 bg-violet-50 text-violet-800"
-        : "border-slate-200 bg-white text-slate-950";
-  return (
-    <div className={`rounded-[1.1rem] border p-3 ${color}`}>
-      <p
-        className={`text-[9px] font-bold uppercase tracking-[0.12em] ${inverse ? "text-violet-100" : "text-slate-500"}`}
-      >
-        {label}
-      </p>
-      <strong className="mt-1 block text-lg tabular-nums">{value}</strong>
-    </div>
-  );
-}
-
-function HeroMetric({
-  label,
-  value,
-  tone = "brand",
-}: {
-  label: string;
-  value: string;
-  tone?: "brand" | "sky" | "violet";
-}) {
-  const style =
-    tone === "brand"
-      ? "from-violet-900 to-fuchsia-600 text-white"
-      : tone === "sky"
-        ? "from-white to-sky-100 text-slate-950"
-        : "from-white to-violet-100 text-slate-950";
-  return (
-    <div
-      className={`rounded-[1.4rem] border border-violet-100 bg-gradient-to-br p-5 shadow-sm ${style}`}
-    >
-      <p
-        className={`text-[9px] font-bold uppercase tracking-[0.14em] ${tone === "brand" ? "text-violet-100" : "text-slate-500"}`}
-      >
-        {label}
-      </p>
-      <strong className="mt-3 block text-3xl tracking-tight tabular-nums">{value}</strong>
-    </div>
-  );
-}
-
-function LargeSummary({
-  label,
-  value,
-  tone = "sky",
-}: {
-  label: string;
-  value: string;
-  tone?: "sky" | "violet";
-}) {
-  return (
-    <div
-      className={`rounded-[1.5rem] border p-5 shadow-sm ${tone === "violet" ? "border-violet-100 bg-gradient-to-br from-white to-violet-100" : "border-sky-100 bg-gradient-to-br from-white to-sky-100"}`}
-    >
-      <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-      <strong className="mt-3 block text-3xl tracking-tight tabular-nums text-slate-950">
-        {value}
-      </strong>
-    </div>
-  );
-}
-
-function CompactTable({
-  headers,
-  rows,
-  total,
-  empty = "Nenhum dado disponível.",
-}: {
-  headers: string[];
-  rows: string[][];
-  total?: string[];
-  empty?: string;
-}) {
-  return (
-    <div className="mt-4 overflow-hidden rounded-xl border border-slate-200">
-      <table className="w-full table-fixed border-collapse bg-white text-[10px]">
-        <thead className="bg-slate-50 text-slate-500">
-          <tr>
-            {headers.map((header, index) => (
-              <th
-                key={`${header}-${index}`}
-                className={`px-3 py-2.5 font-bold uppercase tracking-[0.08em] ${index ? "text-right" : "text-left"}`}
-              >
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length ? (
-            rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-t border-slate-100">
-                {headers.map((_, index) => (
-                  <td
-                    key={index}
-                    className={`px-3 py-2.5 font-medium tabular-nums text-slate-700 ${index ? "text-right" : "text-left font-semibold text-slate-900"}`}
-                  >
-                    {row[index] ?? "—"}
-                  </td>
-                ))}
-              </tr>
-            ))
-          ) : (
-            <tr className="border-t border-slate-100">
-              <td colSpan={headers.length} className="px-3 py-6 text-center text-slate-500">
-                {empty}
-              </td>
-            </tr>
-          )}
-          {total && (
-            <tr className="border-t-2 border-violet-100 bg-violet-50/70">
-              {headers.map((_, index) => (
-                <td
-                  key={index}
-                  className={`px-3 py-2.5 font-bold tabular-nums text-slate-900 ${index ? "text-right" : "text-left"}`}
-                >
-                  {total[index] ?? "—"}
-                </td>
-              ))}
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
   );
 }
 
