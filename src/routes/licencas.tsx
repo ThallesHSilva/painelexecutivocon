@@ -14,6 +14,8 @@ import { CloudCog, ShieldCheck, UserCheck } from "lucide-react";
 import { OpportunitySimulator } from "@/components/OpportunitySimulator";
 import { usePartnerFilter } from "@/contexts/AppContexts";
 
+const DEFAULT_CONVERSION_RATE = 34;
+
 export const Route = createFileRoute("/licencas")({
   head: () => ({ meta: [{ title: "Licenças e Serviços Digitais — Mapa Parque" }] }),
   component: Page,
@@ -23,8 +25,18 @@ function Page() {
   const { data, isLoading, error, refetch } = useLicenses();
   const { selected, role, allowedPartnerIds } = usePartnerFilter();
   const { data: partners = [] } = usePartners();
-  const [conversionRate, setConversionRate] = useState(34);
-  const appliedRate = Math.min(100, Math.max(0, conversionRate));
+  /**
+   * A conversão é individual por parceiro; os cenários financeiros usam a taxa efetiva
+   * do conjunto (média das taxas ponderada pelas oportunidades de cada parceiro), 34%
+   * enquanto o simulador não reporta.
+   */
+  const [adoption, setAdoption] = useState<{ oportunidades: number; adopters: number } | null>(
+    null,
+  );
+  const appliedRate =
+    adoption && adoption.oportunidades > 0
+      ? (adoption.adopters / adoption.oportunidades) * 100
+      : DEFAULT_CONVERSION_RATE;
 
   /**
    * Recorte em texto, com a mesma semântica da Visão resultado: nenhuma seleção
@@ -229,8 +241,8 @@ function Page() {
             opportunityLabel="Oportunidade TI Recorrente"
             quantityLabel="Licenças"
             revenueLabel="Receita digital"
-            conversionRate={appliedRate}
-            onConversionRateChange={setConversionRate}
+            defaultConversionRate={DEFAULT_CONVERSION_RATE}
+            onAdoptionChange={setAdoption}
             loading={isLoading}
           />
 

@@ -16,8 +16,13 @@ import {
 } from "@/components/ui/table";
 import { fmtBRL, fmtInt } from "@/lib/format";
 import {
+  DEFAULT_SIMULATOR_SETTINGS,
+  readSavedSimulator,
+  savePartnerSettings,
   simulateConversion,
   type OpportunityRow,
+  type PartnerSimulatorSettings,
+  type SavedSimulator,
   type SimulationEntry,
 } from "@/lib/opportunity-simulation";
 import { cn } from "@/lib/utils";
@@ -25,34 +30,15 @@ import { cn } from "@/lib/utils";
 /**
  * Simulador de oportunidades (Etapa 4).
  *
- * Um único painel: parâmetros em faixa compacta no topo e, abaixo, as projeções de
+ * Um único painel: parâmetros por parceiro no topo e, abaixo, as projeções de
  * Conversão e Qualificados. As duas tabelas compartilham a mesma borda de leitura da
  * Visão resultado — cabeçalho em superfície sutil, número à direita com `tabular-nums`,
  * identificação persistente na rolagem horizontal e totalizador por borda e peso.
  *
- * Fórmulas, arredondamentos, rótulos comerciais, props, `storageKey` e a persistência
- * em `localStorage` permanecem exatamente como estavam: a mudança é de apresentação.
+ * Cada parceiro tem os seus próprios parâmetros, gravados em `localStorage` (por
+ * `storageKey`) no instante em que o campo é alterado. Parceiro ainda não preenchido
+ * parte dos parâmetros globais salvos no formato anterior, ou dos padrões.
  */
-
-type SimulatorSettings = {
-  quantityPerCnpj: number;
-  conversionRate: number;
-  capacityPerDay: number;
-  averageActivations: number;
-  averageTicket: number;
-};
-
-/**
- * Nomes que a rota Móvel gravava no seu próprio simulador antes de passar a usar
- * este componente. A chave de `localStorage` e o escopo continuam os mesmos; ler
- * também os nomes antigos evita descartar parâmetros já salvos por quem usa a
- * página. A gravação passa a usar apenas os nomes acima.
- */
-type LegacySimulatorSettings = {
-  linesPerCnpj: number;
-  capacityPerPdu: number;
-  ticketMedio: number;
-};
 
 type OpportunitySimulatorProps = {
   rows: OpportunityRow[];
@@ -61,8 +47,13 @@ type OpportunitySimulatorProps = {
   opportunityLabel: string;
   quantityLabel: string;
   revenueLabel: string;
-  conversionRate?: number;
-  onConversionRateChange?: (value: number) => void;
+  /** Conversão (%) de quem ainda não tem parâmetros próprios. */
+  defaultConversionRate?: number;
+  /**
+   * Adesão do conjunto: oportunidades e quantos clientes aderem quando cada parceiro
+   * converte à sua própria taxa. Para páginas que projetam receita sobre a adesão.
+   */
+  onAdoptionChange?: (adoption: { oportunidades: number; adopters: number }) => void;
   /** Base ainda em carregamento: projeções em skeleton, nunca linha de zeros. */
   loading?: boolean;
 };
@@ -75,12 +66,6 @@ type QualifiedEntry = {
   fdv: number;
 };
 
-function savedNumber(value: unknown, minimum: number, maximum = Infinity) {
-  return typeof value === "number" && Number.isFinite(value)
-    ? Math.min(maximum, Math.max(minimum, value))
-    : undefined;
-}
-
 export function OpportunitySimulator({
   rows,
   storageKey,
@@ -88,88 +73,64 @@ export function OpportunitySimulator({
   opportunityLabel,
   quantityLabel,
   revenueLabel,
-  conversionRate: controlledConversionRate,
-  onConversionRateChange,
+  defaultConversionRate,
+  onAdoptionChange,
   loading = false,
 }: OpportunitySimulatorProps) {
-  const [quantityPerCnpj, setQuantityPerCnpj] = useState(2);
-  const [storedConversionRate, setStoredConversionRate] = useState(5);
-  const [capacityPerDay, setCapacityPerDay] = useState(20);
-  const [averageActivations, setAverageActivations] = useState(1);
-  const [averageTicket, setAverageTicket] = useState(0);
-  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [saved, setSaved] = useState<SavedSimulator>(() => ({
+    defaults: {
+      ...DEFAULT_SIMULATOR_SETTINGS,
+      conversionRate: defaultConversionRate ?? DEFAULT_SIMULATOR_SETTINGS.conversionRate,
+    },
+    partners: {},
+  }));
 
+  /** Lê o navegador ao montar (a renderização no servidor não tem `localStorage`). */
   useEffect(() => {
-    try {
-      const saved = JSON.parse(window.localStorage.getItem(storageKey) ?? "{}") as Partial<
-        SimulatorSettings & LegacySimulatorSettings
-      >;
-      const savedQuantity = savedNumber(saved.quantityPerCnpj ?? saved.linesPerCnpj, 0);
-      const savedConversion = savedNumber(saved.conversionRate, 0, 100);
-      const savedCapacity = savedNumber(saved.capacityPerDay ?? saved.capacityPerPdu, 1);
-      const savedAverage = savedNumber(saved.averageActivations, 1);
-      const savedTicket = savedNumber(saved.averageTicket ?? saved.ticketMedio, 0);
+    setSaved(
+      readSavedSimulator(storageKey, {
+        ...DEFAULT_SIMULATOR_SETTINGS,
+        conversionRate: defaultConversionRate ?? DEFAULT_SIMULATOR_SETTINGS.conversionRate,
+      }),
+    );
+  }, [defaultConversionRate, storageKey]);
 
-      if (savedQuantity != null) setQuantityPerCnpj(savedQuantity);
-      if (savedConversion != null) {
-        setStoredConversionRate(savedConversion);
-        onConversionRateChange?.(savedConversion);
-      }
-      if (savedCapacity != null) setCapacityPerDay(savedCapacity);
-      if (savedAverage != null) setAverageActivations(savedAverage);
-      if (savedTicket != null) setAverageTicket(savedTicket);
-    } catch {
-      // Keep defaults when browser storage is unavailable or malformed.
-    } finally {
-      setSettingsLoaded(true);
-    }
-  }, [onConversionRateChange, storageKey]);
+  const settingsFor = (parceiro: string): PartnerSimulatorSettings =>
+    Object.hasOwn(saved.partners, parceiro) ? saved.partners[parceiro] : saved.defaults;
 
-  const conversionRate = controlledConversionRate ?? storedConversionRate;
-  const changeConversionRate = (value: number) => {
-    setStoredConversionRate(value);
-    onConversionRateChange?.(value);
+  /** Atualiza a tela e grava no navegador no mesmo instante em que o campo muda. */
+  const changeSetting = (
+    parceiro: string,
+    field: keyof PartnerSimulatorSettings,
+    value: number,
+  ) => {
+    const next = { ...settingsFor(parceiro), [field]: value };
+    savePartnerSettings(storageKey, parceiro, next);
+    setSaved((current) => ({ ...current, partners: { ...current.partners, [parceiro]: next } }));
   };
 
-  useEffect(() => {
-    if (!settingsLoaded) return;
-    try {
-      window.localStorage.setItem(
-        storageKey,
-        JSON.stringify({
-          quantityPerCnpj,
-          conversionRate,
-          capacityPerDay,
-          averageActivations,
-          averageTicket,
-        }),
-      );
-    } catch {
-      // Keep the simulator usable when browser storage is unavailable.
-    }
-  }, [
-    averageActivations,
-    averageTicket,
-    capacityPerDay,
-    conversionRate,
-    quantityPerCnpj,
-    settingsLoaded,
-    storageKey,
-  ]);
-
-  const { simulation, total } = simulateConversion(rows, {
-    quantityPerCnpj,
-    conversionRate,
-    capacityPerDay,
-    averageTicket,
+  const { simulation, total } = simulateConversion(rows, settingsFor);
+  const qualified = simulation.map((partner) => {
+    const { averageActivations } = settingsFor(partner.parceiro);
+    return {
+      ...partner,
+      cttMonth: partner.conversions / 2,
+      cttWeek: partner.conversions / 8,
+      cttDay: partner.conversions / 40,
+      fdv: averageActivations > 0 ? Math.ceil(partner.conversions / averageActivations) : 0,
+    };
   });
-  const qualified = simulation.map((partner) => ({
-    ...partner,
-    cttMonth: partner.conversions / 2,
-    cttWeek: partner.conversions / 8,
-    cttDay: partner.conversions / 40,
-    fdv: averageActivations > 0 ? Math.ceil(partner.conversions / averageActivations) : 0,
-  }));
+
+  const totalOportunidades = total.oportunidades;
+  const totalAdopters = rows.reduce(
+    (sum, partner) =>
+      sum + (partner.oportunidades * settingsFor(partner.parceiro).conversionRate) / 100,
+    0,
+  );
+  useEffect(() => {
+    onAdoptionChange?.({ oportunidades: totalOportunidades, adopters: totalAdopters });
+  }, [onAdoptionChange, totalAdopters, totalOportunidades]);
+
   const qualifiedTotal = qualified.reduce(
     (result, partner) => ({
       cttMonth: result.cttMonth + partner.cttMonth,
@@ -233,52 +194,30 @@ export function OpportunitySimulator({
           {simulatorLabel}
         </h2>
         <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
-          Os parâmetros abaixo alimentam as duas projeções e ficam salvos neste navegador.
+          Cada parceiro tem os seus próprios parâmetros, que alimentam as duas projeções e são
+          salvos neste navegador assim que preenchidos.
         </p>
       </div>
 
-      <div className="grid gap-3 border-b border-border bg-muted/40 px-4 py-3 md:px-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <ParameterField
-          label={`${quantityLabel} por CNPJ`}
-          value={quantityPerCnpj}
-          min={0}
-          step={1}
-          onChange={setQuantityPerCnpj}
-        />
-        <ParameterField
-          label="Conversão (%)"
-          value={conversionRate}
-          min={0}
-          max={100}
-          step={0.1}
-          onChange={changeConversionRate}
-        />
-        <ParameterField
-          label="Dias úteis"
-          value={capacityPerDay}
-          min={1}
-          step={1}
-          onChange={setCapacityPerDay}
-        />
-        <ParameterField
-          label="Ticket médio (R$)"
-          value={averageTicket}
-          min={0}
-          step={0.01}
-          onChange={setAverageTicket}
-        />
-        <ParameterField
-          label="Média de altas"
-          value={averageActivations}
-          min={1}
-          step={0.1}
-          onChange={setAverageActivations}
-        />
-      </div>
+      {(loading || rows.length > 0) && (
+        <ResultSection
+          title="Parâmetros por parceiro"
+          description="Preencha os campos de cada parceiro; a projeção é recalculada e o valor fica salvo na hora."
+        >
+          <ParametersTable
+            rows={rows}
+            loading={loading}
+            quantityLabel={`${quantityLabel} por CNPJ`}
+            settingsFor={settingsFor}
+            onChange={changeSetting}
+          />
+        </ResultSection>
+      )}
 
       <ResultSection
         title="Conversão"
         description="Volume, conversões, capacidade comercial e receita por parceiro."
+        bordered
       >
         <ResultTable
           columns={conversionColumns}
@@ -310,42 +249,107 @@ export function OpportunitySimulator({
   );
 }
 
-/**
- * Faixa de parâmetros: rótulo em caption, campo editável com borda e foco visíveis,
- * valor à direita em `tabular-nums` para que os cinco campos compartilhem a mesma
- * borda de leitura. Os controles nativos de incremento são ocultados porque cobririam
- * o próprio valor alinhado à direita; o passo continua acessível pelas setas do teclado.
- */
-function ParameterField({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-}: {
+type ParameterColumn = {
+  field: keyof PartnerSimulatorSettings;
   label: string;
-  value: number;
   min: number;
   max?: number;
   step: number;
-  onChange: (value: number) => void;
+};
+
+/**
+ * Tabela de parâmetros: uma linha por parceiro, um campo por parâmetro. O campo
+ * tem borda e foco visíveis e o valor à direita em `tabular-nums`, como as tabelas de
+ * resultado. Os controles nativos de incremento são ocultados porque cobririam o
+ * próprio valor alinhado à direita; o passo continua acessível pelas setas do teclado.
+ */
+function ParametersTable({
+  rows,
+  loading,
+  quantityLabel,
+  settingsFor,
+  onChange,
+}: {
+  rows: OpportunityRow[];
+  loading: boolean;
+  quantityLabel: string;
+  settingsFor: (parceiro: string) => PartnerSimulatorSettings;
+  onChange: (parceiro: string, field: keyof PartnerSimulatorSettings, value: number) => void;
 }) {
+  if (loading) {
+    return (
+      <div className="space-y-2" aria-hidden="true">
+        <Skeleton className="h-10 w-full" />
+        {[0, 1, 2].map((line) => (
+          <Skeleton key={line} className="h-11 w-full" />
+        ))}
+      </div>
+    );
+  }
+  const columns: ParameterColumn[] = [
+    { field: "quantityPerCnpj", label: quantityLabel, min: 0, step: 1 },
+    { field: "conversionRate", label: "Conversão (%)", min: 0, max: 100, step: 0.1 },
+    { field: "capacityPerDay", label: "Dias úteis", min: 1, step: 1 },
+    { field: "averageTicket", label: "Ticket médio (R$)", min: 0, step: 0.01 },
+    { field: "averageActivations", label: "Média de altas", min: 1, step: 0.1 },
+  ];
+
   return (
-    <label className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-xs font-medium leading-4 text-muted-foreground">{label}</span>
-      <Input
-        type="number"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) =>
-          onChange(Math.min(max ?? Infinity, Math.max(min, Number(event.target.value) || min)))
-        }
-        className="h-11 text-right font-medium tabular-nums [appearance:textfield] sm:h-9 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-      />
-    </label>
+    <TableScroll>
+      <Table className="min-w-[860px] table-fixed">
+        <colgroup>
+          <col className={STICKY_ID_WIDTH} />
+          {columns.map((column) => (
+            <col key={column.field} className="w-[132px]" />
+          ))}
+        </colgroup>
+        <TableHeader className={TABLE_HEADER_CLASS}>
+          <TableRow className="hover:bg-transparent">
+            <TableHead className={cn(STICKY_ID_CLASS, "bg-muted")}>Parceiro</TableHead>
+            {columns.map((column) => (
+              <TableHead key={column.field} align="numeric">
+                {column.label}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody className={TABLE_BODY_CLASS}>
+          {rows.map((row) => {
+            const settings = settingsFor(row.parceiro);
+            return (
+              <TableRow key={row.parceiro}>
+                <TableCell className={cn(STICKY_ID_CLASS, "bg-card font-medium text-foreground")}>
+                  {row.parceiro}
+                </TableCell>
+                {columns.map((column) => (
+                  <TableCell key={column.field} align="numeric">
+                    <Input
+                      type="number"
+                      aria-label={`${column.label} — ${row.parceiro}`}
+                      min={column.min}
+                      max={column.max}
+                      step={column.step}
+                      value={settings[column.field]}
+                      onChange={(event) =>
+                        onChange(
+                          row.parceiro,
+                          column.field,
+                          Math.min(
+                            column.max ?? Infinity,
+                            Math.max(column.min, Number(event.target.value) || column.min),
+                          ),
+                        )
+                      }
+                      className="h-9 text-right font-medium tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    />
+                  </TableCell>
+                ))}
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </TableScroll>
   );
 }
 

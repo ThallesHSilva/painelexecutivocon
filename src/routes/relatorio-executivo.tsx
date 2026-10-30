@@ -584,11 +584,8 @@ function ExecutiveReportPage() {
             empty="Nenhum parceiro no recorte."
           />
           <p className="mt-2 text-[10px] leading-4 text-slate-500">
-            Cenário com os parâmetros do simulador móvel salvos neste navegador:{" "}
-            {fmtDec(mobileConversionParams.quantityPerCnpj)} linhas por CNPJ ·{" "}
-            {fmtDec(mobileConversionParams.conversionRate)}% de conversão ·{" "}
-            {fmtInt(mobileConversionParams.capacityPerDay)} dias úteis · ticket médio{" "}
-            {fmtBRL(mobileConversionParams.averageTicket)}.
+            Cenário com os parâmetros individuais de cada parceiro (linhas por CNPJ, conversão, dias
+            úteis e ticket médio) salvos neste navegador no simulador móvel.
           </p>
         </section>
       </ReportPage>
@@ -638,11 +635,8 @@ function ExecutiveReportPage() {
             empty="Nenhum parceiro no recorte."
           />
           <p className="mt-2 text-[10px] leading-4 text-slate-500">
-            Cenário com os parâmetros do simulador FTTH salvos neste navegador:{" "}
-            {fmtDec(ftthConversionParams.quantityPerCnpj)} BLs por CNPJ ·{" "}
-            {fmtDec(ftthConversionParams.conversionRate)}% de conversão ·{" "}
-            {fmtInt(ftthConversionParams.capacityPerDay)} dias úteis · ticket médio{" "}
-            {fmtBRL(ftthConversionParams.averageTicket)}.
+            Cenário com os parâmetros individuais de cada parceiro (BLs por CNPJ, conversão, dias
+            úteis e ticket médio) salvos neste navegador no simulador FTTH.
           </p>
         </section>
         <section className="mt-5">
@@ -994,13 +988,15 @@ function TowerReportPage({
   );
 }
 
-/** Duas torres dividem a folha só se cada uma tem até este número de linhas de parceiro. */
-const TOWER_PAIR_MAX_ROWS = 2;
+/**
+ * Linhas de parceiro de uma torre por folha. Com duas torres em cada folha, a tabela de
+ * uma torre com mais parceiros continua em outra folha em vez de empurrar a vizinha.
+ */
+const TOWER_ROWS_PER_SHEET = 4;
 
 /**
- * Torres de serviço, duas por folha quando cabem (poucas linhas em ambas), e a
- * portabilidade logo antes da torre Banda Larga. A portabilidade interrompe o
- * emparelhamento: nunca se junta a uma torre.
+ * Torres de serviço, sempre duas por folha, e a portabilidade logo antes da torre
+ * Banda Larga. A portabilidade interrompe o emparelhamento: nunca se junta a uma torre.
  */
 function towerAndPortabilityPages({
   towers,
@@ -1016,11 +1012,11 @@ function towerAndPortabilityPages({
       context.selectedCompanies.size
         ? tower.rows.filter((row) => context.selectedCompanies.has(normalize(row.partner)))
         : tower.rows,
-      8,
-    ).map((rows, index, chunks) => ({
+      TOWER_ROWS_PER_SHEET,
+    ).map((rows, index) => ({
       key: `${tower.id}-${index}`,
       tower: { ...tower, rows },
-      compact: chunks.length === 1 && rows.length <= TOWER_PAIR_MAX_ROWS,
+      compact: true,
       beforePortability: tower.id === "banda-larga" && index === 0,
     })),
   );
@@ -1416,10 +1412,13 @@ function QuartilDistributionLegend({
   bands,
   missing,
   total,
+  stacked = false,
 }: {
   bands: [number, number, number, number, number];
   missing: number;
   total: number;
+  /** Rótulo sobre o valor, centralizado: cabe em colunas estreitas sem sobrepor itens. */
+  stacked?: boolean;
 }) {
   const items = [
     ...bands.map((value, index) => ({
@@ -1429,6 +1428,27 @@ function QuartilDistributionLegend({
     })),
     { label: "Sem Q", value: missing, color: "#cbd5e1" },
   ];
+  if (stacked) {
+    return (
+      <div className="mt-2 grid grid-cols-6 gap-1">
+        {items.map((item) => (
+          <div key={item.label} className="flex flex-col items-center text-[9px] leading-3">
+            <span className="flex items-center gap-1 font-semibold text-slate-700">
+              <span
+                className="size-2 shrink-0 rounded-sm"
+                style={{ backgroundColor: item.color }}
+              />
+              {item.label}
+            </span>
+            <span className="tabular-nums text-slate-700">
+              {fmtInt(item.value)}{" "}
+              <span className="text-slate-400">{total ? fmtPct(item.value / total) : "—"}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1.5 sm:grid-cols-6">
       {items.map((item) => (
@@ -1607,29 +1627,134 @@ function QuartilEvolutionCard({
     { label: "Evoluiu", value: counts.up, color: "text-emerald-700" },
     { label: "Regrediu", value: counts.down, color: "text-red-600" },
     { label: "Neutro", value: counts.stable, color: "text-slate-900" },
-    { label: "Alerta", value: counts.alert, color: "text-red-600" },
   ];
+  const tileClass = "rounded-lg border border-violet-100 bg-violet-50/70 px-2 py-1";
   return (
-    <div className="quartil-overview-evolution rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
-      <p className="mb-1.5 text-[10px] font-semibold text-slate-800">
-        Evolução em {period} meses · {metric.label}
-      </p>
-      <div className="grid grid-cols-4 gap-1.5">
+    <div className="quartil-overview-evolution flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white">
+      <div className="border-b border-slate-100 bg-slate-50/80 px-2.5 py-1.5">
+        <p className="text-[10px] font-semibold text-slate-800">
+          Evolução em {period} meses · {metric.label}
+        </p>
+        <p className="text-[8px] text-slate-400">
+          {before
+            ? `${competenceLabel(before)} → ${competenceLabel(latestMonth)}`
+            : "Sem histórico"}
+        </p>
+      </div>
+      <div className="grid flex-1 grid-cols-3 content-start gap-1.5 p-2">
         {tiles.map((tile) => (
-          <div
-            key={tile.label}
-            className="rounded-lg border border-violet-100 bg-violet-50/70 px-2 py-1.5"
-          >
-            <p className={`text-lg font-semibold leading-6 tabular-nums ${tile.color}`}>
+          <div key={tile.label} className={tileClass}>
+            <p className={`text-base font-semibold leading-5 tabular-nums ${tile.color}`}>
               {fmtInt(tile.value)}
             </p>
-            <p className="text-[9px] text-slate-500">{tile.label}</p>
+            <p className="text-[8px] text-slate-500">{tile.label}</p>
           </div>
         ))}
+        <div className={`${tileClass} col-span-3 flex items-center gap-2`}>
+          <p className="text-base font-semibold leading-5 tabular-nums text-red-600">
+            {fmtInt(counts.alert)}
+          </p>
+          <div>
+            <p className="text-[8px] leading-3 text-slate-500">Alerta</p>
+            <p className="text-[7px] leading-[9px] text-slate-400">{QUARTIL_ALERT_RULE}</p>
+          </div>
+        </div>
       </div>
-      <p className="mt-1.5 text-[8px] text-slate-400">
-        {before ? `${competenceLabel(before)} → ${competenceLabel(latestMonth)}` : "Sem histórico"}
-      </p>
+    </div>
+  );
+}
+
+const QUARTIL_ALERT_RULE = "1 mês no Q5 (novos) · 3 meses (demais)";
+/** Linhas de parceiro por métrica no slide único; o excedente é somado numa linha "Demais". */
+const QUARTIL_OVERVIEW_PARTNER_ROWS = 3;
+
+function sumQuartilRows(rows: QuartilPartnerDistribution[], partner: string) {
+  return rows.reduce<QuartilPartnerDistribution>(
+    (summary, row) => ({
+      partner,
+      consultants: summary.consultants + row.consultants,
+      quartiles: summary.quartiles.map((value, index) => value + row.quartiles[index]) as [
+        number,
+        number,
+        number,
+        number,
+        number,
+      ],
+      missing: summary.missing + row.missing,
+    }),
+    { partner, consultants: 0, quartiles: [0, 0, 0, 0, 0], missing: 0 },
+  );
+}
+
+/** Mantém os maiores parceiros e agrega o resto, para o total do slide continuar fechando. */
+function quartilOverviewRows(rows: QuartilPartnerDistribution[]) {
+  if (rows.length <= QUARTIL_OVERVIEW_PARTNER_ROWS) return rows;
+  const ranked = [...rows].sort(
+    (left, right) =>
+      right.consultants - left.consultants || left.partner.localeCompare(right.partner),
+  );
+  const shown = ranked.slice(0, QUARTIL_OVERVIEW_PARTNER_ROWS - 1);
+  const rest = ranked.slice(QUARTIL_OVERVIEW_PARTNER_ROWS - 1);
+  return [...shown, sumQuartilRows(rest, `Demais ${rest.length} parceiros`)];
+}
+
+/** Tabela por parceiro do slide único. O total já está na barra e na legenda acima dela. */
+function QuartilOverviewTable({ rows }: { rows: QuartilPartnerDistribution[] }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-slate-200">
+      <table className="w-full table-fixed border-collapse text-[8px]">
+        <colgroup>
+          <col className="w-[27%]" />
+          <col className="w-[12%]" />
+          <col className="w-[19%]" />
+          {[1, 2, 3, 4, 5].map((band) => (
+            <col key={band} className="w-[6.5%]" />
+          ))}
+          <col className="w-[9.5%]" />
+        </colgroup>
+        <thead className="bg-slate-50 text-[7px] uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-1.5 py-0.5 text-left font-bold">Parceiro</th>
+            <th className="px-1.5 py-0.5 text-right font-bold">Consult.</th>
+            <th className="px-1.5 py-0.5 text-left font-bold">Distribuição</th>
+            {[1, 2, 3, 4, 5].map((band) => (
+              <th key={band} className="px-1.5 py-0.5 text-right font-bold">
+                Q{band}
+              </th>
+            ))}
+            <th className="whitespace-nowrap px-1.5 py-0.5 text-right font-bold">Sem Q</th>
+          </tr>
+        </thead>
+        <tbody>
+          {quartilOverviewRows(rows).map((row) => (
+            <tr key={row.partner} className="border-t border-slate-100">
+              <th
+                className="truncate px-1.5 py-0.5 text-left font-medium text-slate-700"
+                title={row.partner}
+              >
+                {row.partner}
+              </th>
+              <td className="px-1.5 py-0.5 text-right tabular-nums">{fmtInt(row.consultants)}</td>
+              <td className="px-1.5 py-0.5">
+                <QuartilDistributionBar
+                  bands={row.quartiles}
+                  total={row.consultants}
+                  missing={row.missing}
+                  className="!h-2"
+                />
+              </td>
+              {row.quartiles.map((value, index) => (
+                <td key={index} className="px-1.5 py-0.5 text-right tabular-nums">
+                  {fmtInt(value)}
+                </td>
+              ))}
+              <td className="px-1.5 py-0.5 text-right tabular-nums text-slate-500">
+                {fmtInt(row.missing)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -1648,9 +1773,6 @@ function QuartilOverviewReportPage({
   date: string;
 }) {
   const consultants = quartil?.consultants ?? [];
-  const alertCount = consultants.filter((consultant) =>
-    QUARTIL_REPORT_METRICS.some(({ id }) => isQuartilAlert(consultant, id)),
-  ).length;
 
   return (
     <ReportPage
@@ -1665,47 +1787,34 @@ function QuartilOverviewReportPage({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-3 gap-3">
-            <MetricCard label="Consultores no recorte" value={fmtInt(consultants.length)} />
-            <MetricCard label="Parceiros com consultores" value={fmtInt(quartil.partners.length)} />
-            <MetricCard label="Alertas em Q5" value={fmtInt(alertCount)} accent="violet" />
-          </div>
-
-          <div className="quartil-overview-grid mt-4 grid grid-cols-1 gap-3">
+          <div className="quartil-overview-grid grid grid-cols-1 gap-3">
             {QUARTIL_REPORT_METRICS.map((metric) => {
-              const total = quartilDistribution(quartil, metric.id).reduce(
-                (summary, row) => ({
-                  consultants: summary.consultants + row.consultants,
-                  quartiles: summary.quartiles.map(
-                    (value, index) => value + row.quartiles[index],
-                  ) as [number, number, number, number, number],
-                  missing: summary.missing + row.missing,
-                }),
-                {
-                  consultants: 0,
-                  quartiles: [0, 0, 0, 0, 0] as [number, number, number, number, number],
-                  missing: 0,
-                },
-              );
+              const rows = quartilDistribution(quartil, metric.id);
+              const total = sumQuartilRows(rows, "Total");
               return (
                 <section
                   key={metric.id}
-                  className="quartil-overview-card grid grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 rounded-2xl border border-slate-200 bg-white p-3"
+                  className="quartil-overview-card grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 rounded-2xl border border-slate-200 bg-white p-3"
                 >
-                  <div>
-                    <h2 className="mb-2 text-sm font-semibold text-slate-950">
-                      Distribuição · {metric.label}
+                  <div className="min-w-0">
+                    <h2 className="mb-2 text-xs font-semibold text-slate-950">
+                      Distribuição por parceiro · {metric.label}
                     </h2>
                     <QuartilDistributionBar
                       bands={total.quartiles}
                       total={total.consultants}
                       missing={total.missing}
+                      className="!h-3"
                     />
                     <QuartilDistributionLegend
                       bands={total.quartiles}
                       missing={total.missing}
                       total={total.consultants}
+                      stacked
                     />
+                    <div className="mt-2">
+                      <QuartilOverviewTable rows={rows} />
+                    </div>
                   </div>
                   {(["3", "6"] as const).map((period) => (
                     <QuartilEvolutionCard
@@ -1720,10 +1829,11 @@ function QuartilOverviewReportPage({
               );
             })}
           </div>
-          <p className="mt-3 text-[9px] text-slate-500">
-            Competência mais recente: {quartil.latestMonth || "—"}. Evoluiu/Regrediu/Neutro comparam
-            o quartil do mês corrente com o de 3 e 6 meses atrás; consultores sem histórico ficam
-            fora. Alerta: 1 mês no Q5 (novos) · 3 meses (demais).
+          <p className="mt-2 text-[8px] leading-3 text-slate-500">
+            {fmtInt(consultants.length)} consultores em {fmtInt(quartil.partners.length)}{" "}
+            parceiro(s) · competência mais recente: {quartil.latestMonth || "—"}.
+            Evoluiu/Regrediu/Neutro comparam o quartil do mês corrente com o de 3 e 6 meses atrás;
+            consultores sem histórico ficam fora. Sem Q = sem classificação no mês.
           </p>
         </>
       )}
