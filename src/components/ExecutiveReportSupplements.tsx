@@ -7,7 +7,8 @@ import {
   type InvasaoTickets,
 } from "@/lib/invasao-finance";
 import type { ReactNode } from "react";
-import { ReportPage, MetricCard, CompactTable } from "./ExecutiveReportPrimitives";
+import { Boxes, Rocket } from "lucide-react";
+import { ReportPage, MetricCard, CompactTable, SectionTitle } from "./ExecutiveReportPrimitives";
 import { fmtInt, fmtPct } from "@/lib/format";
 import { reportChunks, invasaoReportSummary } from "@/lib/report-data";
 import type { InvasaoSnapshot } from "@/lib/invasao";
@@ -202,89 +203,94 @@ export function invasaoReportPages(
   ];
 }
 
-export function licensesReportPages(
-  data: Awaited<ReturnType<typeof fetchLicenses>> | undefined,
+/** Licenças e Serviços Digitais + Oportunidade Avançada dividem a mesma folha. */
+export function opportunitiesReportPages(
+  licenses: Awaited<ReturnType<typeof fetchLicenses>> | undefined,
+  advanced: Awaited<ReturnType<typeof fetchAdvanced>> | undefined,
   meta: Meta,
 ) {
   return [
     <ReportPage
-      key="licenses"
+      key="opportunities"
       {...meta}
-      title="Licenças e Serviços Digitais"
-      eyebrow="Oportunidades · TI Recorrente"
+      title="Oportunidades"
+      eyebrow="TI Recorrente · Conectividade e Vivo Tech"
     >
-      {!data ? (
-        <ReportMessage>
-          Dados de Licenças e Serviços Digitais indisponíveis para este recorte.
-        </ReportMessage>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-y-3 sm:grid-cols-4 print:grid-cols-4 gap-3">
-            <MetricCard
-              label="Oportunidades TI Recorrente"
-              value={fmtInt(data.kpis.clientesElegiveis)}
-              accent="violet"
-            />
-            <MetricCard
-              label="Cross Segurança em Dados"
-              value={fmtInt(data.kpis.segurancaEmDados)}
-            />
-            <MetricCard
-              label="Google com pré-aprovação"
-              value={fmtInt(data.kpis.googleComCredito)}
-            />
-            <MetricCard
-              label="Microsoft 365 com pré-aprovação"
-              value={fmtInt(data.kpis.microsoft365ComCredito)}
-            />
+      <section>
+        <SectionTitle
+          icon={<Boxes className="size-4" />}
+          eyebrow="Oportunidades · TI Recorrente"
+          title="Licenças e Serviços Digitais"
+        />
+        {!licenses ? (
+          <div className="mt-3">
+            <ReportMessage>
+              Dados de Licenças e Serviços Digitais indisponíveis para este recorte.
+            </ReportMessage>
           </div>
-          <p className="mt-4 text-[10px] leading-4 text-slate-500">
-            Participação na base ativa: {fmtPct(data.kpis.percentualBase)}. Públicos podem se
-            sobrepor; a oportunidade total usa os CNPJs elegíveis da tela, não a soma dos três
-            públicos. Cenários de conversão e receita simulada não compõem os resultados deste
-            relatório.
-          </p>
-        </>
-      )}
-    </ReportPage>,
-  ];
-}
-
-export function advancedReportPages(
-  data: Awaited<ReturnType<typeof fetchAdvanced>> | undefined,
-  meta: Meta,
-) {
-  return [
-    <ReportPage
-      key="advanced"
-      {...meta}
-      title="Oportunidade Avançada"
-      eyebrow="Oportunidades · Conectividade e Vivo Tech"
-    >
-      {!data ? (
-        <ReportMessage>
-          Dados de Oportunidade Avançada indisponíveis para este recorte.
-        </ReportMessage>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 gap-y-3 sm:grid-cols-5 print:grid-cols-5 gap-3">
-            <MetricCard
-              label="Oportunidade Avançada"
-              value={fmtInt(data.kpis.opportunities)}
-              accent="violet"
-            />
-            <MetricCard label="Renovação de Avançada" value={fmtInt(data.kpis.renewal)} />
-            <MetricCard label="% da base total" value={fmtPct(data.kpis.percentualBase)} />
-            <MetricCard label="Oportunidade Vivo Tech" value={fmtInt(data.kpis.vivoTech)} />
-            <MetricCard label="Posse · Empresas" value={fmtInt(data.kpis.posse)} />
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-1 gap-y-3 sm:grid-cols-4 print:grid-cols-4 gap-3">
+              <MetricCard
+                label="Oportunidades TI Recorrente"
+                value={fmtInt(licenses.kpis.clientesElegiveis)}
+                accent="violet"
+              />
+              <MetricCard
+                label="Cross Segurança em Dados"
+                value={fmtInt(licenses.kpis.segurancaEmDados)}
+              />
+              <MetricCard
+                label="Google com pré-aprovação"
+                value={fmtInt(licenses.kpis.googleComCredito)}
+              />
+              <MetricCard
+                label="Microsoft 365 com pré-aprovação"
+                value={fmtInt(licenses.kpis.microsoft365ComCredito)}
+              />
+            </div>
+            <p className="mt-3 text-[10px] leading-4 text-slate-500">
+              Participação na base ativa: {fmtPct(licenses.kpis.percentualBase)}. Públicos podem se
+              sobrepor; a oportunidade total usa os CNPJs elegíveis da tela, não a soma dos três
+              públicos. Cenários de conversão e receita simulada não compõem os resultados deste
+              relatório.
+            </p>
+          </>
+        )}
+      </section>
+      <section className="mt-6 border-t border-violet-100 pt-5">
+        <SectionTitle
+          icon={<Rocket className="size-4" />}
+          eyebrow="Oportunidades · Conectividade e Vivo Tech"
+          title="Oportunidade Avançada"
+        />
+        {!advanced ? (
+          <div className="mt-3">
+            <ReportMessage>
+              Dados de Oportunidade Avançada indisponíveis para este recorte.
+            </ReportMessage>
           </div>
-          <p className="mt-4 text-[10px] leading-4 text-slate-500">
-            Mesmo recorte e regras da tela: base ativa com aquisição, adesão ou winback em
-            AVANCADOS; renovação apurada separadamente. Simulações comerciais não são vendas
-            realizadas.
-          </p>
-        </>
-      )}
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-1 gap-y-3 sm:grid-cols-5 print:grid-cols-5 gap-3">
+              <MetricCard
+                label="Oportunidade Avançada"
+                value={fmtInt(advanced.kpis.opportunities)}
+                accent="violet"
+              />
+              <MetricCard label="Renovação de Avançada" value={fmtInt(advanced.kpis.renewal)} />
+              <MetricCard label="% da base total" value={fmtPct(advanced.kpis.percentualBase)} />
+              <MetricCard label="Oportunidade Vivo Tech" value={fmtInt(advanced.kpis.vivoTech)} />
+              <MetricCard label="Posse · Empresas" value={fmtInt(advanced.kpis.posse)} />
+            </div>
+            <p className="mt-3 text-[10px] leading-4 text-slate-500">
+              Mesmo recorte e regras da tela: base ativa com aquisição, adesão ou winback em
+              AVANCADOS; renovação apurada separadamente. Simulações comerciais não são vendas
+              realizadas.
+            </p>
+          </>
+        )}
+      </section>
     </ReportPage>,
   ];
 }

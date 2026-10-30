@@ -1,8 +1,7 @@
 ﻿import { useInvasaoTickets } from "@/hooks/useInvasaoTickets";
 import {
   invasaoReportPages,
-  licensesReportPages,
-  advancedReportPages,
+  opportunitiesReportPages,
   certificationReportPages,
 } from "@/components/ExecutiveReportSupplements";
 import { qscSemesterValues } from "@/lib/qsc-domain-history";
@@ -648,8 +647,7 @@ function ExecutiveReportPage() {
         </section>
       </ReportPage>
 
-      {licensesReportPages(licensesQuery.data, meta)}
-      {advancedReportPages(advancedQuery.data, meta)}
+      {opportunitiesReportPages(licensesQuery.data, advancedQuery.data, meta)}
 
       <ChapterCoverPage
         id="capitulo-qsc"
