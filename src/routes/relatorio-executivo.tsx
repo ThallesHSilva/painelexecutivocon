@@ -4,7 +4,6 @@ import {
   licensesReportPages,
   advancedReportPages,
   certificationReportPages,
-  QuartilRangesReportPage,
 } from "@/components/ExecutiveReportSupplements";
 import { qscSemesterValues } from "@/lib/qsc-domain-history";
 import type { InvasaoSnapshot } from "@/lib/invasao";
@@ -42,7 +41,7 @@ import {
   simulateConversion,
 } from "@/lib/opportunity-simulation";
 import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
-import { isQuartilAlert, quartilEvolutionCounts } from "@/lib/quartil";
+import { quartilEvolutionCounts } from "@/lib/quartil";
 import type { QscDomain } from "@/lib/qsc";
 import { formatQscDeltaPp, qscVariation, qscWorsened, shortCompetence } from "@/lib/qsc-variation";
 import type {
@@ -676,20 +675,7 @@ function ExecutiveReportPage() {
         tone="violet"
       />
 
-      <QuartilRangesReportPage {...meta} />
       <QuartilOverviewReportPage quartil={quartil} partner={partnerLabel} date={reportDate} />
-      {QUARTIL_REPORT_METRICS.flatMap((metric) =>
-        reportChunks(quartilDistribution(quartil, metric.id), 10).map((rows, index) => (
-          <QuartilReportPage
-            key={`${metric.id}-${index}`}
-            quartil={quartil}
-            metric={metric}
-            rows={rows}
-            partner={partnerLabel}
-            date={reportDate}
-          />
-        )),
-      )}
     </ExecutiveReportDocument>
   );
 }
@@ -1463,151 +1449,6 @@ function QuartilDistributionLegend({
   );
 }
 
-function QuartilReportPage({
-  quartil,
-  metric,
-  rows,
-  partner,
-  date,
-}: {
-  quartil: QuartilSnapshot | null;
-  metric: (typeof QUARTIL_REPORT_METRICS)[number];
-  rows: QuartilPartnerDistribution[];
-  partner: string;
-  date: string;
-}) {
-  const consultants = quartil?.consultants ?? [];
-  const alertCount = consultants.filter((consultant) =>
-    QUARTIL_REPORT_METRICS.some(({ id }) => isQuartilAlert(consultant, id)),
-  ).length;
-
-  return (
-    <ReportPage
-      title={`Quartil de consultores · ${metric.label}`}
-      eyebrow="Performance comercial"
-      partner={partner}
-      date={date}
-    >
-      {!quartil ? (
-        <div className="grid min-h-[520px] place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-          Dados de Quartil indisponíveis para este recorte.
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 gap-3">
-            <MetricCard label="Consultores no recorte" value={fmtInt(consultants.length)} />
-            <MetricCard label="Parceiros com consultores" value={fmtInt(quartil.partners.length)} />
-            <MetricCard label="Alertas em Q5" value={fmtInt(alertCount)} accent="violet" />
-          </div>
-
-          <div className="quartil-executive-grid mt-4 grid grid-cols-1 gap-4">
-            {[metric].map((metric) => {
-              const allRows = quartilDistribution(quartil, metric.id);
-              const total = allRows.reduce(
-                (summary, row) => ({
-                  consultants: summary.consultants + row.consultants,
-                  quartiles: summary.quartiles.map(
-                    (value, index) => value + row.quartiles[index],
-                  ) as [number, number, number, number, number],
-                  missing: summary.missing + row.missing,
-                }),
-                {
-                  consultants: 0,
-                  quartiles: [0, 0, 0, 0, 0] as [number, number, number, number, number],
-                  missing: 0,
-                },
-              );
-              return (
-                <section
-                  key={metric.id}
-                  className="quartil-executive-card rounded-2xl border border-slate-200 bg-white p-4"
-                >
-                  <h2 className="mb-2 text-sm font-semibold text-slate-950">{metric.label}</h2>
-                  <QuartilDistributionBar
-                    bands={total.quartiles}
-                    total={total.consultants}
-                    missing={total.missing}
-                    className="mb-2"
-                  />
-                  <QuartilDistributionLegend
-                    bands={total.quartiles}
-                    missing={total.missing}
-                    total={total.consultants}
-                  />
-                  <div className="overflow-hidden rounded-lg border border-slate-200">
-                    <table className="w-full table-fixed border-collapse text-[8px]">
-                      <thead className="bg-slate-50 text-slate-500">
-                        <tr>
-                          <th className="w-[34%] px-1 py-1.5 text-left font-bold">Parceiro</th>
-                          <th className="px-1 py-1.5 text-right font-bold">C</th>
-                          <th className="px-1 py-1.5 text-left font-bold">Distrib.</th>
-                          {[1, 2, 3, 4, 5].map((quartileBand) => (
-                            <th key={quartileBand} className="px-1 py-1.5 text-right font-bold">
-                              Q{quartileBand}
-                            </th>
-                          ))}
-                          <th className="px-1 py-1.5 text-right font-bold">S/Q</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row) => (
-                          <tr key={row.partner} className="border-t border-slate-100">
-                            <th
-                              className="truncate px-1 py-1 text-left font-medium text-slate-700"
-                              title={row.partner}
-                            >
-                              {row.partner}
-                            </th>
-                            <td className="px-1 py-1 text-right tabular-nums">{row.consultants}</td>
-                            <td className="px-1 py-1">
-                              <QuartilDistributionBar
-                                bands={row.quartiles}
-                                total={row.consultants}
-                                missing={row.missing}
-                              />
-                            </td>
-                            {row.quartiles.map((value, index) => (
-                              <td key={index} className="px-1 py-1 text-right tabular-nums">
-                                {value}
-                              </td>
-                            ))}
-                            <td className="px-1 py-1 text-right tabular-nums">{row.missing}</td>
-                          </tr>
-                        ))}
-                        <tr className="border-t-2 border-violet-100 bg-violet-50/70 font-bold text-slate-900">
-                          <th className="px-1 py-1 text-left">Total</th>
-                          <td className="px-1 py-1 text-right tabular-nums">{total.consultants}</td>
-                          <td className="px-1 py-1">
-                            <QuartilDistributionBar
-                              bands={total.quartiles}
-                              total={total.consultants}
-                              missing={total.missing}
-                            />
-                          </td>
-                          {total.quartiles.map((value, index) => (
-                            <td key={index} className="px-1 py-1 text-right tabular-nums">
-                              {value}
-                            </td>
-                          ))}
-                          <td className="px-1 py-1 text-right tabular-nums">{total.missing}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-          <p className="mt-3 text-[9px] text-slate-500">
-            Competência mais recente: {quartil.latestMonth || "—"}. C = consultores; S/Q = sem
-            quartil.
-          </p>
-        </>
-      )}
-    </ReportPage>
-  );
-}
-
 function QuartilEvolutionCard({
   consultants,
   metric,
@@ -1761,7 +1602,7 @@ function QuartilOverviewTable({ rows }: { rows: QuartilPartnerDistribution[] }) 
 
 /**
  * Visão consolidada num único slide: distribuição Q1–Q5 e cards de evolução (3 e 6
- * meses) de Receita, Móvel e FTTH. O detalhe por parceiro segue nas páginas seguintes.
+ * meses) de Receita, Móvel e FTTH.
  */
 function QuartilOverviewReportPage({
   quartil,

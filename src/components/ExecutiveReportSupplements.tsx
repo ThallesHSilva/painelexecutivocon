@@ -16,7 +16,6 @@ import {
   parseCertificationPreview,
   MONTH_FIELDS,
 } from "@/lib/certification";
-import { quartilRangeLabel } from "@/lib/quartil";
 import type { fetchAdvanced, fetchLicenses } from "@/services/api";
 
 type Meta = { partner: string; date: string };
@@ -378,28 +377,3 @@ export function certificationReportPages(
   ];
 }
 
-export function QuartilRangesReportPage(meta: Meta) {
-  return (
-    <ReportPage {...meta} title="Faixas de cada quartil" eyebrow="Referência · Limites inclusivos">
-      {(["experienced", "new"] as const).map((tenure) => (
-        <section key={tenure} className="mb-6">
-          <h2 className="text-base font-semibold">
-            {tenure === "experienced" ? "Acima de 3 meses" : "Até 3 meses"}
-          </h2>
-          <CompactTable
-            headers={["Quartil", "Receita", "Móvel", "FTTH"]}
-            rows={[1, 2, 3, 4, 5].map((quartile) => [
-              `Q${quartile}`,
-              ...(["receita", "movel", "ftth"] as const).map((metric) =>
-                quartilRangeLabel(metric, tenure, quartile),
-              ),
-            ])}
-          />
-        </section>
-      ))}
-      <p className="text-[10px] text-slate-500">
-        Mesmos limites usados na tela e verificados contra a classificação da importação.
-      </p>
-    </ReportPage>
-  );
-}

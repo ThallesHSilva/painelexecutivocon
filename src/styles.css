@@ -913,26 +913,6 @@
     page-break-inside: avoid;
   }
 
-  .quartil-executive-grid {
-    gap: 3mm !important;
-    margin-top: 4mm !important;
-  }
-
-  .quartil-executive-card {
-    padding: 2.5mm !important;
-    break-inside: avoid;
-    page-break-inside: avoid;
-  }
-
-  .quartil-executive-card h2 {
-    margin-bottom: 1.5mm !important;
-    font-size: 9pt !important;
-  }
-
-  .quartil-executive-card table {
-    font-size: 6.2pt !important;
-  }
-
   /* Slide único de quartis: três blocos (Receita, Móvel, FTTH) têm de caber numa folha. */
   .quartil-overview-grid {
     gap: 3mm !important;
@@ -943,11 +923,6 @@
     padding: 2.5mm !important;
     break-inside: avoid;
     page-break-inside: avoid;
-  }
-
-  .quartil-executive-card th,
-  .quartil-executive-card td {
-    padding: 0.8mm 0.6mm !important;
   }
 
   /* Molduras de seção não podem recortar a tabela que transborda para outra folha. */
