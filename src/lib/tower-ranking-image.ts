@@ -7,11 +7,10 @@ const key = (text: string) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
 export function towerRankingColumns(tower: ServiceTower) {
-  const labels =
-    tower.id === "dados-avancados"
-      ? ["xpc", "bgxpc", "meta", "estxpc"]
-      : ["bgxpc", "meta", "estxpc"];
-  return labels.flatMap((label) => tower.columns.filter((c) => key(c.label) === label));
+  const column = ["bgxpc", "xpc", "estxpc", "pc", "meta"].flatMap((label) =>
+    tower.columns.filter((c) => key(c.label) === label && c.format === "percent"),
+  )[0];
+  return column ? [column] : [];
 }
 export function towerRanking(tower: ServiceTower) {
   const columns = towerRankingColumns(tower);
@@ -40,13 +39,7 @@ export function towerImageColumns(tower: ServiceTower) {
   const metric =
     priorities.flatMap((label) => tower.columns.filter((c) => key(c.label) === label))[0] ??
     tower.columns.find((c) => c.format !== "percent");
-  const ratio =
-    (tower.id === "dados-avancados"
-      ? ["xpc", "bgxpc", "estxpc", "meta"]
-      : ["bgxpc", "estxpc", "meta"]
-    ).flatMap((label) =>
-      tower.columns.filter((c) => key(c.label) === label && c.format === "percent"),
-    )[0] ?? tower.columns.find((c) => c.format === "percent");
+  const ratio = towerRankingColumns(tower)[0];
   return { metric, ratio };
 }
 
