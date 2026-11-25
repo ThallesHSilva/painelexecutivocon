@@ -65,3 +65,38 @@ test("Dados Avançados ordena por x PC em vez de volume ou ordem da base", () =>
   assert.equal(data.total.p, 0.434);
   assert.equal(data.rows[0].partner, "A7");
 });
+
+test("todas as torres usam PC antes de Meta e a imagem usa a mesma coluna", () => {
+  const ids = [
+    "altas-movel",
+    "aparelhos",
+    "banda-larga",
+    "dados-avancados",
+    "vvn",
+    "voz",
+    "ti-recorrente",
+    "vivo-tech",
+  ];
+  for (const id of ids)
+    for (const label of ["BG x PC", "x PC", "Est x PC", "PC"]) {
+      const data: ServiceTower = {
+        ...tower,
+        id,
+        columns: [
+          { key: "m", label: "Meta", format: "percent" },
+          { key: "p", label, format: "percent" },
+        ],
+        rows: [
+          { partner: "Volume maior", values: { p: 0.5, m: 9 } },
+          { partner: "Beta", values: { p: 1.2, m: 8 } },
+          { partner: "Alfa", values: { p: 1.2, m: 1 } },
+        ],
+      };
+      assert.deepEqual(
+        towerRanking(data).map((r) => r.partner),
+        ["Alfa", "Beta", "Volume maior"],
+        id + label,
+      );
+      assert.equal(towerImageColumns(data).ratio?.key, "p");
+    }
+});
