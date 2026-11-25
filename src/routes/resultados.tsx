@@ -41,7 +41,7 @@ import { cn } from "@/lib/utils";
 import { fmtDec, fmtPct } from "@/lib/format";
 import { readXlsxRows } from "@/lib/xlsx-reader";
 import { TowerRankingExport } from "@/components/TowerRankingExport";
-import { towerRanking } from "@/lib/tower-ranking-image";
+import { towerRanking, towerRankingColumns } from "@/lib/tower-ranking-image";
 import { resultadosYoyCells, resultadosYoyColumns } from "@/lib/resultados-yoy-columns";
 import type {
   BestGuessRecord,
@@ -1773,9 +1773,7 @@ function ServiceTowersPanel({
   const showOthers = expandedFocus === focusKey;
   const tower = towers[activeIndex] ?? towers[0];
   if (!tower) return null;
-  const rankingColumns = ["bgxpc", "meta", "estxpc"].flatMap((label) =>
-    tower.columns.filter((column) => normalizeCompany(column.label) === label),
-  );
+  const rankingColumns = towerRankingColumns(tower);
   const rankedRows = towerRanking(tower);
   const positions = new Map(rankedRows.map((row, index) => [row, index + 1]));
   const focused = selectedCompanies.size > 0;
@@ -1818,7 +1816,7 @@ function ServiceTowersPanel({
       return <span className="font-semibold tabular-nums text-foreground">{formatted}</span>;
     }
     if (
-      !["bgxpc", "meta", "estxpc"].includes(normalizeCompany(column.label)) ||
+      !["bgxpc", "meta", "estxpc", "xpc"].includes(normalizeCompany(column.label)) ||
       typeof value !== "number" ||
       !Number.isFinite(value)
     )
