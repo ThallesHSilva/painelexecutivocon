@@ -42,7 +42,13 @@ import {
 import { buildYtdSummary, type YtdSummary } from "@/lib/report-ytd";
 import { quartilEvolutionCounts } from "@/lib/quartil";
 import type { QscDomain } from "@/lib/qsc";
-import { formatQscDeltaPp, qscVariation, qscWorsened, shortCompetence } from "@/lib/qsc-variation";
+import {
+  formatQscDeltaPp,
+  qscVariation,
+  qscClosedMonths,
+  qscThreeMonthComparison,
+  shortCompetence,
+} from "@/lib/qsc-variation";
 import type {
   BestGuessRecord,
   BestGuessTotal,
@@ -1192,10 +1198,19 @@ function qscReportPages({
     const metric = metrics.find((candidate) => candidate.id === item.id);
     return metric ? [{ ...item, metric }] : [];
   });
-  // Mês fechado de cada indicador (competência mais recente com apuração) contra o mês
-  // imediatamente anterior a ele.
-  const worsened = qscWorsened(metrics);
-  const comparable = metrics.filter((metric) => qscVariation(metric).status !== "unavailable");
+  const closedMonths = qscClosedMonths(competence);
+  const comparisons = metrics.map((metric) => ({
+    metric,
+    comparison: qscThreeMonthComparison(metric, competence),
+  }));
+  const worsened = comparisons
+    .filter(({ comparison }) => comparison.decline > 0)
+    .sort(
+      (a, b) =>
+        b.comparison.decline - a.comparison.decline ||
+        a.metric.label.localeCompare(b.metric.label, "pt-BR"),
+    );
+  const comparable = comparisons.filter(({ comparison }) => comparison.comparable);
   const notComparable = metrics.length - comparable.length;
   const dropPages = reportChunks(worsened, 12);
 
@@ -1308,49 +1323,48 @@ function qscReportPages({
       <ReportPage
         key={`qsc-drops-${index}`}
         title={`Indicadores em queda${dropPages.length > 1 ? ` · ${index + 1}/${dropPages.length}` : ""}`}
-        eyebrow="QSC · Mês fechado × mês anterior"
+        eyebrow="QSC · Últimos 3 meses fechados"
         partner={partner}
         date={date}
       >
         <p className="text-xs text-slate-600">
-          Cada indicador no seu mês fechado (a competência mais recente com apuração) contra o mês
-          imediatamente anterior. Competência mais recente da base:{" "}
-          <span className="capitalize">{competenceLabel(competence)}</span>.
+          Comparação de {closedMonths.map(shortCompetence).join(" · ")}. O mês de referência da base
+          ({competenceLabel(competence)}) fica fora da comparação.
         </p>
         <p className="mt-1 text-[10px] leading-4 text-slate-500">
           Queda é a piora do indicador: valor menor quando subir é favorável, valor maior quando
-          descer é favorável (ex.: churn). Variação em pontos percentuais, do maior recuo para o
-          menor.
+          descer é favorável (ex.: churn). São exibidos os indicadores com piora em pelo menos um
+          dos dois intervalos, ordenados pelo maior recuo mensal. Variações em pontos percentuais.
         </p>
         <CompactTable
           headers={[
             "Indicador",
             "Sentido favorável",
-            "Competência",
-            "Mês anterior",
-            "Mês fechado",
-            "Variação",
+            ...closedMonths.map(shortCompetence),
+            `Δ ${shortCompetence(closedMonths[1])} × ${shortCompetence(closedMonths[0])}`,
+            `Δ ${shortCompetence(closedMonths[2])} × ${shortCompetence(closedMonths[1])}`,
             "Faixa",
           ]}
-          rows={rows.map(({ metric, variation }) => [
+          rows={rows.map(({ metric, comparison }) => [
             metric.label,
             metric.favorableDirection === "up" ? "Maior é melhor" : "Menor é melhor",
-            `${shortCompetence(variation.current?.competence ?? "")} × ${shortCompetence(variation.previous?.competence ?? "")}`,
-            fmtQscPct(variation.previous?.value),
-            fmtQscPct(variation.current?.value),
-            formatQscDeltaPp(variation.deltaPp),
-            `F${variation.previous?.scoreBand ?? "—"} → F${variation.current?.scoreBand ?? "—"}`,
+            ...comparison.points.map((point) => fmtQscPct(point?.value)),
+            ...comparison.deltas.map(formatQscDeltaPp),
+            comparison.points.map((point) => `F${point?.scoreBand ?? "—"}`).join(" → "),
           ])}
           empty={
             comparable.length
-              ? "Nenhum indicador piorou em relação ao mês anterior."
-              : "Sem mês anterior apurado na base para comparar os indicadores."
+              ? "Nenhum indicador piorou nos últimos três meses fechados."
+              : "Sem três meses fechados apurados na base para comparar os indicadores."
           }
         />
         {index === dropPages.length - 1 && notComparable > 0 && (
           <p className="mt-3 text-[10px] leading-4 text-slate-500">
-            {notComparable} {notComparable === 1 ? "indicador" : "indicadores"} sem o mês anterior
-            apurado ficaram fora da comparação; ausência de dado não é queda.
+            {notComparable}{" "}
+            {notComparable === 1
+              ? "indicador sem apuração completa ficou"
+              : "indicadores sem apuração completa ficaram"}{" "}
+            fora da comparação dos três meses; ausência de dado não é queda.
           </p>
         )}
       </ReportPage>
