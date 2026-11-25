@@ -40,6 +40,8 @@ import { TableScroll } from "@/components/TableScroll";
 import { cn } from "@/lib/utils";
 import { fmtDec, fmtPct } from "@/lib/format";
 import { readXlsxRows } from "@/lib/xlsx-reader";
+import { TowerRankingExport } from "@/components/TowerRankingExport";
+import { towerRanking } from "@/lib/tower-ranking-image";
 import { resultadosYoyCells, resultadosYoyColumns } from "@/lib/resultados-yoy-columns";
 import type {
   BestGuessRecord,
@@ -1774,16 +1776,7 @@ function ServiceTowersPanel({
   const rankingColumns = ["bgxpc", "meta", "estxpc"].flatMap((label) =>
     tower.columns.filter((column) => normalizeCompany(column.label) === label),
   );
-  const rankedRows = [...tower.rows].sort((left, right) => {
-    for (const column of rankingColumns) {
-      const a = left.values[column.key];
-      const b = right.values[column.key];
-      const aValue = typeof a === "number" && Number.isFinite(a) ? a : -Infinity;
-      const bValue = typeof b === "number" && Number.isFinite(b) ? b : -Infinity;
-      if (aValue !== bValue) return aValue > bValue ? -1 : 1;
-    }
-    return rankingColumns.length ? left.partner.localeCompare(right.partner, "pt-BR") : 0;
-  });
+  const rankedRows = towerRanking(tower);
   const positions = new Map(rankedRows.map((row, index) => [row, index + 1]));
   const focused = selectedCompanies.size > 0;
   const focusedRows = rankedRows.filter((row) =>
@@ -1882,6 +1875,7 @@ function ServiceTowersPanel({
       description={`Recorte: ${scopeLabel}. ${rankingDescription} Valores importados da base de torres; a seta indica a faixa de atingimento e a linha TT permanece com o total de todos os parceiros disponíveis no escopo autorizado.`}
       actions={
         <>
+          <TowerRankingExport towers={towers} activeIndex={activeIndex} />
           <span className="text-xs font-medium tabular-nums text-muted-foreground">
             {activeIndex + 1} / {towers.length}
           </span>
