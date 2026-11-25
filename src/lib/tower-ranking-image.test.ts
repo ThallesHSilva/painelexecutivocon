@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { towerImageColumns, towerRanking } from "./tower-ranking-image.ts";
+import { towerImageColumns, towerRanking, towerRankingColumns } from "./tower-ranking-image.ts";
 import type { ServiceTower } from "./snapshot-types.ts";
 
 const tower: ServiceTower = {
@@ -36,4 +36,32 @@ test("ranking compartilhado preserva desempate, zero antes de ausente e não alt
   );
   assert.equal(tower.rows[0].partner, "Sem dado");
   assert.equal(towerImageColumns({ ...tower, columns: [] }).metric, undefined);
+});
+
+test("Dados Avançados ordena por x PC em vez de volume ou ordem da base", () => {
+  const data: ServiceTower = {
+    ...tower,
+    id: "dados-avancados",
+    columns: [
+      { key: "v", label: "Ativado", format: "number" },
+      { key: "p", label: "x PC", format: "percent" },
+    ],
+    rows: [
+      { partner: "A7", values: { v: 1616, p: 0.349 } },
+      { partner: "OCIDENTAL", values: { v: 390, p: 0.73 } },
+      { partner: "LIVE", values: { v: 1545, p: 0.62 } },
+      { partner: "PROVISAO", values: { v: 707, p: 1.986 } },
+      { partner: "Zero", values: { v: 0, p: 0 } },
+      { partner: "Ausente", values: { v: null, p: null } },
+    ],
+    total: { v: 8267, p: 0.434 },
+  };
+  assert.deepEqual(
+    towerRanking(data).map((r) => r.partner),
+    ["PROVISAO", "OCIDENTAL", "LIVE", "A7", "Zero", "Ausente"],
+  );
+  assert.equal(towerRankingColumns(data)[0].label, "x PC");
+  assert.equal(towerImageColumns(data).ratio?.key, "p");
+  assert.equal(data.total.p, 0.434);
+  assert.equal(data.rows[0].partner, "A7");
 });
