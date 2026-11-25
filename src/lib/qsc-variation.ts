@@ -78,6 +78,31 @@ export function qscWorsened(metrics: QscMetricSeries[]) {
     );
 }
 
+/** Three consecutive closed months, excluding the reference month still in progress. */
+export function qscClosedMonths(reference: string) {
+  const last = previousCompetence(reference) ?? "";
+  const middle = previousCompetence(last) ?? "";
+  return [previousCompetence(middle) ?? "", middle, last];
+}
+
+export function qscThreeMonthComparison(metric: QscMetricSeries, reference: string) {
+  const months = qscClosedMonths(reference);
+  const source = [...metric.history, ...(metric.latest ? [metric.latest] : [])];
+  const points = months.map((month) => source.find((point) => point.competence === month) ?? null);
+  const comparable = points.every(usable);
+  const deltas = [0, 1].map((index) => {
+    const before = points[index],
+      after = points[index + 1];
+    return usable(before) && usable(after)
+      ? (displayedBasisPoints(after.value) - displayedBasisPoints(before.value)) / 100
+      : null;
+  });
+  const adverse = deltas.map((delta) =>
+    delta === null ? 0 : metric.favorableDirection === "up" ? -delta : delta,
+  );
+  return { points, deltas, comparable, decline: comparable ? Math.max(0, ...adverse) : 0 };
+}
+
 /** "2026-08" -> "ago/26". */
 export function shortCompetence(competence: string) {
   const [year, month] = competence.split("-").map(Number);
