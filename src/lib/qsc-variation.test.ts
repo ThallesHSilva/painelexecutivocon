@@ -6,6 +6,8 @@ import {
   qscVariation,
   qscWorsened,
   shortCompetence,
+  qscClosedMonths,
+  qscThreeMonthComparison,
 } from "./qsc-variation.ts";
 import type { QscMetricPoint, QscMetricSeries } from "./qsc.ts";
 
@@ -122,4 +124,45 @@ test("delta text has an explicit sign, comma decimal and unit", () => {
   assert.equal(formatQscDeltaPp(1.25).replace(/\s/g, " "), "+1,25 p.p.");
   assert.equal(formatQscDeltaPp(0).replace(/\s/g, " "), "0,00 p.p.");
   assert.equal(formatQscDeltaPp(null), "—");
+});
+
+test("three closed months exclude the reference month and cross years", () => {
+  assert.deepEqual(qscClosedMonths("2026-11"), ["2026-08", "2026-09", "2026-10"]);
+  assert.deepEqual(qscClosedMonths("2026-02"), ["2025-11", "2025-12", "2026-01"]);
+});
+
+test("three-month comparison detects a decline even followed by recovery", () => {
+  const data = metric("up", "up", [
+    point("2026-08", 0.9),
+    point("2026-09", 0.8),
+    point("2026-10", 0.95),
+    point("2026-11", 0.1),
+  ]);
+  const result = qscThreeMonthComparison(data, "2026-11");
+  assert.equal(result.comparable, true);
+  assert.deepEqual(result.deltas, [-10, 15]);
+  assert.equal(result.decline, 10);
+  assert.equal(result.points[2]?.competence, "2026-10");
+});
+
+test("three-month comparison respects churn direction and real zero", () => {
+  const data = metric("churn", "down", [
+    point("2026-08", 0),
+    point("2026-09", 0.02),
+    point("2026-10", 0.03),
+  ]);
+  assert.equal(qscThreeMonthComparison(data, "2026-11").decline, 2);
+});
+
+test("missing closed month never falls back to an older point or current month", () => {
+  const data = metric("gap", "up", [
+    point("2026-07", 0.9),
+    point("2026-09", 0.5),
+    point("2026-10", 0.1),
+    point("2026-11", 0.05),
+  ]);
+  const result = qscThreeMonthComparison(data, "2026-11");
+  assert.equal(result.comparable, false);
+  assert.equal(result.decline, 0);
+  assert.equal(result.points[0], null);
 });
