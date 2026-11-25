@@ -410,7 +410,7 @@ function DomainPanel({
         <div className="min-w-0">
           <h2 className="flex items-center gap-2 text-lg font-semibold leading-[1.45] tracking-tight text-foreground">
             <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            {meta.label}
+            {meta.label} · {formatCompetence(competence)}
           </h2>
           <p className="page-subtitle mt-1 text-xs leading-5 text-muted-foreground">
             {meta.context} · competência {formatCompetence(competence)} · {fmtInt(metrics.length)}{" "}
@@ -810,6 +810,16 @@ function QscPage() {
   const currentCompetence = data?.competence ?? calendarCompetence;
   const hasCurrentCompetence = data?.available ?? false;
   const metrics = useMemo(() => data?.metrics ?? [], [data]);
+  const detailCompetence = previousCompetence(currentCompetence);
+  const detailMetrics = useMemo(
+    () =>
+      metrics.map((metric) => ({
+        ...metric,
+        latest: metric.history.find((point) => point.competence === detailCompetence) ?? null,
+        history: metric.history.filter((point) => point.competence <= detailCompetence),
+      })),
+    [metrics, detailCompetence],
+  );
 
   /**
    * Recorte em texto, sem alterar o filtro: nenhuma seleção continua significando
@@ -830,7 +840,7 @@ function QscPage() {
       : "Todos os parceiros (consolidado)";
 
   const metricsByDomain = (domain: QscDomain) =>
-    metrics.filter((metric) => metric.domain === domain);
+    detailMetrics.filter((metric) => metric.domain === domain);
   const competenceIsBehind = hasCurrentCompetence && currentCompetence !== calendarCompetence;
 
   return (
@@ -916,7 +926,7 @@ function QscPage() {
               key={domain}
               domain={domain}
               metrics={metricsByDomain(domain)}
-              competence={currentCompetence}
+              competence={detailCompetence}
             />
           ))}
         </div>
