@@ -154,8 +154,15 @@ function parseNumber(value) {
 }
 
 function parseDeviceCredit(value) {
-  const match = normalize(value).match(/R\$\s*([\d.,]+)/i);
-  return match ? parseNumber(match[1]) : 0;
+  const match = normalize(value).match(/R\$\s*([\d.,]+)\s*(mil\b)?/i);
+  if (!match) return 0;
+  const amount = match[1].replace(/[.,]+$/, "");
+  const canonical = amount.includes(",")
+    ? amount.replaceAll(".", "").replace(",", ".")
+    : /^\d{1,3}(?:\.\d{3})+$/.test(amount)
+      ? amount.replaceAll(".", "")
+      : amount;
+  return parseNumber(canonical) * (match[2] ? 1000 : 1);
 }
 
 function increment(map, value, amount = 1) {
@@ -384,8 +391,13 @@ for (const row of rows) {
   const hasPosseEmpresas = posseKey.includes("EMPRESAS");
   const hasPosseEmpresasWithoutMobile = hasPosseEmpresas && !posseKey.startsWith("MOVEL");
   const devices = valueAt(row, "APARELHOS");
-  const hasDevices = normalizeBusinessText(devices).includes("CAPACIDADE DE PAGAMENTO");
   const deviceCredit = parseDeviceCredit(devices);
+  const devicesKey = normalizeBusinessText(devices);
+  const hasDevices =
+    devicesKey.includes("CAPACIDADE DE PAGAMENTO") ||
+    ((devicesKey.includes("APARELHO ATUAL DO CLIENTE") ||
+      devicesKey.includes("AQUISICAO DE APARELHOS")) &&
+      devicesKey.includes("CREDITO DE ATE") && deviceCredit > 0);
   const has5g = valueAt(row, "COBERTURA_5G") !== "";
   const opportunityCount = Number(hasMobile) + Number(hasFtth) + Number(hasDigital1);
   const contactable = contactHeaders.some((header) => valueAt(row, header) !== "");
@@ -679,8 +691,8 @@ const snapshot = {
     mobileAcquisition: "MOVEL contém Aquisição de Móvel",
     mobileFtthRenewalTotalization:
       "FIXA_BASICA contém Upgrade/Renovação de Fixa Básica e QT_MOVEL_TERM igual a zero ou vazio",
-    mobileRenewalWithDevice: "REC_MOVEL contém Renovação e APARELHOS preenchido",
-    devicesWithoutMobileRenewal: "APARELHOS preenchido sem REC_MOVEL de Renovação para o CNPJ",
+    mobileRenewalWithDevice: "REC_MOVEL contém Renovação e oportunidade de aparelho para o cliente",
+    devicesWithoutMobileRenewal: "Oportunidade de aparelho sem REC_MOVEL de Renovação para o cliente",
     ftth: "FIXA_BASICA contém Aquisição ou Adesão e Capacidade de Pagamento; SITUACAO_RECEITA ativa ou vazia",
     ftthOpportunities:
       "SITUACAO_RECEITA em branco, ATIVO, ATIVA ou 2 - ATIVA; FLG_COBERTURA = 1; FIXA_BASICA nos grupos de aquisição/adesão de banda larga; TP_PRODUTO não contém BASICA; sem filtro de FLG_MEI",
@@ -695,7 +707,7 @@ const snapshot = {
     advancedAcquisitionWinback: "AVANCADOS contém Aquisição, Adesão ou Winback",
     advancedRenewal: "AVANCADOS contém Renovação",
     vivoTech: "VIVO_TECH contém Capacidade de Pagamento",
-    devices: "APARELHOS contém Capacidade de Pagamento",
+    devices: "APARELHOS contém Capacidade de Pagamento, ou Aparelho atual do cliente/Aquisição de aparelhos com Crédito de até positivo; valores em mil são multiplicados por 1.000",
   },
   partners: [{ id: formatPartnerId(partnerName), name: partnerName }],
   totals: {
